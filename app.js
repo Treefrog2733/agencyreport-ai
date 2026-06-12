@@ -1654,6 +1654,93 @@ function updateSimpleModeCopy() {
   });
 }
 
+function updateSimpleModeCopy() {
+  if (!document.documentElement.classList.contains("simple-mode")) return;
+  const copy = uiState.lang === "en" ? {
+    pages: ["System Overview", "Report Workspace"],
+    heroTitle: "AI Reporting Operating System",
+    heroCopy: "Collect requirements, import campaign data, generate AI analysis, and deliver branded monthly reports from one workflow.",
+    demo: "Load Demo",
+    open: "Build Report Flow",
+    detail: "Open",
+    kpis: [
+      ["Readiness", "Database, AI, email, worker, payment, and delivery status."],
+      ["Clients", "Active reporting workspaces."],
+      ["Reports", "Saved reports ready to reuse or deliver."],
+      ["Revenue", "Plan, quote, invoice, and payment readiness."],
+    ],
+    headings: [
+      ["Current Case", "Work on one client at a time so the reporting flow stays focused."],
+      ["Recent Activity", "Latest client, report, and invoice activity."],
+      ["Guided Workflow", "A simple path from request intake to AI report delivery."],
+    ],
+    shortcuts: [
+      ["Client Intake", "Client, month, and requirements"],
+      ["Data Import", "Sheets, CSV, and validation"],
+      ["AI Narrative", "Summary, risks, and next actions"],
+      ["Report Studio", "Charts, branding, and export"],
+      ["Revenue Ops", "Plans, quotes, and invoices"],
+      ["Trust Settings", "Consent, privacy, and audit"],
+    ],
+  } : {
+    pages: ["系統總覽", "月報工作台"],
+    heroTitle: "AI 月報自動化作業系統",
+    heroCopy: "把客戶需求、廣告資料、AI 分析、品牌化月報、排程與 Email 交付集中在同一套工作流。",
+    demo: "載入 Demo",
+    open: "建立月報流程",
+    detail: "開啟",
+    kpis: [
+      ["上線狀態", "資料庫、AI、Email、Worker、付款與交付狀態。"],
+      ["客戶案件", "目前可追蹤的客戶月報工作區。"],
+      ["報告數量", "已保存、可交付或可複製的月報。"],
+      ["營收流程", "方案、報價、發票與付款準備狀態。"],
+    ],
+    headings: [
+      ["目前案件", "一次專注處理一位客戶，讓月報流程清楚不混亂。"],
+      ["近期活動", "最近的客戶、報告與發票動態。"],
+      ["引導式流程", "從需求輸入、資料匯入、AI 分析到報告交付。"],
+    ],
+    shortcuts: [
+      ["需求入口", "客戶、月份與需求"],
+      ["資料匯入", "Sheets、CSV 與驗證"],
+      ["AI 文案", "摘要、風險與下月行動"],
+      ["報告工作室", "圖表、品牌與匯出"],
+      ["營收流程", "方案、報價與發票"],
+      ["信任設定", "同意條款、隱私與稽核"],
+    ],
+  };
+  document.querySelectorAll("[data-app-page]").forEach((button, index) => { button.textContent = copy.pages[index] || button.textContent; });
+  const hero = document.querySelector(".home-hero");
+  if (hero) {
+    hero.querySelector("h2").textContent = copy.heroTitle;
+    hero.querySelector("p:not(.eyebrow)").textContent = copy.heroCopy;
+  }
+  const demo = document.querySelector("#homeLoadDemoBtn");
+  const open = document.querySelector("#openCaseDetailBtn");
+  const detail = document.querySelector("#homeOpenCurrentCaseBtn");
+  if (demo) demo.textContent = copy.demo;
+  if (open) open.textContent = copy.open;
+  if (detail) detail.textContent = copy.detail;
+  document.querySelectorAll(".home-kpi-card").forEach((card, index) => {
+    const item = copy.kpis[index];
+    if (!item) return;
+    card.querySelector("span").textContent = item[0];
+    card.querySelector("p").textContent = item[1];
+  });
+  document.querySelectorAll(".home-panel .section-heading").forEach((heading, index) => {
+    const item = copy.headings[index];
+    if (!item) return;
+    heading.querySelector("h3").textContent = item[0];
+    heading.querySelector("p").textContent = item[1];
+  });
+  document.querySelectorAll(".home-shortcuts button").forEach((button, index) => {
+    const item = copy.shortcuts[index];
+    if (!item) return;
+    button.querySelector("strong").textContent = item[0];
+    button.querySelector("small").textContent = item[1];
+  });
+}
+
 function updateWorkspaceNavLanguage() {
   const labels = workspaceNavLabels[uiState.lang] || workspaceNavLabels.zh;
   document.querySelectorAll("[data-workspace-view]").forEach((button) => {

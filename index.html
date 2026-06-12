@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AgencyReport AI | 代理商 AI 月報解讀與交付工具</title>
-    <link rel="stylesheet" href="/styles.css?v=20260612-pricing-update" />
+    <link rel="stylesheet" href="/styles.css?v=20260613-system-architecture" />
   </head>
   <body>
     <section class="auth-gate" id="authGate" hidden>
@@ -116,6 +116,55 @@
           <button class="primary" id="openCaseDetailBtn" type="button">進入案件詳情</button>
         </div>
       </div>
+
+      <section class="home-system-map" aria-label="系統架構">
+        <div class="section-heading split">
+          <div>
+            <h3>從資料到交付的完整系統</h3>
+            <p>將產品主線收斂成四個明確階段，讓客戶只需要提供資料與需求，其餘由系統協助完成。</p>
+          </div>
+          <span class="system-badge">System Architecture</span>
+        </div>
+        <div class="home-flow-grid">
+          <article>
+            <span>01</span>
+            <strong>收集需求</strong>
+            <p>客戶入口、需求文字、報告月份、交付 Email 與品牌設定。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <strong>匯入資料</strong>
+            <p>CSV / Google Sheets 資料進入同一套 KPI 與渠道分析模型。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <strong>AI 分析</strong>
+            <p>OpenAI 產生摘要、風險、下月建議與客戶說明稿。</p>
+          </article>
+          <article>
+            <span>04</span>
+            <strong>交付追蹤</strong>
+            <p>品牌化報告、HTML/PDF、Email 佇列、排程與付款紀錄。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="home-system-map compact-system" aria-label="核心模組">
+        <div class="section-heading">
+          <div>
+            <h3>核心模組</h3>
+            <p>把目前能力整理成可營利 SaaS 需要的系統分層。</p>
+          </div>
+        </div>
+        <div class="home-module-grid">
+          <article><strong>Client Intake</strong><span>需求輸入、資料提交、同意條款</span></article>
+          <article><strong>Data Engine</strong><span>CSV / Sheets、渠道 KPI、比較基準</span></article>
+          <article><strong>AI Narrative</strong><span>摘要、風險、行動建議、客戶話術</span></article>
+          <article><strong>Report Studio</strong><span>互動圖表、品牌化報告、匯出</span></article>
+          <article><strong>Delivery Ops</strong><span>Resend Email、分享連結、排程 worker</span></article>
+          <article><strong>Revenue Layer</strong><span>方案、報價、發票、綠界付款準備</span></article>
+        </div>
+      </section>
 
       <div class="home-kpi-grid">
         <article class="home-kpi-card">
@@ -827,6 +876,6 @@
         <button type="button" data-dock-action="logout"><span>↪</span><strong id="dockLogoutLabel">登出</strong></button>
       </section>
     </div>
-    <script src="/app.js?v=20260612-pricing-update"></script>
+    <script src="/app.js?v=20260613-system-architecture"></script>
   </body>
 </html>
