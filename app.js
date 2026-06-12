@@ -948,18 +948,42 @@ function authToken() {
 function setAuthState(auth) {
   appState.auth = auth;
   if (auth?.token) localStorage.setItem("agencyReportAuthToken", auth.token);
-  const locked = !appState.auth && !isPortalMode();
+  const publicLanding = !appState.auth && !isPortalMode();
+  const promptOpen = document.documentElement.classList.contains("auth-prompt-open");
   const authGate = document.querySelector("#authGate");
   document.querySelector("#logoutBtn").hidden = !appState.auth || isPortalMode();
-  document.documentElement.classList.toggle("auth-locked", locked);
-  authGate.hidden = !locked;
-  authGate.toggleAttribute("hidden", !locked);
+  document.documentElement.classList.toggle("public-landing", publicLanding);
+  document.documentElement.classList.toggle("auth-locked", publicLanding && promptOpen);
+  authGate.hidden = !(publicLanding && promptOpen);
+  authGate.toggleAttribute("hidden", !(publicLanding && promptOpen));
+  if (auth && !isPortalMode()) setAppPage("case");
   updateAccountDock();
   const authStatus = document.querySelector("#authStatus");
   if (authStatus && auth) {
     authStatus.className = "status-panel ok";
     authStatus.innerHTML = `<strong>${t("authReady")}</strong><span>${auth.user?.email || auth.email || ""}</span>`;
   }
+}
+
+function showAuthGate(mode = "login") {
+  if (appState.auth) {
+    openCaseWorkspace("overview");
+    return;
+  }
+  document.documentElement.classList.add("auth-prompt-open");
+  setAuthState(null);
+  const status = document.querySelector("#authStatus");
+  if (status) {
+    status.className = "status-panel";
+    status.textContent = "";
+  }
+  if (mode === "start") document.querySelector("#authName")?.focus();
+  else document.querySelector("#authEmail")?.focus();
+}
+
+function hideAuthGate() {
+  document.documentElement.classList.remove("auth-prompt-open");
+  setAuthState(appState.auth);
 }
 
 async function authRequest(path, payload = null, method = "POST") {
@@ -987,9 +1011,9 @@ function applyEnvironmentMode() {
   const isLocal = localHosts.includes(window.location.hostname) || window.location.protocol === "file:";
   document.documentElement.classList.toggle("internal-mode", isLocal);
   document.documentElement.classList.add("simple-mode");
-  if (uiState.appPage !== "case") {
-    uiState.appPage = "case";
-    localStorage.setItem("agencyReportAppPage", "case");
+  if (!authToken()) {
+    uiState.appPage = "home";
+    localStorage.setItem("agencyReportAppPage", "home");
   }
   if (uiState.workspaceView !== "overview") {
     uiState.workspaceView = "overview";
@@ -1052,6 +1076,10 @@ function setupWorkspaceNavigation() {
 
 function setAppPage(page) {
   const nextPage = page === "case" ? "case" : "home";
+  if (nextPage === "case" && !appState.auth && !isPortalMode()) {
+    showAuthGate("start");
+    return;
+  }
   uiState.appPage = nextPage;
   localStorage.setItem("agencyReportAppPage", nextPage);
   document.querySelectorAll("[data-app-page]").forEach((button) => {
@@ -1065,6 +1093,10 @@ function setAppPage(page) {
 }
 
 function openCaseWorkspace(view = uiState.workspaceView || "overview") {
+  if (!appState.auth && !isPortalMode()) {
+    showAuthGate("start");
+    return;
+  }
   setAppPage("case");
   setWorkspaceView(view);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1077,9 +1109,16 @@ function setupAppPages() {
   document.querySelector("#openCaseDetailBtn")?.addEventListener("click", () => openCaseWorkspace("overview"));
   document.querySelector("#homeOpenCurrentCaseBtn")?.addEventListener("click", () => openCaseWorkspace("case"));
   document.querySelector("#homeLoadDemoBtn")?.addEventListener("click", () => {
+    if (!appState.auth && !isPortalMode()) {
+      showAuthGate("start");
+      return;
+    }
     document.querySelector("#loadDemoBtn")?.click();
     openCaseWorkspace("overview");
   });
+  document.querySelector("#landingLoginBtn")?.addEventListener("click", () => showAuthGate("login"));
+  document.querySelector("#landingStartBtn")?.addEventListener("click", () => showAuthGate("start"));
+  document.querySelector("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
   document.querySelectorAll("[data-home-workspace]").forEach((button) => {
     button.addEventListener("click", () => openCaseWorkspace(button.dataset.homeWorkspace));
   });
@@ -1542,9 +1581,13 @@ function updateHomeLanguage() {
   const demo = document.querySelector("#homeLoadDemoBtn");
   const open = document.querySelector("#openCaseDetailBtn");
   const detail = document.querySelector("#homeOpenCurrentCaseBtn");
+  const landingLogin = document.querySelector("#landingLoginBtn");
+  const landingStart = document.querySelector("#landingStartBtn");
   if (demo) demo.textContent = copy.demo;
   if (open) open.textContent = copy.open;
   if (detail) detail.textContent = copy.detail;
+  if (landingLogin) landingLogin.textContent = uiState.lang === "en" ? "Sign in" : "登入";
+  if (landingStart) landingStart.textContent = uiState.lang === "en" ? "Start free" : "開始使用";
   document.querySelectorAll(".home-kpi-card").forEach((card, index) => {
     const item = copy.kpis[index];
     if (!item) return;
@@ -1631,9 +1674,13 @@ function updateSimpleModeCopy() {
   const demo = document.querySelector("#homeLoadDemoBtn");
   const open = document.querySelector("#openCaseDetailBtn");
   const detail = document.querySelector("#homeOpenCurrentCaseBtn");
+  const landingLogin = document.querySelector("#landingLoginBtn");
+  const landingStart = document.querySelector("#landingStartBtn");
   if (demo) demo.textContent = copy.demo;
   if (open) open.textContent = copy.open;
   if (detail) detail.textContent = copy.detail;
+  if (landingLogin) landingLogin.textContent = uiState.lang === "en" ? "Sign in" : "登入";
+  if (landingStart) landingStart.textContent = uiState.lang === "en" ? "Start free" : "開始使用";
   document.querySelectorAll(".home-kpi-card").forEach((card, index) => {
     const item = copy.kpis[index];
     if (!item) return;
@@ -1721,6 +1768,8 @@ function updateSimpleModeCopy() {
   if (demo) demo.textContent = copy.demo;
   if (open) open.textContent = copy.open;
   if (detail) detail.textContent = copy.detail;
+  document.querySelector("#landingLoginBtn") && (document.querySelector("#landingLoginBtn").textContent = uiState.lang === "en" ? "Sign in" : "登入");
+  document.querySelector("#landingStartBtn") && (document.querySelector("#landingStartBtn").textContent = uiState.lang === "en" ? "Start free" : "開始使用");
   document.querySelectorAll(".home-kpi-card").forEach((card, index) => {
     const item = copy.kpis[index];
     if (!item) return;
