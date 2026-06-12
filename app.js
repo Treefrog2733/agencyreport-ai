@@ -986,6 +986,28 @@ function hideAuthGate() {
   setAuthState(appState.auth);
 }
 
+function applyMarketingLandingCopy() {
+  const zh = uiState.lang !== "en";
+  const hero = document.querySelector(".home-hero");
+  if (hero) {
+    hero.querySelector(".eyebrow").textContent = zh ? "人工智慧驅動的報告" : "AI-powered reporting";
+    hero.querySelector("h2").textContent = zh ? "別再寫報告了，直接發送報告吧。" : "Stop writing reports. Send them instead.";
+    hero.querySelector("p:not(.eyebrow)").textContent = zh
+      ? "上傳您的資料與客戶需求，AgencyReport AI 會在幾秒內產生可交付的品牌化月報。"
+      : "Upload campaign data and client requirements. AgencyReport AI generates a branded, client-ready report in seconds.";
+  }
+  const demo = document.querySelector("#homeLoadDemoBtn");
+  const open = document.querySelector("#openCaseDetailBtn");
+  const login = document.querySelector("#landingLoginBtn");
+  const start = document.querySelector("#landingStartBtn");
+  const bottomStart = document.querySelector(".landing-bottom-start");
+  if (demo) demo.textContent = zh ? "請參閱範例報告" : "View sample report";
+  if (open) open.textContent = zh ? "免費開始！" : "Start free";
+  if (login) login.textContent = zh ? "登入" : "Sign in";
+  if (start) start.textContent = zh ? "開始使用" : "Start free";
+  if (bottomStart) bottomStart.textContent = zh ? "開始使用" : "Start free";
+}
+
 async function authRequest(path, payload = null, method = "POST") {
   const response = await fetch(`/api/auth/${path}`, {
     method,
@@ -1119,11 +1141,13 @@ function setupAppPages() {
   document.querySelector("#landingLoginBtn")?.addEventListener("click", () => showAuthGate("login"));
   document.querySelector("#landingStartBtn")?.addEventListener("click", () => showAuthGate("start"));
   document.querySelector("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
+  document.querySelector(".landing-bottom-start")?.addEventListener("click", () => showAuthGate("start"));
   document.querySelectorAll("[data-home-workspace]").forEach((button) => {
     button.addEventListener("click", () => openCaseWorkspace(button.dataset.homeWorkspace));
   });
   updateHomeLanguage();
   updateSimpleModeCopy();
+  applyMarketingLandingCopy();
   setAppPage(uiState.appPage);
 }
 
@@ -3139,6 +3163,7 @@ function applyLanguage(lang) {
   updateThemeLabels();
   updateHomeLanguage();
   updateSimpleModeCopy();
+  applyMarketingLandingCopy();
   updateAccountDock();
   if (!document.querySelector("#upgradeModal")?.hidden) renderUpgradePlans();
   applyLegalText();

@@ -4,9 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AgencyReport AI | 代理商 AI 月報解讀與交付工具</title>
-    <link rel="stylesheet" href="/styles.css?v=20260613-public-landing" />
+    <link rel="stylesheet" href="/styles.css?v=20260613-briefly-style" />
   </head>
   <body>
+    <div class="landing-info-bar">
+      <div>
+        <span>support@virtualtrendworks.com</span>
+        <span>工作時間：上午 9:00 至下午 6:00</span>
+      </div>
+      <div>
+        <a href="#about">關於</a>
+        <a href="#contact">接觸</a>
+      </div>
+    </div>
     <section class="auth-gate" id="authGate" hidden>
       <form class="auth-card" id="authForm">
         <button class="ghost auth-close" id="closeAuthBtn" type="button" aria-label="Close">×</button>
@@ -40,6 +50,14 @@
           <h1 data-i18n="appTitle">代理商 AI 月報解讀與交付工具</h1>
         </div>
       </div>
+      <nav class="landing-nav-links" aria-label="Landing navigation">
+        <a href="#features">特徵</a>
+        <a href="#cases">範例</a>
+        <a href="#samples">範本</a>
+        <a href="#pricing">定價</a>
+        <a href="#deployment">部署格</a>
+        <a href="#contact">接觸</a>
+      </nav>
       <div class="top-actions">
         <div class="language-toggle" aria-label="Language">
           <button class="active" data-lang="zh" type="button">中</button>
@@ -118,6 +136,114 @@
           <button class="ghost" id="homeLoadDemoBtn" type="button">載入 Demo</button>
           <button class="primary" id="openCaseDetailBtn" type="button">進入案件詳情</button>
         </div>
+      </div>
+
+      <div class="landing-hero-visual" aria-hidden="true">
+        <div class="visual-panel main-panel">
+          <div class="visual-bar"></div>
+          <div class="visual-chart"></div>
+          <div class="visual-lines"><span></span><span></span><span></span></div>
+        </div>
+        <div class="visual-panel side-panel">
+          <div></div><div></div><div></div>
+        </div>
+        <div class="visual-orbit"></div>
+      </div>
+
+      <div class="landing-marketing">
+        <section class="landing-section problem-section" id="about">
+          <p class="landing-kicker">問題</p>
+          <h2>報告陷阱</h2>
+          <p class="landing-copy">客戶需要透明進度，代理商需要把時間留給策略。兩者之間的落差，常常都耗在整理資料、截圖、寫摘要與反覆解釋。</p>
+          <div class="problem-grid">
+            <article>
+              <h3>客戶需要什麼</h3>
+              <ul>
+                <li>專案進度清晰透明</li>
+                <li>能看懂的定期更新</li>
+                <li>對投放成效有信心</li>
+                <li>可被內部分享的文件</li>
+              </ul>
+            </article>
+            <article class="warning-card">
+              <h3>代理商面臨的挑戰</h3>
+              <ul>
+                <li>花大量時間格式化報告</li>
+                <li>不知道如何一句話說明成效</li>
+                <li>每月交付都要重複整理</li>
+                <li>難以把洞察轉成下月行動</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section metric-section" id="cases">
+          <p class="landing-kicker">統計數據</p>
+          <h2>人工報告的隱性成本</h2>
+          <div class="metric-grid">
+            <article><span>6 小時</span><p>每月平均整理一份客戶月報的時間</p></article>
+            <article><span>40%</span><p>行政與格式化工作吃掉的策略時間</p></article>
+            <article><span>NT$9,600</span><p>以時薪 1,600 元估算的單份機會成本</p></article>
+          </div>
+        </section>
+
+        <section class="landing-section process-section" id="deployment">
+          <p class="landing-kicker">流程</p>
+          <h2>四個步驟，就完成了。</h2>
+          <p class="landing-copy">從資料收集到 AI 產出，再到品牌化交付，每一步都被設計成代理商可重複使用的流程。</p>
+          <div class="process-grid">
+            <article><span>01</span><strong>收回資料</strong><p>客戶提交需求、報告月份、CSV 或 Google Sheets。</p></article>
+            <article><span>02</span><strong>新增上下文</strong><p>補上產業、KPI、預算目標與交付語氣。</p></article>
+            <article><span>03</span><strong>產生報告</strong><p>AI 產生摘要、風險、下月建議與客戶說明稿。</p></article>
+            <article><span>04</span><strong>審核並發送</strong><p>輸出 HTML/PDF，排入 Email 佇列並留下紀錄。</p></article>
+          </div>
+        </section>
+
+        <section class="landing-section feature-section" id="features">
+          <p class="landing-kicker">特徵</p>
+          <h2>每份報告包含哪些內容</h2>
+          <p class="landing-copy">專業報告不只放數字，而是把數字變成客戶看得懂、能行動的交付物。</p>
+          <div class="feature-grid">
+            <article><div class="feature-media media-a"></div><strong>執行摘要</strong><p>AI 生成本月重點、成效變化與管理層能快速理解的結論。</p></article>
+            <article><div class="feature-media media-b"></div><strong>視覺時間軸</strong><p>依照時間與渠道整理投放結果，清楚看出趨勢與異常。</p></article>
+            <article><div class="feature-media media-c"></div><strong>資產預覽</strong><p>把圖表、KPI、風險提醒與下月行動整合成品牌化頁面。</p></article>
+            <article><strong>後續步驟</strong><p>自動產出下月優化建議、預算調整方向與客戶溝通話術。</p></article>
+            <article><strong>您的品牌</strong><p>套用代理商品牌、語氣與交付模板，讓報告看起來像你的服務。</p></article>
+          </div>
+        </section>
+
+        <section class="landing-section command-section" id="samples">
+          <p class="landing-kicker">儀表板</p>
+          <h2>您的指揮中心</h2>
+          <p class="landing-copy">在同一個後台管理客戶、資料來源、AI 草稿、報告版本、Email 交付與付款狀態。</p>
+          <div class="command-preview">
+            <div class="command-sidebar"></div>
+            <div class="command-content">
+              <div class="command-row"></div>
+              <div class="command-chart"></div>
+              <div class="command-cards"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section pricing-section" id="pricing">
+          <p class="landing-kicker">定價</p>
+          <h2>從第一位客戶開始自動化</h2>
+          <div class="landing-pricing-grid">
+            <article><strong>入門版</strong><span>NT$790/月</span><p>每月 10 份月報、CSV/Sheets 匯入、AI 建議、HTML/PDF 匯出。</p></article>
+            <article><strong>代理商版</strong><span>NT$2,490/月</span><p>每月 50 份月報、多客戶、品牌化報告、交付與付款紀錄。</p></article>
+            <article><strong>專業版</strong><span>NT$5,990/月</span><p>更高月報量、客戶入口、排程、Email 草稿與進階 AI 分析。</p></article>
+          </div>
+        </section>
+
+        <section class="landing-section contact-section" id="contact">
+          <div>
+            <p class="landing-kicker">接觸</p>
+            <h2>準備把月報流程產品化？</h2>
+            <p class="landing-copy">建立帳號後即可進入工作台，匯入資料並產生第一份 Demo 月報。</p>
+          </div>
+          <button class="primary landing-bottom-start" type="button">開始使用</button>
+        </section>
       </div>
 
       <section class="home-system-map" aria-label="系統架構">
@@ -879,6 +1005,6 @@
         <button type="button" data-dock-action="logout"><span>↪</span><strong id="dockLogoutLabel">登出</strong></button>
       </section>
     </div>
-    <script src="/app.js?v=20260613-public-landing"></script>
+    <script src="/app.js?v=20260613-briefly-style"></script>
   </body>
 </html>
