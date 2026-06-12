@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgencyReport AI | 代理商 AI 月報解讀與交付工具</title>
+    <link rel="stylesheet" href="/styles.css?v=20260612-pricing-update" />
+  </head>
+  <body>
+    <section class="auth-gate" id="authGate" hidden>
+      <form class="auth-card" id="authForm">
+        <p class="eyebrow">AgencyReport AI</p>
+        <h2 data-i18n="authTitle">工作台登入</h2>
+        <p data-i18n="authCopy">登入後才能管理客戶、報告、付款與 AI 自動化流程。</p>
+        <label>
+          <span data-i18n="authName">名稱 / 公司</span>
+          <input id="authName" type="text" placeholder="Northstar Marketing" />
+        </label>
+        <label>
+          <span>Email</span>
+          <input id="authEmail" type="email" placeholder="owner@example.com" required />
+        </label>
+        <label>
+          <span data-i18n="authPassword">密碼</span>
+          <input id="authPassword" type="password" placeholder="至少 8 個字元" required />
+        </label>
+        <div class="auth-actions">
+          <button class="primary" id="loginBtn" type="submit" data-i18n="login">登入</button>
+          <button class="ghost" id="registerBtn" type="button" data-i18n="register">建立帳號</button>
+        </div>
+        <div class="status-panel" id="authStatus"></div>
+      </form>
+    </section>
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark">AR</span>
+        <div>
+          <p class="eyebrow">AgencyReport AI</p>
+          <h1 data-i18n="appTitle">代理商 AI 月報解讀與交付工具</h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="language-toggle" aria-label="Language">
+          <button class="active" data-lang="zh" type="button">中</button>
+          <button data-lang="en" type="button">EN</button>
+        </div>
+        <div class="theme-toggle" aria-label="Theme">
+          <button class="active" data-theme="dark" type="button">深色</button>
+          <button data-theme="light" type="button">白色</button>
+        </div>
+        <button class="ghost" id="loadDemoBtn" type="button" data-i18n="loadDemo">載入範例</button>
+        <button class="ghost" id="saveTemplateBtn" type="button" data-i18n="saveTemplate">儲存模板</button>
+        <button class="ghost" id="exportHtmlBtn" type="button" data-i18n="exportHtml">匯出 HTML</button>
+        <button class="primary" id="printBtn" type="button" data-i18n="printPdf">列印 PDF</button>
+        <button class="ghost" id="logoutBtn" type="button" data-i18n="logout" hidden>Logout</button>
+      </div>
+    </header>
+
+    <section class="legal-panel" id="legalPanel" hidden>
+      <div class="legal-card">
+        <button class="ghost legal-close" id="closeLegalBtn" type="button" onclick="hideLegalPanel()">Close</button>
+        <div id="legalContent"></div>
+      </div>
+    </section>
+
+    <section class="portal-page" id="portalPage" hidden>
+      <div class="portal-shell">
+        <div class="portal-hero">
+          <p class="eyebrow">AgencyReport AI</p>
+          <h2 data-i18n="portalTitle">客戶需求入口</h2>
+          <p data-i18n="portalCopy">請填寫本月目標、資料來源與補充說明，系統會交給代理商與 AI 工作流接續處理。</p>
+          <div class="portal-token" id="portalToken">-</div>
+        </div>
+        <form class="portal-form" id="portalForm">
+          <label>
+            <span data-i18n="portalContact">聯絡 Email</span>
+            <input id="portalContactEmail" type="email" placeholder="client@example.com" />
+          </label>
+          <label>
+            <span data-i18n="portalGoal">本月目標</span>
+            <textarea id="portalGoal" data-i18n-placeholder="portalGoalPlaceholder" placeholder="例：降低 CPA、提高 ROAS、比較 Google Ads 與 Meta 成效。"></textarea>
+          </label>
+          <label>
+            <span data-i18n="portalSource">資料來源或 Sheets URL</span>
+            <input id="portalSourceUrl" type="url" placeholder="https://docs.google.com/spreadsheets/..." />
+          </label>
+          <label>
+            <span data-i18n="portalNotes">補充說明</span>
+            <textarea id="portalNotes" data-i18n-placeholder="portalNotesPlaceholder" placeholder="可貼上活動名稱、預算變動、特殊檔期或希望報告回答的問題。"></textarea>
+          </label>
+          <button class="primary full" id="submitPortalBtn" type="submit" data-i18n="submitPortal">送出需求</button>
+          <label class="legal-consent">
+            <input id="portalLegalConsent" type="checkbox" />
+            <span data-legal-copy="portalConsent">I agree to data processing, AI analysis, and report delivery terms.</span>
+          </label>
+          <a class="ghost full legal-link" id="portalLegalBtn" href="/legal" target="_blank" rel="noreferrer" data-legal-copy="viewLegal">View Terms & Privacy</a>
+          <div class="status-panel" id="portalStatus"></div>
+        </form>
+      </div>
+    </section>
+
+    <nav class="product-switcher" id="productSwitcher" aria-label="Workspace mode">
+      <button class="active" type="button" data-app-page="home">總覽首頁</button>
+      <button type="button" data-app-page="case">案件詳情</button>
+    </nav>
+
+    <section class="home-page app-page" id="overviewHome" aria-label="總覽首頁">
+      <div class="home-hero">
+        <div>
+          <p class="eyebrow">AgencyReport AI</p>
+          <h2>代理商營運總覽</h2>
+          <p>用一個畫面掌握目前案件、AI 自動化、報告交付與營收準備狀態。</p>
+        </div>
+        <div class="home-hero-actions">
+          <button class="ghost" id="homeLoadDemoBtn" type="button">載入 Demo</button>
+          <button class="primary" id="openCaseDetailBtn" type="button">進入案件詳情</button>
+        </div>
+      </div>
+
+      <div class="home-kpi-grid">
+        <article class="home-kpi-card">
+          <span>Launch readiness</span>
+          <strong id="homeLaunchScore">0%</strong>
+          <p>自動化、資料、交付與收款完成度。</p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Active clients</span>
+          <strong id="homeClientCount">0</strong>
+          <p>已建立且可追蹤的客戶案件。</p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Saved reports</span>
+          <strong id="homeReportCount">0</strong>
+          <p>已保存、可交付或可複製的報告。</p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Revenue ops</span>
+          <strong id="homeRevenueStatus">Draft</strong>
+          <p>付款、發票與方案準備狀態。</p>
+        </article>
+      </div>
+
+      <div class="home-layout">
+        <section class="home-panel home-current-case">
+          <div class="section-heading split">
+            <div>
+              <h3>目前案件</h3>
+              <p>把工作台聚焦在單一客戶，避免所有功能同時擠在第一屏。</p>
+            </div>
+            <button class="ghost" id="homeOpenCurrentCaseBtn" type="button">查看詳情</button>
+          </div>
+          <div class="home-case-summary">
+            <div><span>Client</span><strong id="homeCaseName">Untitled</strong></div>
+            <div><span>Month</span><strong id="homeCaseMonth">-</strong></div>
+            <div><span>Currency</span><strong id="homeCaseCurrency">TWD</strong></div>
+            <div><span>Report type</span><strong id="homeCaseType">Mixed</strong></div>
+          </div>
+          <div class="home-next-actions" id="homeNextActions"></div>
+        </section>
+
+        <section class="home-panel">
+          <div class="section-heading">
+            <div>
+              <h3>案件管線</h3>
+              <p>最近客戶、報告與發票動態。</p>
+            </div>
+          </div>
+          <div class="home-feed" id="homeFeed"></div>
+        </section>
+      </div>
+
+      <div class="home-panel">
+        <div class="section-heading">
+          <div>
+            <h3>工作流捷徑</h3>
+            <p>依照代理商交付流程分類，不需要在同一頁找所有功能。</p>
+          </div>
+        </div>
+        <div class="home-shortcuts">
+          <button type="button" data-home-workspace="case"><span>01</span><strong>案件資料</strong><small>客戶、需求、報告範本</small></button>
+          <button type="button" data-home-workspace="data"><span>02</span><strong>資料串接</strong><small>Sheets、CSV、來源驗證</small></button>
+          <button type="button" data-home-workspace="ai"><span>03</span><strong>AI 自動化</strong><small>需求解析、草稿、排程</small></button>
+          <button type="button" data-home-workspace="delivery"><span>04</span><strong>交付中心</strong><small>審稿、連結、Email</small></button>
+          <button type="button" data-home-workspace="billing"><span>05</span><strong>營收帳務</strong><small>方案、收款、發票</small></button>
+          <button type="button" data-home-workspace="settings"><span>06</span><strong>設定與信任</strong><small>成員、同意、稽核</small></button>
+        </div>
+      </div>
+    </section>
+
+    <main class="workspace app-page" id="caseWorkspace" hidden>
+      <aside class="panel controls" aria-label="報告設定">
+        <section class="case-card">
+          <div>
+            <span data-i18n="caseLabel">目前案件</span>
+            <strong id="caseSummary">晨光牙醫診所 / 廣告成效月報</strong>
+          </div>
+          <div class="case-chips">
+            <span id="caseMonthChip">2026-06</span>
+            <span id="caseCurrencyChip">TWD</span>
+          </div>
+        </section>
+
+        <nav class="workspace-nav" id="workspaceNav" aria-label="Workspace sections">
+          <button class="active" type="button" data-workspace-view="overview">總覽</button>
+          <button type="button" data-workspace-view="case">案件</button>
+          <button type="button" data-workspace-view="data">資料</button>
+          <button type="button" data-workspace-view="ai">AI</button>
+          <button type="button" data-workspace-view="delivery">交付</button>
+          <button type="button" data-workspace-view="billing">帳務</button>
+          <button type="button" data-workspace-view="settings">設定</button>
+        </nav>
+
+        <section class="onboarding-card">
+          <h2 data-i18n="quickStart">快速開始</h2>
+          <div class="steps-list">
+            <div><span>1</span><p data-i18n="stepOne">選一個範例或客戶模板。</p></div>
+            <div><span>2</span><p data-i18n="stepTwo">貼上 CSV，或從 Google Sheets 匯入。</p></div>
+            <div><span>3</span><p data-i18n="stepThree">產生報告後列印 PDF 或匯出 HTML。</p></div>
+          </div>
+        </section>
+
+        <section class="launch-card">
+          <div class="section-title compact">
+            <h2 data-i18n="launchAssistantTitle">上線助手</h2>
+            <p data-i18n="launchAssistantCopy">一鍵準備可展示、可留資、可交付的 Demo 案件。</p>
+          </div>
+          <div class="launch-meter">
+            <span data-i18n="launchReadiness">上線準備度</span>
+            <strong id="launchScore">0%</strong>
+          </div>
+          <div class="launch-checklist" id="launchChecklist"></div>
+          <div class="setup-wizard" id="setupWizard"></div>
+          <div class="status-panel compact-status" id="setupWizardStatus"></div>
+          <button class="primary full" id="completeDemoBtn" type="button" data-i18n="completeDemoSetup">一鍵完成 Demo 設定</button>
+        </section>
+
+        <section class="health-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="healthHubTitle">整合健康</h2>
+            <p data-i18n="healthHubCopy">快速檢查資料、AI、排程、交付、付款與權限狀態。</p>
+          </div>
+          <div class="health-score-card">
+            <span data-i18n="healthHubScore">營運健康分數</span>
+            <strong id="integrationScore">0%</strong>
+          </div>
+          <div class="integration-list" id="integrationList"></div>
+        </section>
+
+        <section class="client-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="clientHubTitle">客戶管理</h2>
+            <p data-i18n="clientHubCopy">建立客戶紀錄並檢查方案用量。</p>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="planLabel">方案</span>
+              <select id="planSelect">
+                <option value="starter">入門版</option>
+                <option value="agency">代理商版</option>
+                <option value="whiteLabel">專業版</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="apiModeLabel">資料模式</span>
+              <input id="apiMode" type="text" value="Local fallback" readonly />
+            </label>
+          </div>
+          <div class="client-stats">
+            <div><span data-i18n="clientCount">客戶數</span><strong id="clientCount">0</strong></div>
+            <div><span data-i18n="reportUsage">報告用量</span><strong id="reportUsage">0 / 5</strong></div>
+          </div>
+          <div class="actions-row">
+            <button class="primary" id="saveClientBtn" type="button" data-i18n="saveClient">儲存客戶</button>
+            <button class="ghost" id="syncClientsBtn" type="button" data-i18n="syncClients">同步資料</button>
+          </div>
+          <button class="ghost full" id="createPortalInviteBtn" type="button" data-i18n="createPortalInvite">建立客戶入口</button>
+          <div class="portal-invite-list" id="portalInviteList"></div>
+          <div class="client-list" id="clientList"></div>
+          <div class="status-panel compact-status" id="clientHubStatus"></div>
+        </section>
+
+        <section class="report-library">
+          <div class="section-title compact">
+            <h2 data-i18n="reportLibraryTitle">報告庫</h2>
+            <p data-i18n="reportLibraryCopy">保存與查看最近報告版本。</p>
+          </div>
+          <div class="library-summary">
+            <div><span data-i18n="savedReports">已保存報告</span><strong id="libraryCount">0</strong></div>
+            <div><span data-i18n="latestReport">最近報告</span><strong id="latestReportMonth">-</strong></div>
+          </div>
+          <button class="ghost full" id="saveReportBtn" type="button" data-i18n="saveReport">保存目前報告</button>
+          <div class="report-list" id="reportList"></div>
+        </section>
+
+        <section class="billing-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="billingTitle">帳號與付款</h2>
+            <p data-i18n="billingCopy">建立代理商帳號並產生付款草稿。</p>
+          </div>
+          <label>
+            <span data-i18n="accountName">帳號名稱</span>
+            <input id="accountName" type="text" placeholder="Northstar Marketing" data-i18n-placeholder="accountNamePlaceholder" />
+          </label>
+          <label>
+            <span data-i18n="accountEmail">帳號 Email</span>
+            <input id="accountEmail" type="email" placeholder="owner@example.com" data-i18n-placeholder="accountEmailPlaceholder" />
+          </label>
+          <div class="billing-summary">
+            <div><span data-i18n="selectedPlan">目前方案</span><strong id="billingPlan">Starter</strong></div>
+            <div><span data-i18n="checkoutStatus">付款狀態</span><strong id="checkoutStatus">Draft</strong></div>
+          </div>
+          <div class="actions-row">
+            <button class="primary" id="saveAccountBtn" type="button" data-i18n="saveAccount">儲存帳號</button>
+            <button class="ghost" id="createCheckoutBtn" type="button" data-i18n="createCheckout">建立付款草稿</button>
+          </div>
+          <button class="ghost full" id="createInvoiceBtn" type="button" data-i18n="createInvoice">建立發票草稿</button>
+          <div class="status-panel compact-status" id="billingStatus"></div>
+          <div class="invoice-list" id="invoiceList"></div>
+        </section>
+
+        <section class="access-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="accessTitle">團隊權限</h2>
+            <p data-i18n="accessCopy">邀請 PM、媒體投手或管理員，建立基本工作區權限。</p>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="memberEmail">成員 Email</span>
+              <input id="memberEmail" type="email" placeholder="pm@example.com" />
+            </label>
+            <label>
+              <span data-i18n="memberRole">角色</span>
+              <select id="memberRole">
+                <option value="admin">Admin</option>
+                <option value="pm">PM</option>
+                <option value="media_buyer">Media Buyer</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </label>
+          </div>
+          <button class="ghost full" id="inviteMemberBtn" type="button" data-i18n="inviteMember">邀請成員</button>
+          <div class="member-list" id="memberList"></div>
+          <div class="access-status" id="accessStatus"></div>
+        </section>
+
+        <section class="trust-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="trustTitle">信任與授權</h2>
+            <p data-i18n="trustCopy">保存資料處理與 AI 分析授權，正式上線前必備。</p>
+          </div>
+          <div class="consent-list">
+            <label><input id="consentData" type="checkbox" /> <span data-i18n="consentData">客戶同意匯入與處理廣告 / 分析資料。</span></label>
+            <label><input id="consentAi" type="checkbox" /> <span data-i18n="consentAi">客戶同意使用 AI 產出分析草稿。</span></label>
+            <label><input id="consentDelivery" type="checkbox" /> <span data-i18n="consentDelivery">客戶同意以 Email / PDF / HTML 交付報告。</span></label>
+          </div>
+          <button class="ghost full" id="saveConsentBtn" type="button" data-i18n="saveConsent">保存授權</button>
+          <div class="trust-status" id="trustStatus"></div>
+        </section>
+
+        <section class="audit-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="auditTitle">稽核紀錄</h2>
+            <p data-i18n="auditCopy">追蹤 API 操作，方便客服、除錯與上線合規。</p>
+          </div>
+          <div class="audit-summary">
+            <div><span data-i18n="auditEvents">事件數</span><strong id="auditCount">0</strong></div>
+            <div><span data-i18n="auditStatus">狀態</span><strong id="auditStatus">-</strong></div>
+          </div>
+          <button class="ghost full" id="refreshAuditBtn" type="button" data-i18n="refreshAudit">刷新紀錄</button>
+          <div class="audit-list" id="auditList"></div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title">
+            <h2 data-i18n="reportSettings">報告設定</h2>
+            <p data-i18n="settingsCopy">將 Sheets / CSV 數據轉成客戶看得懂的月報。</p>
+          </div>
+
+          <div class="quick-actions">
+            <button class="soft-action" id="quickAdsBtn" type="button">Ads</button>
+            <button class="soft-action" id="quickSeoBtn" type="button">SEO</button>
+            <button class="soft-action" id="quickSocialBtn" type="button">Social</button>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              <span data-i18n="clientTemplate">客戶模板</span>
+              <select id="templateSelect"></select>
+            </label>
+            <label>
+              <span data-i18n="sampleReport">報告範例</span>
+              <select id="sampleSelect">
+                <option value="ads">Google / Meta 廣告月報</option>
+                <option value="seo">SEO 成效月報</option>
+                <option value="social">社群成效月報</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="agencyBrand">代理商品牌</span>
+              <input id="agencyName" type="text" value="Northstar Marketing" />
+            </label>
+            <label>
+              <span data-i18n="clientName">客戶名稱</span>
+              <input id="clientName" type="text" value="晨光牙醫診所" />
+            </label>
+            <label>
+              <span data-i18n="reportMonth">報告月份</span>
+              <input id="reportMonth" type="month" />
+            </label>
+            <label>
+              <span data-i18n="reportType">報告類型</span>
+              <select id="reportType">
+                <option value="ads">廣告成效月報</option>
+                <option value="seo">SEO 成效月報</option>
+                <option value="social">社群成效月報</option>
+                <option value="mixed">整合行銷月報</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="currency">幣別</span>
+              <select id="currency">
+                <option value="TWD">TWD</option>
+                <option value="USD">USD</option>
+                <option value="JPY">JPY</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="tone">報告語氣</span>
+              <select id="tone">
+                <option value="executive">高層摘要</option>
+                <option value="consultative">顧問式說明</option>
+                <option value="direct">直接行動導向</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title compact">
+            <h2 data-i18n="dataSource">資料來源</h2>
+            <p data-i18n="dataSourceCopy">建議用 Google Sheets 發佈成 CSV。</p>
+          </div>
+          <label>
+            <span>Google Sheets CSV URL</span>
+            <input id="sheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv" />
+          </label>
+          <div class="source-box">
+            <div class="field-grid">
+              <label>
+                <span data-i18n="sourceType">資料來源類型</span>
+                <select id="sourceType">
+                  <option value="google_sheets">Google Sheets CSV</option>
+                  <option value="manual_csv">Manual CSV</option>
+                  <option value="google_ads">Google Ads API</option>
+                  <option value="meta_ads">Meta Ads API</option>
+                  <option value="ga4">GA4 API</option>
+                  <option value="search_console">Search Console API</option>
+                  <option value="oauth_ready">OAuth / Supermetrics Ready</option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="sourceOwner">來源負責人</span>
+                <input id="sourceOwner" type="email" placeholder="ops@example.com" />
+              </label>
+            </div>
+            <div class="actions-row">
+              <button class="ghost" id="testSourceBtn" type="button" data-i18n="testSource">測試來源</button>
+              <button class="ghost" id="saveSourceBtn" type="button" data-i18n="saveSource">保存來源</button>
+            </div>
+            <div class="source-status" id="sourceStatus"></div>
+            <div class="source-list" id="sourceList"></div>
+          </div>
+          <div class="actions-row">
+            <button class="ghost" id="importSheetBtn" type="button" data-i18n="importSheets">從 Sheets 匯入</button>
+            <label class="file-button">
+              <span data-i18n="importCsv">匯入 CSV</span>
+              <input id="csvFile" type="file" accept=".csv,text/csv" />
+            </label>
+          </div>
+          <div class="actions-row helper-actions">
+            <button class="ghost" id="insertCsvTemplateBtn" type="button" data-i18n="copyCsvTemplate">插入 CSV 範本</button>
+            <button class="ghost" id="downloadSampleBtn" type="button" data-i18n="downloadSample">下載範例 CSV</button>
+            <button class="ghost danger" id="clearLocalBtn" type="button" data-i18n="clearLocal">清除本機資料</button>
+          </div>
+          <label class="wide">
+            <span data-i18n="csvData">CSV 數據</span>
+            <textarea id="csvInput" spellcheck="false"></textarea>
+          </label>
+          <div class="hint" data-i18n="csvHint">
+            必填欄位：channel, spend, impressions, clicks, conversions, revenue。可選欄位：last_spend, last_clicks, last_conversions, last_revenue。幣別只改變顯示格式，不做匯率換算。
+          </div>
+          <button class="primary full" id="generateBtn" type="button" data-i18n="generateReport">產生報告</button>
+          <div class="status-panel" id="dataStatus" aria-live="polite"></div>
+          <div class="checklist-panel internal-only">
+            <h3 data-i18n="deployChecklist">公開部署前檢查</h3>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkNoBackend">無後端即可展示</span></label>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkNoSensitive">資料只存在使用者瀏覽器</span></label>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkExport">支援 PDF / HTML 交付</span></label>
+            <label><input type="checkbox" /> <span data-i18n="checkPayment">正式收費前接付款與帳號</span></label>
+          </div>
+        </section>
+
+        <section class="control-section autopilot-panel">
+          <div class="section-title compact">
+            <h2 data-i18n="autopilotTitle">AI Autopilot</h2>
+            <p data-i18n="autopilotCopy">讓客戶用自然語言描述需求，系統自動配置報告。</p>
+          </div>
+          <label>
+            <span data-i18n="clientRequest">客戶需求</span>
+            <textarea id="clientRequest" class="short-textarea" data-i18n-placeholder="clientRequestPlaceholder" placeholder="例：我們是牙醫診所，想知道這個月 Google Ads 和 Meta 哪個帶來更多預約，並降低 CPA。"></textarea>
+          </label>
+          <div class="prompt-presets">
+            <button class="soft-action" data-prompt-preset="cpa" type="button">CPA</button>
+            <button class="soft-action" data-prompt-preset="roas" type="button">ROAS</button>
+            <button class="soft-action" data-prompt-preset="seo" type="button">SEO</button>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="businessType">產業</span>
+              <select id="businessType">
+                <option value="local">在地服務</option>
+                <option value="ecommerce">電商</option>
+                <option value="b2b">B2B</option>
+                <option value="content">內容 / 媒體</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="automationLevel">自動化程度</span>
+              <select id="automationLevel">
+                <option value="assist">AI 輔助</option>
+                <option value="draft">AI 產草稿</option>
+                <option value="auto">全自動交付草案</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="deliveryEmail">交付 Email</span>
+              <input id="deliveryEmail" type="email" placeholder="client@example.com" data-i18n-placeholder="deliveryEmailPlaceholder" />
+            </label>
+            <label>
+              <span data-i18n="scheduleCadence">交付排程</span>
+              <select id="scheduleCadence">
+                <option value="manual">手動審核後交付</option>
+                <option value="monthly">每月 1 號自動產草稿</option>
+                <option value="weekly">每週一自動產草稿</option>
+              </select>
+            </label>
+          </div>
+          <button class="primary full" id="runAutopilotBtn" type="button" data-i18n="runAutopilot">AI 自動配置案件</button>
+          <div class="ai-output" id="autopilotOutput"></div>
+          <div class="intake-box">
+            <div>
+              <strong data-i18n="intakeTitle">客戶需求 Intake</strong>
+              <span data-i18n="intakeCopy">保存客戶需求，讓後端 AI 與客服可以接續處理。</span>
+            </div>
+            <button class="ghost full" id="saveIntakeBtn" type="button" data-i18n="saveIntake">送出需求</button>
+            <div class="intake-status" id="intakeStatus"></div>
+            <div class="portal-submission-actions">
+              <button class="ghost" id="refreshPortalSubmissionsBtn" type="button" data-i18n="refreshPortalSubmissions">刷新客戶提交</button>
+              <button class="ghost" id="applyPortalSubmissionBtn" type="button" data-i18n="applyPortalSubmission">套用最新提交</button>
+              <button class="ghost" id="processPortalSubmissionBtn" type="button" data-i18n="processPortalSubmission">自動建案</button>
+              <button class="ghost" id="runPortalAiDraftBtn" type="button" data-i18n="runPortalAiDraft">建案 + AI 草稿</button>
+            </div>
+            <div class="portal-submission-list" id="portalSubmissionList"></div>
+          </div>
+          <div class="agent-box">
+            <div>
+              <strong data-i18n="agentBackendTitle">後端 AI 與排程</strong>
+              <span data-i18n="agentBackendCopy">產生後端 AI 草稿並建立固定重跑排程。</span>
+            </div>
+            <div class="actions-row">
+              <button class="ghost" id="runBackendAiBtn" type="button" data-i18n="runBackendAi">執行後端 AI</button>
+              <button class="ghost" id="createScheduleBtn" type="button" data-i18n="createSchedule">建立排程</button>
+            </div>
+            <div class="agent-status" id="agentStatus"></div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="report-shell" aria-label="報告預覽">
+        <article class="report" id="report">
+          <section class="cover">
+            <div>
+          <p class="report-kicker" id="coverAgency">Northstar Marketing</p>
+              <h2 id="coverTitle">晨光牙醫診所廣告成效月報</h2>
+              <p id="coverMonth">2026 年 06 月</p>
+            </div>
+            <div class="score-card">
+              <span data-i18n="healthScoreLabel">本月健康分</span>
+              <strong id="healthScore">82</strong>
+              <small id="scoreLabel">穩定成長</small>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="executiveSummary">高層摘要</h3>
+                <p data-i18n="executiveSummaryCopy">給客戶決策者看的 60 秒重點。</p>
+              </div>
+            </div>
+            <div class="summary-grid" id="summaryCards"></div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading split">
+              <div>
+                <h3 data-i18n="coreKpi">核心 KPI</h3>
+                <p data-i18n="coreKpiCopy">總量、效率與上月比較。</p>
+              </div>
+              <div class="quality-pill" id="qualityPill">資料完整</div>
+            </div>
+            <div class="kpi-grid" id="kpiGrid"></div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="automationTitle">自動化導入架構</h3>
+                <p data-i18n="automationCopy">不取代 Looker Studio，而是補上月報敘事與交付層。</p>
+              </div>
+            </div>
+            <div class="automation-grid">
+              <div class="automation-card"><span>01</span><h4 data-i18n="autoDataTitle">資料串接</h4><p data-i18n="autoDataCopy">Supermetrics、官方 API 或 Sheets 匯出 CSV，集中 Google Ads、Meta、GA4、Search Console 等資料。</p><strong>Sheets / Supermetrics</strong></div>
+              <div class="automation-card"><span>02</span><h4 data-i18n="autoDashboardTitle">即時看板</h4><p data-i18n="autoDashboardCopy">Looker Studio 負責每日監控、日期篩選與品牌化儀表板。</p><strong>Looker Studio</strong></div>
+              <div class="automation-card"><span>03</span><h4 data-i18n="autoNarrativeTitle">AI 月報解讀</h4><p data-i18n="autoNarrativeCopy">AgencyReport AI 將數字轉成摘要、風險、洞察與下月行動。</p><strong>AI Narrative</strong></div>
+              <div class="automation-card"><span>04</span><h4 data-i18n="autoDeliveryTitle">交付自動化</h4><p data-i18n="autoDeliveryCopy">Zapier / Make 每月觸發提醒、更新資料、寄送草稿給 PM。</p><strong>Zapier / Make</strong></div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="interactiveAnalytics">互動視覺分析</h3>
+                <p data-i18n="interactiveAnalyticsCopy">切換模式、點選渠道，快速找到成長與浪費來源。</p>
+              </div>
+            </div>
+            <div class="dashboard-toolbar">
+              <div class="segmented" aria-label="圖表模式">
+                <button class="active" data-chart-mode="overview" type="button" data-i18n="overview">總覽</button>
+                <button data-chart-mode="efficiency" type="button" data-i18n="efficiency">效率</button>
+                <button data-chart-mode="growth" type="button" data-i18n="growth">成長</button>
+              </div>
+              <div class="selected-channel" id="selectedChannel">目前檢視：全部渠道</div>
+            </div>
+            <div class="chart-grid">
+              <div class="chart-card wide-chart"><div class="chart-title"><h4 data-i18n="trendChartTitle">本月 vs 上月變化</h4><span>Spend / Clicks / Conversions / Revenue</span></div><canvas id="trendChart" width="720" height="360"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="revenueChartTitle">渠道營收占比</h4><span>Revenue share</span></div><canvas id="revenueChart" width="420" height="320"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="roasChartTitle">渠道 ROAS 排名</h4><span>Higher is better</span></div><canvas id="roasChart" width="520" height="330"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="funnelChartTitle">轉換漏斗</h4><span>Impressions to conversions</span></div><canvas id="funnelChart" width="520" height="330"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="quadrantChartTitle">效率象限</h4><span>CPA x ROAS</span></div><canvas id="quadrantChart" width="520" height="330"></canvas></div>
+            </div>
+          </section>
+
+          <section class="report-section two-column">
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="channelPerformance">渠道表現</h3><p data-i18n="channelPerformanceCopy">依 ROAS 與效率排序。</p></div></div>
+              <div class="channel-list" id="channelList"></div>
+            </div>
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="efficiencyDiagnosis">效率診斷</h3><p data-i18n="efficiencyDiagnosisCopy">把數字翻成可執行判斷。</p></div></div>
+              <div class="diagnostic-grid" id="diagnostics"></div>
+            </div>
+          </section>
+
+          <section class="report-section two-column insight-layout">
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="aiInsight">AI 成效解讀</h3><p data-i18n="aiInsightCopy">可直接貼進客戶月報的說明文字。</p></div></div>
+              <div class="insight-box" id="insights"></div>
+            </div>
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="riskAlerts">風險提醒</h3><p data-i18n="riskAlertsCopy">需要 PM 優先處理的異常訊號。</p></div></div>
+              <div class="risk-list" id="riskList"></div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading"><div><h3 data-i18n="nextActions">下月行動建議</h3><p data-i18n="nextActionsCopy">具體、可追蹤、可交辦。</p></div></div>
+            <ol class="recommendations" id="recommendations"></ol>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading"><div><h3 data-i18n="detailData">渠道明細資料</h3><p data-i18n="detailDataCopy">給 PM 或投手核對的完整數字。</p></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th data-i18n="channel">渠道</th><th data-i18n="spend">花費</th><th data-i18n="clicks">點擊</th><th data-i18n="conversions">轉換</th><th data-i18n="revenue">營收</th><th>CTR</th><th>CVR</th><th>CPA</th><th>ROAS</th></tr></thead>
+                <tbody id="detailTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="report-section ai-workorder-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="aiWorkOrderTitle">AI 工作單</h3>
+                <p data-i18n="aiWorkOrderCopy">把客戶需求轉成可執行的分析任務與回覆草稿。</p>
+              </div>
+            </div>
+            <div class="workorder-grid" id="aiWorkOrder"></div>
+          </section>
+
+          <section class="report-section automation-operating-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="automationOpsTitle">全自動化營運控制台</h3>
+                <p data-i18n="automationOpsCopy">把需求、資料、AI 分析、審核與交付串成可營利流程。</p>
+              </div>
+            </div>
+            <div class="automation-plan" id="automationPlan"></div>
+          </section>
+
+          <section class="report-section delivery-section">
+            <div class="section-heading split">
+              <div>
+                <h3 data-i18n="deliveryCenterTitle">PM 審核與交付中心</h3>
+                <p data-i18n="deliveryCenterCopy">審核報告、建立交付紀錄，之後可串接 Email / PDF。</p>
+              </div>
+              <div class="actions-row">
+                <button class="ghost" id="approveDraftBtn" type="button" data-i18n="approveDraft">標記已審核</button>
+                <button class="ghost" id="createShareLinkBtn" type="button" data-i18n="createShareLink">建立分享連結</button>
+                <button class="ghost" id="queueEmailBtn" type="button" data-i18n="queueEmail">排入 Email</button>
+                <button class="primary" id="deliverReportBtn" type="button" data-i18n="deliverReport">建立交付紀錄</button>
+              </div>
+            </div>
+            <div class="delivery-grid" id="deliveryCenter"></div>
+            <div class="share-link-panel" id="shareLinkPanel"></div>
+            <div class="email-job-panel" id="emailJobPanel"></div>
+          </section>
+
+          <section class="report-section progress-section internal-only">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="progressTitle">專案完成進度</h3>
+                <p data-i18n="progressCopy">目前可展示、可測試收費；正式營利前仍需後端與第三方串接。</p>
+              </div>
+            </div>
+            <div class="progress-grid" id="progressGrid"></div>
+            <div class="completion-panel">
+              <div class="section-heading">
+                <div>
+                  <h3 data-i18n="completionTitle">本階段交付清單</h3>
+                  <p data-i18n="completionCopy">截圖中的進度項目已整理成可驗證的產品功能。</p>
+                </div>
+              </div>
+              <div class="completion-list" id="completionList"></div>
+            </div>
+          </section>
+
+          <section class="report-section commercial-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="pricingTitle">產品化服務方案</h3>
+                <p data-i18n="pricingCopy">用來測試第一批代理商付費意願。</p>
+              </div>
+            </div>
+            <div class="pricing-grid">
+              <div class="price-card"><h4 data-i18n="starterPlanName">入門版</h4><strong data-i18n="starterPrice">NT$790/月</strong><p data-i18n="starterCopy">每月 10 份月報、CSV/Sheets 匯入、AI 建議、PDF/HTML 匯出。</p></div>
+              <div class="price-card featured"><h4 data-i18n="agencyPlanName">代理商版</h4><strong data-i18n="agencyPrice">NT$2,490/月</strong><p data-i18n="agencyCopy">每月 50 份月報、多客戶、品牌化報告、AI 下月建議、付款/交付紀錄。</p></div>
+              <div class="price-card"><h4 data-i18n="professionalPlanName">專業版</h4><strong data-i18n="whiteLabelPrice">NT$5,990/月</strong><p data-i18n="whiteLabelCopy">更高月報量、客戶入口、排程、Email 草稿、白標與進階 AI 分析。</p></div>
+            </div>
+
+            <form class="lead-form" id="leadForm">
+              <div>
+                <h4 data-i18n="leadTitle">預約試用 / 留下需求</h4>
+                <p data-i18n="leadCopy">先收集有興趣的代理商名單，不必等完整 SaaS 才開始賣。</p>
+              </div>
+            <input id="leadName" type="text" placeholder="姓名 / 公司" data-i18n-placeholder="leadNamePlaceholder" required />
+            <input id="leadEmail" type="email" placeholder="Email" data-i18n-placeholder="leadEmailPlaceholder" required />
+              <button class="primary" type="submit" data-i18n="saveLead">儲存名單</button>
+              <label class="legal-consent inline-consent">
+                <input id="leadLegalConsent" type="checkbox" required />
+                <span data-legal-copy="leadConsent">I agree to be contacted and to the privacy terms.</span>
+              </label>
+              <a class="ghost legal-link" id="leadLegalBtn" href="/legal" target="_blank" rel="noreferrer" data-legal-copy="viewLegal">View Terms & Privacy</a>
+            </form>
+            <div class="status-panel" id="leadStatus"></div>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <section class="upgrade-modal" id="upgradeModal" hidden>
+      <div class="upgrade-dialog" role="dialog" aria-modal="true" aria-labelledby="upgradeModalTitle">
+        <div class="upgrade-head">
+          <div>
+            <p class="eyebrow">AgencyReport AI</p>
+            <h2 id="upgradeModalTitle">升級方案</h2>
+          </div>
+          <button class="ghost upgrade-close" id="upgradeCloseBtn" type="button" aria-label="Close">×</button>
+        </div>
+        <div class="upgrade-tabs" role="tablist" aria-label="Billing cycle">
+          <button class="active" type="button" data-upgrade-cycle="monthly">月繳</button>
+          <button type="button" data-upgrade-cycle="annual">年繳</button>
+        </div>
+        <div class="upgrade-plans" id="upgradePlans"></div>
+        <div class="upgrade-status" id="upgradeStatus"></div>
+      </div>
+    </section>
+
+    <div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>
+    <div class="account-dock" id="accountDock">
+      <button class="account-dock-toggle" id="accountDockToggle" type="button" aria-expanded="false" aria-controls="accountDockMenu">
+        <span>⚙</span>
+        <strong id="accountDockLabel">設定</strong>
+      </button>
+      <section class="account-dock-menu" id="accountDockMenu" hidden>
+        <div class="account-dock-header">
+          <span>AR</span>
+          <div>
+            <strong id="accountDockName">個人帳戶</strong>
+            <small id="accountDockEmail">Not signed in</small>
+          </div>
+        </div>
+        <button type="button" data-dock-action="profile"><span>◎</span><strong id="dockProfileLabel">個人檔案</strong></button>
+        <button type="button" data-dock-action="settings"><span>⚙</span><strong id="dockSettingsLabel">設定</strong><small>Ctrl+,</small></button>
+        <div class="dock-divider"></div>
+        <button type="button" data-dock-action="usage" class="dock-usage-button"><span>◔</span><strong id="dockUsageLabel">剩餘用量</strong><small id="dockUsagePercent">0%</small></button>
+        <div class="dock-usage-grid">
+          <div><strong id="dockReportUsage">0 / 5</strong><span id="dockReportUsageLabel">報告</span></div>
+          <div><strong id="dockClientUsage">0 / 3</strong><span id="dockClientUsageLabel">客戶</span></div>
+        </div>
+        <button type="button" data-dock-action="billing"><span>↗</span><strong id="dockUpgradeLabel">升級為 Pro</strong></button>
+        <button type="button" data-dock-action="reset"><span>›</span><strong id="dockResetLabel">可用重設</strong><small id="dockResetValue">1 次</small></button>
+        <div class="dock-divider"></div>
+        <button type="button" data-dock-action="invite"><span>✉</span><strong id="dockInviteLabel">邀請好友</strong></button>
+        <button type="button" data-dock-action="logout"><span>↪</span><strong id="dockLogoutLabel">登出</strong></button>
+      </section>
+    </div>
+    <script src="/app.js?v=20260612-pricing-update"></script>
+  </body>
+</html>
