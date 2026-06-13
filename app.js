@@ -129,6 +129,12 @@ const i18n = {
     saveLead: "儲存名單",
     leadNamePlaceholder: "姓名 / 公司",
     leadEmailPlaceholder: "Email",
+    essentialFlowTitle: "三步驟產生月報",
+    essentialFlowCopy: "新客戶只需要完成資料、AI、交付三件事。",
+    essentialDataTitle: "匯入資料",
+    essentialAiTitle: "產生 AI 建議",
+    essentialDeliveryTitle: "審核並交付",
+    essentialGenerate: "一鍵產生月報",
     quickStart: "快速開始",
     stepOne: "選一個範例或客戶模板。",
     stepTwo: "貼上 CSV，或從 Google Sheets 匯入。",
@@ -453,6 +459,12 @@ const i18n = {
     saveLead: "Save Lead",
     leadNamePlaceholder: "Name / Company",
     leadEmailPlaceholder: "Email",
+    essentialFlowTitle: "Generate a Report in 3 Steps",
+    essentialFlowCopy: "New clients only need data, AI analysis, and delivery.",
+    essentialDataTitle: "Import Data",
+    essentialAiTitle: "Generate AI Advice",
+    essentialDeliveryTitle: "Review and Deliver",
+    essentialGenerate: "Generate Monthly Report",
     quickStart: "Quick Start",
     stepOne: "Choose a sample or client template.",
     stepTwo: "Paste CSV data or import from Google Sheets.",
@@ -991,9 +1003,30 @@ function applyMarketingLandingCopy() {
   const hero = document.querySelector(".home-hero");
   if (hero) {
     hero.querySelector(".eyebrow").textContent = zh ? "人工智慧驅動的報告" : "AI-powered reporting";
-    hero.querySelector("h2").textContent = zh ? "別再寫報告了，直接發送報告吧。" : "Stop writing reports. Send them instead.";
+    const heroTitle = hero.querySelector("h2");
+    heroTitle.textContent = zh ? "別再寫報告了，直接發送報告吧。" : "Stop writing reports. Send them instead.";
+    if (zh) {
+      heroTitle.innerHTML = "<span>別再寫報告了，</span><span>直接發送報告吧。</span>";
+    }
     hero.querySelector("p:not(.eyebrow)").textContent = zh
       ? "上傳您的資料與客戶需求，AgencyReport AI 會在幾秒內產生可交付的品牌化月報。"
+      : "Upload campaign data and client requirements. AgencyReport AI generates a branded, client-ready report in seconds.";
+  }
+  if (hero) {
+    const heroTitle = hero.querySelector("h2");
+    hero.querySelector(".eyebrow").textContent = zh ? "\u4eba\u5de5\u667a\u6167\u9a45\u52d5\u7684\u4ee3\u7406\u5546\u6708\u5831" : "AI-powered agency reporting";
+    if (zh) {
+      heroTitle.innerHTML = [
+        "<span class=\"title-word title-word-a\">\u5225\u518d</span>",
+        "<span class=\"title-word title-word-b\">\u5beb\u5831\u544a\u4e86\uff0c</span>",
+        "<span class=\"title-word title-word-c\">\u76f4\u63a5</span>",
+        "<span class=\"title-word title-word-d\">\u767c\u9001\u5831\u544a\u5427\u3002</span>",
+      ].join("");
+    } else {
+      heroTitle.textContent = "Stop writing reports. Send them instead.";
+    }
+    hero.querySelector("p:not(.eyebrow)").textContent = zh
+      ? "\u4e0a\u50b3\u5ee3\u544a\u8cc7\u6599\u8207\u5ba2\u6236\u9700\u6c42\uff0cAgencyReport AI \u6703\u5728\u6578\u79d2\u5167\u7522\u751f\u53ef\u76f4\u63a5\u4ea4\u4ed8\u7684\u54c1\u724c\u5316\u6708\u5831\u3002"
       : "Upload campaign data and client requirements. AgencyReport AI generates a branded, client-ready report in seconds.";
   }
   const demo = document.querySelector("#homeLoadDemoBtn");
@@ -1006,6 +1039,90 @@ function applyMarketingLandingCopy() {
   if (login) login.textContent = zh ? "登入" : "Sign in";
   if (start) start.textContent = zh ? "開始使用" : "Start free";
   if (bottomStart) bottomStart.textContent = zh ? "開始使用" : "Start free";
+  const systemCopy = zh ? [
+    ["01", "資料入口", "CSV、Sheets、客戶需求與交付 Email 集中到單一案件。"],
+    ["02", "AI 分析引擎", "自動整理 KPI、找出最佳與最弱渠道，產生下月行動。"],
+    ["03", "代理商審核", "保留人工把關，快速調整語氣、重點與客戶說明稿。"],
+    ["04", "品牌化交付", "輸出 HTML/PDF、Email 草稿、分享連結與付款交付紀錄。"],
+  ] : [
+    ["01", "Data Intake", "CSV, Sheets, client requirements, and delivery email live in one case."],
+    ["02", "AI Analysis Engine", "Turn KPIs, best and weakest channels, and next actions into usable insight."],
+    ["03", "Agency Review", "Keep human approval while quickly tuning tone, priorities, and client copy."],
+    ["04", "Branded Delivery", "Export HTML/PDF, email drafts, share links, and payment delivery records."],
+  ];
+  ["One", "Two", "Three", "Four"].forEach((suffix, index) => {
+    const [step, title, body] = systemCopy[index];
+    const stepNode = document.querySelector(`#landingSystemStep${suffix}`);
+    const titleNode = document.querySelector(`#landingSystemTitle${suffix}`);
+    const copyNode = document.querySelector(`#landingSystemCopy${suffix}`);
+    if (stepNode) stepNode.textContent = step;
+    if (titleNode) titleNode.textContent = title;
+    if (copyNode) copyNode.textContent = body;
+  });
+  const proofCopy = zh ? [
+    ["\u5e73\u5747\u7bc0\u7701\u6642\u9593", "6 hr", "\u6bcf\u4f4d\u5ba2\u6236\u6bcf\u6708\u5c11\u505a\u4e00\u6b21\u4eba\u5de5\u6574\u7406\u3002"],
+    ["\u53ef\u4ea4\u4ed8\u5167\u5bb9", "4-in-1", "KPI\u3001\u5716\u8868\u3001AI \u6458\u8981\u3001Email \u8349\u7a3f\u4e00\u6b21\u5b8c\u6210\u3002"],
+    ["\u71df\u904b\u72c0\u614b", "Live", "\u6848\u4ef6\u3001\u6536\u6b3e\u8207\u4ea4\u4ed8\u7d00\u9304\u96c6\u4e2d\u8ffd\u8e64\u3002"],
+  ] : [
+    ["Time saved", "6 hr", "Reduce manual report assembly for every monthly client cycle."],
+    ["Deliverables", "4-in-1", "KPI, charts, AI summary, and email draft are prepared together."],
+    ["Ops status", "Live", "Track cases, payment drafts, and delivery records in one place."],
+  ];
+  ["One", "Two", "Three"].forEach((suffix, index) => {
+    const [label, value, body] = proofCopy[index];
+    const labelNode = document.querySelector(`#landingProof${suffix}Label`);
+    const valueNode = document.querySelector(`#landingProof${suffix}Value`);
+    const copyNode = document.querySelector(`#landingProof${suffix}Copy`);
+    if (labelNode) labelNode.textContent = label;
+    if (valueNode) valueNode.textContent = value;
+    if (copyNode) copyNode.textContent = body;
+  });
+  const sampleCopy = zh ? {
+    kicker: "Sample Report",
+    title: "讓客戶打開就看得懂的月報成品",
+    copy: "把 KPI、趨勢、風險與下月行動整理成一份可審核、可下載、可寄送的品牌化報告。",
+    client: "晨光牙醫診所 / 2026-06",
+    headline: "本月 ROAS 穩定提升，Meta CPA 需控管",
+    insightOne: "搜尋廣告帶來最高轉換效率，可提高預算占比。",
+    insightTwo: "重新測試 Meta 受眾，並調整落地頁 CTA。",
+    notes: [
+      ["客戶版摘要", "把數字轉成客戶看得懂的成效說明。"],
+      ["互動圖表", "用 KPI 與趨勢圖呈現每個渠道的變化。"],
+      ["交付紀錄", "保留 Email、PDF、分享連結與審核狀態。"],
+    ],
+  } : {
+    kicker: "Sample Report",
+    title: "A monthly report clients can understand immediately",
+    copy: "Turn KPIs, trends, risks, and next actions into a branded report that can be reviewed, downloaded, and sent.",
+    client: "Bright Dental Clinic / 2026-06",
+    headline: "ROAS improved steadily while Meta CPA needs control",
+    insightOne: "Search ads delivered the strongest conversion efficiency and can receive more budget.",
+    insightTwo: "Retest Meta audiences and adjust the landing page CTA.",
+    notes: [
+      ["Client-ready summary", "Translate numbers into performance language clients can understand."],
+      ["Interactive charts", "Show channel movement with KPI cards and trend visuals."],
+      ["Delivery record", "Keep email, PDF, share link, and approval status in one trail."],
+    ],
+  };
+  const sampleMap = {
+    "#sampleReportKicker": sampleCopy.kicker,
+    "#sampleReportTitle": sampleCopy.title,
+    "#sampleReportCopy": sampleCopy.copy,
+    "#sampleReportClient": sampleCopy.client,
+    "#sampleReportHeadline": sampleCopy.headline,
+    "#sampleReportInsightOne": sampleCopy.insightOne,
+    "#sampleReportInsightTwo": sampleCopy.insightTwo,
+    "#sampleReportNoteOneTitle": sampleCopy.notes[0][0],
+    "#sampleReportNoteOneCopy": sampleCopy.notes[0][1],
+    "#sampleReportNoteTwoTitle": sampleCopy.notes[1][0],
+    "#sampleReportNoteTwoCopy": sampleCopy.notes[1][1],
+    "#sampleReportNoteThreeTitle": sampleCopy.notes[2][0],
+    "#sampleReportNoteThreeCopy": sampleCopy.notes[2][1],
+  };
+  Object.entries(sampleMap).forEach(([selector, value]) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  });
 }
 
 async function authRequest(path, payload = null, method = "POST") {
@@ -1086,6 +1203,7 @@ function setWorkspaceView(view) {
   if (nextView === "overview" && appState.metrics) {
     requestAnimationFrame(() => renderInteractiveState());
   }
+  updateWorkspaceFocus(nextView);
 }
 
 function setupWorkspaceNavigation() {
@@ -1093,7 +1211,49 @@ function setupWorkspaceNavigation() {
   document.querySelectorAll("[data-workspace-view]").forEach((button) => {
     button.addEventListener("click", () => setWorkspaceView(button.dataset.workspaceView));
   });
+  document.querySelector("#workspaceFocusAction")?.addEventListener("click", () => {
+    const selector = document.querySelector("#workspaceFocusAction")?.dataset.focusTarget;
+    const target = selector ? document.querySelector(selector) : null;
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof target.focus === "function") target.focus({ preventScroll: true });
+    }
+  });
   setWorkspaceView(uiState.workspaceView);
+}
+
+function updateWorkspaceFocus(view) {
+  const zh = {
+    overview: ["01 / 07", "總覽與產出狀態", "檢查目前案件是否具備需求、資料、AI 分析與交付設定。", "#completeDemoBtn"],
+    case: ["02 / 07", "案件與客戶資料", "建立客戶、選擇方案，並保留可回溯的報告紀錄。", "#saveClientBtn"],
+    data: ["03 / 07", "資料匯入", "貼上 CSV 或 Google Sheets，讓 KPI 與圖表自動更新。", "#generateBtn"],
+    ai: ["04 / 07", "AI 分析與草稿", "讓 AI 產生摘要、風險、下月建議與客戶說明稿。", "#runBackendAiBtn"],
+    delivery: ["05 / 07", "交付中心", "審核報告、建立分享連結、排程 Email 並留下交付紀錄。", "#deliverReportBtn"],
+    billing: ["06 / 07", "方案與收款", "管理方案、付款草稿、發票與營收流程。", "#createCheckoutBtn"],
+    settings: ["07 / 07", "信任與設定", "管理同意、成員、稽核紀錄與工作區權限。", "#saveConsentBtn"],
+  };
+  const en = {
+    overview: ["01 / 07", "Overview and readiness", "Check whether the case has requirements, data, AI analysis, and delivery setup.", "#completeDemoBtn"],
+    case: ["02 / 07", "Case and client data", "Create the client, choose a plan, and keep report records traceable.", "#saveClientBtn"],
+    data: ["03 / 07", "Data import", "Paste CSV or Google Sheets so KPI cards and charts update automatically.", "#generateBtn"],
+    ai: ["04 / 07", "AI analysis and draft", "Generate summary, risks, next actions, and client-facing copy.", "#runBackendAiBtn"],
+    delivery: ["05 / 07", "Delivery center", "Review the report, create a share link, queue email, and record delivery.", "#deliverReportBtn"],
+    billing: ["06 / 07", "Plans and billing", "Manage plans, checkout drafts, invoices, and revenue operations.", "#createCheckoutBtn"],
+    settings: ["07 / 07", "Trust and settings", "Manage consent, members, audit records, and workspace access.", "#saveConsentBtn"],
+  };
+  const copy = (uiState.lang === "en" ? en : zh)[view] || zh.overview;
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#workspaceFocusStep", copy[0]);
+  setText("#workspaceFocusTitle", copy[1]);
+  setText("#workspaceFocusCopy", copy[2]);
+  const action = document.querySelector("#workspaceFocusAction");
+  if (action) {
+    action.dataset.focusTarget = copy[3];
+    action.textContent = uiState.lang === "en" ? "Go to action" : "前往處理";
+  }
 }
 
 function setAppPage(page) {
@@ -1145,6 +1305,33 @@ function setupAppPages() {
   document.querySelectorAll("[data-home-workspace]").forEach((button) => {
     button.addEventListener("click", () => openCaseWorkspace(button.dataset.homeWorkspace));
   });
+  document.querySelectorAll("[data-command-workspace]").forEach((button) => {
+    button.addEventListener("click", () => openCaseWorkspace(button.dataset.commandWorkspace));
+  });
+  document.querySelector("#consoleReadinessAction")?.addEventListener("click", () => {
+    const action = document.querySelector("#consoleReadinessAction")?.dataset.readinessAction;
+    if (action === "generate") {
+      document.querySelector("#generateBtn")?.click();
+    }
+  });
+  document.querySelectorAll("[data-report-jump]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = document.querySelector(button.dataset.reportJump);
+      if (target) {
+        document.querySelectorAll("[data-report-jump]").forEach((item) => item.classList.toggle("active", item === button));
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+  document.querySelectorAll("[data-quick-command]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.quickCommand;
+      if (action === "generate") document.querySelector("#generateBtn")?.click();
+      if (action === "ai") document.querySelector("#runBackendAiBtn")?.click();
+      if (action === "deliver") document.querySelector("#deliverReportBtn")?.click();
+      if (action === "billing") document.querySelector("#createCheckoutBtn")?.click();
+    });
+  });
   updateHomeLanguage();
   updateSimpleModeCopy();
   applyMarketingLandingCopy();
@@ -1181,6 +1368,13 @@ function renderHomeDashboard() {
   setText("#homeCaseMonth", fields.reportMonth.value || "-");
   setText("#homeCaseCurrency", fields.currency.value || "TWD");
   setText("#homeCaseType", reportTypeText);
+  setText("#consoleLaunchScore", launchScore);
+  setText("#consoleDataStatus", hasData ? (uiState.lang === "en" ? "Ready" : "已匯入") : (uiState.lang === "en" ? "Pending" : "待匯入"));
+  setText("#consoleAiStatus", appState.aiRuns.length ? (uiState.lang === "en" ? "Generated" : "已產生") : (uiState.lang === "en" ? "Pending" : "待產生"));
+  setText("#consoleDeliveryStatus", hasDelivery ? (uiState.lang === "en" ? "Queued" : "已排程") : (uiState.lang === "en" ? "Draft" : "草稿"));
+  updateWorkspaceContext({ hasData, hasAi: appState.aiRuns.length > 0, hasDelivery });
+  updateQuickCommands({ hasData, hasAi: appState.aiRuns.length > 0, hasReport: Boolean(appState.metrics || appState.lastGeneratedAt || reports.length > 0), hasDelivery, hasBilling: Boolean(appState.checkout || invoices.length) });
+  updateConsoleFlow({ hasRequest, hasData, hasAi: appState.aiRuns.length > 0, hasReport: appState.metrics || reports.length > 0, hasDelivery });
 
   const nextActionsNode = document.querySelector("#homeNextActions");
   if (nextActionsNode) {
@@ -1266,6 +1460,17 @@ function renderHomeDashboard() {
   setText("#homeCaseMonth", fields.reportMonth.value || "-");
   setText("#homeCaseCurrency", fields.currency.value || "TWD");
   setText("#homeCaseType", reportTypeText);
+  setText("#consoleLaunchScore", launchScore);
+  setText("#consoleDataStatus", hasData ? (uiState.lang === "en" ? "Ready" : "已匯入") : (uiState.lang === "en" ? "Pending" : "待匯入"));
+  setText("#consoleAiStatus", appState.aiRuns.length ? (uiState.lang === "en" ? "Generated" : "已產生") : (uiState.lang === "en" ? "Pending" : "待產生"));
+  setText("#consoleDeliveryStatus", hasDelivery ? (uiState.lang === "en" ? "Queued" : "已排程") : (uiState.lang === "en" ? "Draft" : "草稿"));
+  updateConsoleFlow({ hasRequest, hasData, hasAi: appState.aiRuns.length > 0, hasReport: appState.metrics || reports.length > 0, hasDelivery });
+  updateConsoleTasks({ hasRequest, hasData, hasAi: appState.aiRuns.length > 0, hasReport: Boolean(appState.metrics || reports.length > 0), hasDelivery });
+  updateEssentialFlow({ hasData, hasAi: appState.aiRuns.length > 0, hasDelivery });
+  updateConsoleReadiness({ hasRequest, hasData, hasAi: appState.aiRuns.length > 0, hasReport: Boolean(appState.metrics || reports.length > 0), hasDelivery });
+  updateHealthRadar({ hasData, hasAi: appState.aiRuns.length > 0, hasDelivery, hasBilling: Boolean(appState.checkout || invoices.length) });
+  updateConsoleOpsBoard({ hasRequest, hasData, hasAi: appState.aiRuns.length > 0, hasReport: Boolean(appState.metrics || reports.length > 0), hasDelivery, clients, reports, invoices });
+  updateReportCommandBar({ hasData, hasAi: appState.aiRuns.length > 0, hasDelivery });
 
   const nextActionsNode = document.querySelector("#homeNextActions");
   if (nextActionsNode) {
@@ -1278,6 +1483,686 @@ function renderHomeDashboard() {
       : `<div><strong>${copy.emptyTitle}</strong><span>${copy.emptyCopy}</span></div>`;
   }
   updateAccountDock();
+}
+
+function updateWorkspaceContext(state = {}) {
+  const lang = uiState.lang;
+  const reportTypeText = fields.reportType?.options?.[fields.reportType.selectedIndex]?.textContent || fields.reportType?.value || "Mixed";
+  const client = fields.clientName.value || "Untitled";
+  const month = fields.reportMonth.value || "-";
+  const copy = lang === "en" ? {
+    kicker: "Active Case",
+    copy: "Manage this client report from data intake and AI analysis through delivery records.",
+    month: "Month",
+    ai: "AI",
+    delivery: "Delivery",
+    aiDone: "Generated",
+    aiTodo: "Pending",
+    deliveryDone: "Queued",
+    deliveryTodo: "Draft",
+    dataButton: "Import data",
+    reportButton: "View report",
+  } : {
+    kicker: "Active Case",
+    copy: "從資料、AI 分析到交付紀錄，集中管理這個月的客戶月報。",
+    month: "Month",
+    ai: "AI",
+    delivery: "Delivery",
+    aiDone: "已產生",
+    aiTodo: "待產生",
+    deliveryDone: "已排程",
+    deliveryTodo: "草稿",
+    dataButton: "匯入資料",
+    reportButton: "查看月報",
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#workspaceContextKicker", copy.kicker);
+  setText("#workspaceContextTitle", `${client} / ${reportTypeText}`);
+  setText("#workspaceContextCopy", copy.copy);
+  setText("#workspaceContextMonthLabel", copy.month);
+  setText("#workspaceContextMonth", month);
+  setText("#workspaceContextAiLabel", copy.ai);
+  setText("#workspaceContextAi", state.hasAi ? copy.aiDone : copy.aiTodo);
+  setText("#workspaceContextDeliveryLabel", copy.delivery);
+  setText("#workspaceContextDelivery", state.hasDelivery ? copy.deliveryDone : copy.deliveryTodo);
+  setText("#workspaceContextDataBtn", copy.dataButton);
+  setText("#workspaceContextReportBtn", copy.reportButton);
+}
+
+function updateQuickCommands(state = {}) {
+  const copy = uiState.lang === "en" ? {
+    title: "Quick Actions",
+    body: "Run common actions from one place instead of hunting through the workspace.",
+    generate: ["Generate report", "Update KPI cards and charts from the current data."],
+    ai: ["Run AI", "Create summary, risks, and next-month actions."],
+    deliver: ["Delivery record", "Create share, email, and delivery records."],
+    billing: ["Payment draft", "Create checkout or invoice drafts."],
+  } : {
+    title: "\u5feb\u901f\u57f7\u884c",
+    body: "\u5e38\u7528\u52d5\u4f5c\u96c6\u4e2d\u5728\u9019\u88e1\uff0c\u4e0d\u7528\u5728\u5de5\u4f5c\u53f0\u88e1\u4f86\u56de\u5c0b\u627e\u3002",
+    generate: ["\u7522\u751f\u6708\u5831", "\u7528\u76ee\u524d\u8cc7\u6599\u66f4\u65b0 KPI \u8207\u5716\u8868\u3002"],
+    ai: ["\u57f7\u884c AI", "\u7522\u751f\u6458\u8981\u3001\u98a8\u96aa\u8207\u4e0b\u6708\u5efa\u8b70\u3002"],
+    deliver: ["\u4ea4\u4ed8\u7d00\u9304", "\u5efa\u7acb\u5206\u4eab\u3001Email \u8207\u4ea4\u4ed8\u7d00\u9304\u3002"],
+    billing: ["\u4ed8\u6b3e\u8349\u7a3f", "\u5efa\u7acb\u65b9\u6848\u4ed8\u6b3e\u6216\u767c\u7968\u8349\u7a3f\u3002"],
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#quickCommandTitle", copy.title);
+  setText("#quickCommandCopy", copy.body);
+  setText("#quickCommandGenerateTitle", copy.generate[0]);
+  setText("#quickCommandGenerateCopy", copy.generate[1]);
+  setText("#quickCommandAiTitle", copy.ai[0]);
+  setText("#quickCommandAiCopy", copy.ai[1]);
+  setText("#quickCommandDeliverTitle", copy.deliver[0]);
+  setText("#quickCommandDeliverCopy", copy.deliver[1]);
+  setText("#quickCommandBillingTitle", copy.billing[0]);
+  setText("#quickCommandBillingCopy", copy.billing[1]);
+
+  const items = {
+    generate: { done: Boolean(state.hasReport), active: Boolean(state.hasData) && !state.hasReport },
+    ai: { done: Boolean(state.hasAi), active: Boolean(state.hasReport) && !state.hasAi },
+    deliver: { done: Boolean(state.hasDelivery), active: Boolean(state.hasAi) && !state.hasDelivery },
+    billing: { done: Boolean(state.hasBilling), active: Boolean(state.hasDelivery) && !state.hasBilling },
+  };
+  Object.entries(items).forEach(([key, status]) => {
+    const button = document.querySelector(`[data-quick-command="${key}"]`);
+    if (!button) return;
+    button.classList.toggle("done", status.done);
+    button.classList.toggle("active", !status.done && status.active);
+  });
+}
+
+function updateHealthRadar(state = {}) {
+  const hasData = Boolean(state.hasData);
+  const hasAi = Boolean(state.hasAi);
+  const hasDelivery = Boolean(state.hasDelivery);
+  const hasBilling = Boolean(state.hasBilling);
+  const score = [hasData, hasAi, hasDelivery, hasBilling].filter(Boolean).length * 25;
+  const copy = uiState.lang === "en" ? {
+    kicker: "Case Health",
+    title: "Case health radar",
+    empty: "Import data first so the workspace can generate KPI, AI, delivery, and billing progress.",
+    active: "This case is moving. Complete the next signal to make it ready for client delivery.",
+    done: "This case has the core signals required for repeatable monthly delivery.",
+    data: ["Data", hasData ? "Ready" : "Import needed"],
+    ai: ["AI", hasAi ? "Generated" : hasData ? "Ready to run" : "Waiting for data"],
+    delivery: ["Delivery", hasDelivery ? "Recorded" : hasAi ? "Ready to deliver" : "Draft"],
+    billing: ["Billing", hasBilling ? "Created" : hasDelivery ? "Create draft" : "Pending"],
+  } : {
+    kicker: "\u6848\u4ef6\u5065\u5eb7",
+    title: "\u6848\u4ef6\u5065\u5eb7\u96f7\u9054",
+    empty: "\u5148\u532f\u5165\u8cc7\u6599\uff0c\u5de5\u4f5c\u53f0\u624d\u80fd\u63a8\u9032 KPI\u3001AI\u3001\u4ea4\u4ed8\u8207\u6536\u6b3e\u72c0\u614b\u3002",
+    active: "\u9019\u500b\u6848\u4ef6\u6b63\u5728\u63a8\u9032\u4e2d\uff0c\u5b8c\u6210\u4e0b\u4e00\u500b\u4fe1\u865f\u5c31\u80fd\u66f4\u63a5\u8fd1\u53ef\u4ea4\u4ed8\u72c0\u614b\u3002",
+    done: "\u9019\u500b\u6848\u4ef6\u5df2\u5177\u5099\u53ef\u91cd\u8907\u6708\u5ea6\u4ea4\u4ed8\u7684\u6838\u5fc3\u4fe1\u865f\u3002",
+    data: ["\u8cc7\u6599", hasData ? "\u5df2\u532f\u5165" : "\u5f85\u532f\u5165"],
+    ai: ["AI", hasAi ? "\u5df2\u7522\u751f" : hasData ? "\u53ef\u57f7\u884c" : "\u7b49\u5f85\u8cc7\u6599"],
+    delivery: ["\u4ea4\u4ed8", hasDelivery ? "\u5df2\u7559\u5b58" : hasAi ? "\u53ef\u4ea4\u4ed8" : "\u8349\u7a3f"],
+    billing: ["\u6536\u6b3e", hasBilling ? "\u5df2\u5efa\u7acb" : hasDelivery ? "\u5efa\u7acb\u8349\u7a3f" : "\u5f85\u5efa\u7acb"],
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#healthRadarKicker", copy.kicker);
+  setText("#healthRadarTitle", copy.title);
+  setText("#healthRadarCopy", score === 100 ? copy.done : score > 0 ? copy.active : copy.empty);
+  setText("#healthRadarScore", `${score}%`);
+  const needle = document.querySelector("#healthRadarNeedle");
+  if (needle) needle.style.transform = `translateX(-50%) rotate(${-54 + (score * 1.08)}deg)`;
+  const signals = {
+    data: { done: hasData, active: !hasData, copy: copy.data },
+    ai: { done: hasAi, active: hasData && !hasAi, copy: copy.ai },
+    delivery: { done: hasDelivery, active: hasAi && !hasDelivery, copy: copy.delivery },
+    billing: { done: hasBilling, active: hasDelivery && !hasBilling, copy: copy.billing },
+  };
+  Object.entries(signals).forEach(([key, item]) => {
+    const node = document.querySelector(`[data-health-signal="${key}"]`);
+    if (node) {
+      node.classList.toggle("done", item.done);
+      node.classList.toggle("active", !item.done && item.active);
+    }
+    const id = key === "data" ? "Data" : key === "ai" ? "Ai" : key === "delivery" ? "Delivery" : "Billing";
+    setText(`#healthSignal${id}Title`, item.copy[0]);
+    setText(`#healthSignal${id}Copy`, item.copy[1]);
+  });
+}
+
+function updateConsoleFlow(state = {}) {
+  const steps = {
+    request: Boolean(state.hasRequest),
+    data: Boolean(state.hasData),
+    ai: Boolean(state.hasAi),
+    report: Boolean(state.hasReport),
+    delivery: Boolean(state.hasDelivery),
+  };
+  let firstOpenFound = false;
+  const total = Object.keys(steps).length;
+  const doneCount = Object.values(steps).filter(Boolean).length;
+  const progress = Math.round((doneCount / total) * 100);
+  const flowText = document.querySelector("#consoleFlowProgressText");
+  const flowBar = document.querySelector("#consoleFlowProgressBar");
+  if (flowText) flowText.textContent = `${doneCount} / ${total}`;
+  if (flowBar) flowBar.style.width = `${progress}%`;
+  document.querySelectorAll("[data-flow-step]").forEach((button) => {
+    const key = button.dataset.flowStep;
+    const done = Boolean(steps[key]);
+    button.classList.toggle("done", done);
+    button.classList.toggle("active", !done && !firstOpenFound);
+    if (!done && !firstOpenFound) firstOpenFound = true;
+    const badge = button.querySelector("i");
+    if (badge) badge.textContent = done ? "OK" : button.dataset.flowIndex || "";
+  });
+}
+
+function updateConsoleTasks(state = {}) {
+  const lang = uiState.lang;
+  const copy = lang === "en" ? {
+    status: { done: "Done", active: "Next", waiting: "Waiting" },
+    data: ["Today", "Import the performance data", "Paste CSV or connect Google Sheets to unlock KPI cards, charts, and AI analysis.", "Import data"],
+    ai: ["AI", "Review summary and risks", "Send client context, best/worst channel, and metrics to AI for client-ready copy.", "Run AI"],
+    delivery: ["Delivery", "Approve and deliver", "Export HTML/PDF or create email drafts, payment notes, and delivery records.", "Open delivery"],
+  } : {
+    status: { done: "完成", active: "下一步", waiting: "等待" },
+    data: ["Today", "先完成資料匯入", "貼上 CSV 或 Google Sheets 連結後，即可產生 KPI、圖表與 AI 分析。", "匯入資料"],
+    ai: ["AI", "檢查摘要與風險", "系統會把最佳/最弱渠道、客戶需求與指標送進 AI 產生可交付文字。", "執行 AI"],
+    delivery: ["Delivery", "確認後交付客戶", "匯出 HTML/PDF，或建立 Email 草稿與付款紀錄，保留完整交付軌跡。", "前往交付"],
+  };
+  const cards = {
+    data: { done: Boolean(state.hasData), active: !state.hasData, target: "data" },
+    ai: { done: Boolean(state.hasAi), active: Boolean(state.hasData) && !state.hasAi, target: "ai" },
+    delivery: { done: Boolean(state.hasDelivery), active: Boolean(state.hasAi) && !state.hasDelivery, target: "delivery" },
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  Object.entries(cards).forEach(([key, config]) => {
+    const card = document.querySelector(`[data-task-card="${key}"]`);
+    const data = copy[key];
+    if (card) {
+      card.classList.toggle("done", config.done);
+      card.classList.toggle("active", !config.done && config.active);
+    }
+    const status = config.done ? copy.status.done : config.active ? copy.status.active : copy.status.waiting;
+    const id = key === "data" ? "Data" : key === "ai" ? "Ai" : "Delivery";
+    setText(`#consoleTask${id}Kicker`, data[0]);
+    setText(`#consoleTask${id}Status`, status);
+    setText(`#consoleTask${id}Title`, data[1]);
+    setText(`#consoleTask${id}Copy`, data[2]);
+    setText(`#consoleTask${id}Action`, data[3]);
+    const action = document.querySelector(`#consoleTask${id}Action`);
+    if (action) action.dataset.commandWorkspace = config.target;
+  });
+}
+
+function updateConsoleReadiness(state = {}) {
+  const hasRequest = Boolean(state.hasRequest);
+  const hasData = Boolean(state.hasData);
+  const hasReport = Boolean(state.hasReport);
+  const hasAi = Boolean(state.hasAi);
+  const hasDelivery = Boolean(state.hasDelivery);
+  const lang = uiState.lang;
+  const copy = lang === "en" ? {
+    empty: ["Not started", "Complete requirements and data first", "Add the client request and import CSV / Sheets data before generating the monthly report.", "case", "Go to setup", 0, "empty", "open"],
+    data: ["Needs data", "Import the performance data", "The client context is ready. Add CSV or Google Sheets data so charts and KPI cards can be created.", "data", "Import data", 25, "empty", "open"],
+    ready: ["Ready to generate", "Generate the first monthly report", "Requirements and data are ready. Generate KPI cards, charts, and the base report narrative.", "data", "Generate report", 55, "ready", "generate"],
+    ai: ["Waiting for AI", "Add AI analysis", "The report exists. Run AI to produce the executive summary, risk notes, next actions, and client copy.", "ai", "Run AI analysis", 72, "ai", "open"],
+    delivery: ["Ready to deliver", "Review and send the report", "AI analysis is ready. Create the share link, email draft, PDF, or delivery record.", "delivery", "Open delivery", 88, "delivery", "open"],
+    done: ["Delivered", "Case is ready for follow-up", "The report has delivery activity. Keep this case as a reusable monthly workflow template.", "overview", "Review overview", 100, "done", "open"],
+  } : {
+    empty: ["尚未開始", "先完成需求與資料", "補上客戶需求並匯入 CSV / Sheets 後，即可產生月報。", "case", "前往處理", 0, "empty", "open"],
+    data: ["需要資料", "匯入成效資料", "客戶需求已建立，接著貼上 CSV 或 Google Sheets，系統即可建立圖表與 KPI。", "data", "匯入資料", 25, "empty", "open"],
+    ready: ["可產生月報", "產生第一版月報", "需求與資料已齊全，可以先用規則產出 KPI、圖表與基礎月報敘事。", "data", "產生月報", 55, "ready", "generate"],
+    ai: ["等待 AI", "補上 AI 分析", "月報已建立，接著執行 AI 產生摘要、風險、下月行動與客戶說明稿。", "ai", "執行 AI 分析", 72, "ai", "open"],
+    delivery: ["可交付", "審核並發送報告", "AI 分析已完成，現在可以建立分享連結、Email 草稿、PDF 或交付紀錄。", "delivery", "前往交付", 88, "delivery", "open"],
+    done: ["已交付", "案件可進入追蹤", "此案件已有交付動態，可以作為下個月可重複使用的月報流程。", "overview", "查看總覽", 100, "done", "open"],
+  };
+  const key = hasDelivery ? "done" : hasAi ? "delivery" : hasReport ? "ai" : (hasRequest && hasData) ? "ready" : hasRequest ? "data" : "empty";
+  const item = copy[key];
+  const strip = document.querySelector("#consoleReadinessStrip");
+  if (strip) {
+    strip.className = `console-readiness-strip is-${item[6]}`;
+  }
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#consoleReadinessBadge", item[0]);
+  setText("#consoleReadinessTitle", item[1]);
+  setText("#consoleReadinessCopy", item[2]);
+  setText("#consoleReadinessPercent", `${item[5]}%`);
+  const bar = document.querySelector("#consoleReadinessBar");
+  if (bar) bar.style.width = `${item[5]}%`;
+  const action = document.querySelector("#consoleReadinessAction");
+  if (action) {
+    action.dataset.commandWorkspace = item[3];
+    action.dataset.readinessAction = item[7];
+    action.textContent = item[4];
+  }
+}
+
+function updateEssentialFlow(state = {}) {
+  const copy = uiState.lang === "en" ? {
+    dataReady: "Data is ready for KPI and chart generation.",
+    dataTodo: "Paste CSV data or connect a Google Sheets URL.",
+    aiReady: "AI summary, risks, and next actions are ready.",
+    aiTodo: "Run AI after the data has been imported.",
+    deliveryReady: "Delivery record, share link, or email queue exists.",
+    deliveryTodo: "Create a PDF, email draft, or share link after review.",
+  } : {
+    dataReady: "資料已可用，可產生 KPI 與圖表。",
+    dataTodo: "貼上 CSV 或 Google Sheets 連結。",
+    aiReady: "AI 摘要、風險與下月行動已產出。",
+    aiTodo: "資料匯入後即可執行 AI 建議。",
+    deliveryReady: "已有交付紀錄、分享連結或 Email 佇列。",
+    deliveryTodo: "審核後建立 PDF、Email 草稿或分享連結。",
+  };
+  const steps = {
+    data: Boolean(state.hasData),
+    ai: Boolean(state.hasAi),
+    delivery: Boolean(state.hasDelivery),
+  };
+  let activeSet = false;
+  document.querySelectorAll("[data-essential-step]").forEach((button) => {
+    const key = button.dataset.essentialStep;
+    const done = Boolean(steps[key]);
+    button.classList.toggle("done", done);
+    button.classList.toggle("active", !done && !activeSet);
+    if (!done && !activeSet) activeSet = true;
+    const badge = button.querySelector("i");
+    if (badge) badge.textContent = done ? "OK" : (key === "data" ? "01" : key === "ai" ? "02" : "03");
+  });
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#essentialDataCopy", steps.data ? copy.dataReady : copy.dataTodo);
+  setText("#essentialAiCopy", steps.ai ? copy.aiReady : copy.aiTodo);
+  setText("#essentialDeliveryCopy", steps.delivery ? copy.deliveryReady : copy.deliveryTodo);
+}
+
+function updateConsoleOpsBoard(state = {}) {
+  const lang = uiState.lang;
+  const copy = lang === "en" ? {
+    pipelineKicker: "Pipeline",
+    pipelineTitle: "Case Progress",
+    aiKicker: "AI Copilot",
+    aiTitle: "Next Best Action",
+    activityKicker: "Activity",
+    activityTitle: "Recent Activity",
+    progressLabel: "Progress",
+    go: "Go to action",
+    emptyTitle: "No activity yet",
+    emptyCopy: "Client, report, invoice, and delivery records will appear here.",
+    activityEmptyState: "Waiting for first record",
+    activityReadyState: "Workspace is active",
+    itemSingular: "item",
+    itemPlural: "items",
+    metrics: {
+      data: ["Data", "Ready", "Pending"],
+      report: ["Report", "Generated", "Draft"],
+      delivery: ["Delivery", "Queued", "Open"],
+    },
+    stages: {
+      request: ["Requirements", "Client request is ready.", "Add client requirements."],
+      data: ["Data", "Data source is ready.", "Import CSV or Sheets data."],
+      ai: ["AI", "AI recommendation is ready.", "Generate AI advice."],
+      delivery: ["Delivery", "Delivery workflow is active.", "Create delivery package."],
+    },
+    advice: {
+      request: ["case", "Start by writing the client requirement in plain language so AI can prepare the work order."],
+      data: ["data", "Import CSV or connect a Google Sheets URL so KPI cards, charts, and AI analysis can be generated."],
+      ai: ["ai", "Run AI to generate the executive summary, risks, next actions, and client-facing copy."],
+      delivery: ["delivery", "Review the report and create the share link, email draft, or delivery record."],
+      done: ["overview", "This case is ready for final review. Check the report preview and send it to the client."],
+    },
+    labels: { client: "Client", report: "Report", invoice: "Invoice", delivery: "Delivery", ai: "AI" },
+  } : {
+    pipelineKicker: "Pipeline",
+    pipelineTitle: "案件進度",
+    aiKicker: "AI Copilot",
+    aiTitle: "下一步建議",
+    activityKicker: "Activity",
+    activityTitle: "最近動態",
+    progressLabel: "完成度",
+    go: "前往處理",
+    emptyTitle: "尚無動態",
+    emptyCopy: "建立客戶、報告、發票或交付紀錄後會顯示在這裡。",
+    activityEmptyState: "等待第一筆紀錄",
+    activityReadyState: "工作區已有動態",
+    itemSingular: "筆紀錄",
+    itemPlural: "筆紀錄",
+    metrics: {
+      data: ["Data", "已匯入", "待匯入"],
+      report: ["Report", "已產生", "草稿"],
+      delivery: ["Delivery", "已排程", "待交付"],
+    },
+    stages: {
+      request: ["需求", "客戶需求已建立。", "補上客戶需求。"],
+      data: ["資料", "資料來源已準備。", "匯入 CSV 或 Sheets。"],
+      ai: ["AI", "AI 建議已產生。", "產生 AI 建議。"],
+      delivery: ["交付", "交付流程已啟動。", "建立交付包。"],
+    },
+    advice: {
+      request: ["case", "先用自然語言補上客戶需求，AI 才能判斷 KPI 重點與工作單。"],
+      data: ["data", "匯入 CSV 或 Google Sheets 連結，系統會先產生 KPI、圖表與基礎月報。"],
+      ai: ["ai", "執行 AI 建議，產生摘要、風險、下月行動與客戶說明稿。"],
+      delivery: ["delivery", "審核月報後建立分享連結、Email 草稿或交付紀錄。"],
+      done: ["overview", "這個案件已具備交付條件，可以檢查報告預覽並交付客戶。"],
+    },
+    labels: { client: "客戶", report: "報告", invoice: "發票", delivery: "交付", ai: "AI" },
+  };
+  const stages = {
+    request: Boolean(state.hasRequest),
+    data: Boolean(state.hasData),
+    ai: Boolean(state.hasAi),
+    delivery: Boolean(state.hasDelivery),
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#consolePipelineKicker", copy.pipelineKicker);
+  setText("#consolePipelineTitle", copy.pipelineTitle);
+  setText("#consoleAiKicker", copy.aiKicker);
+  setText("#consoleAiBoardTitle", copy.aiTitle);
+  setText("#consoleActivityKicker", copy.activityKicker);
+  setText("#consoleActivityTitle", copy.activityTitle);
+  setText("#consolePipelineProgressLabel", copy.progressLabel);
+
+  const doneCount = Object.values(stages).filter(Boolean).length;
+  const progress = Math.round((doneCount / Object.keys(stages).length) * 100);
+  setText("#consolePipelineProgress", `${progress}%`);
+  const progressBar = document.querySelector("#consolePipelineProgressBar");
+  if (progressBar) progressBar.style.width = `${progress}%`;
+  setText("#consoleAiDataLabel", copy.metrics.data[0]);
+  setText("#consoleAiDataValue", stages.data ? copy.metrics.data[1] : copy.metrics.data[2]);
+  setText("#consoleAiReportLabel", copy.metrics.report[0]);
+  setText("#consoleAiReportValue", state.hasReport ? copy.metrics.report[1] : copy.metrics.report[2]);
+  setText("#consoleAiDeliveryLabel", copy.metrics.delivery[0]);
+  setText("#consoleAiDeliveryValue", stages.delivery ? copy.metrics.delivery[1] : copy.metrics.delivery[2]);
+
+  let activeSet = false;
+  document.querySelectorAll("[data-console-stage]").forEach((button) => {
+    const key = button.dataset.consoleStage;
+    const done = Boolean(stages[key]);
+    const stageCopy = copy.stages[key];
+    button.classList.toggle("done", done);
+    button.classList.toggle("active", !done && !activeSet);
+    if (!done && !activeSet) activeSet = true;
+    const badge = button.querySelector("i");
+    if (badge) badge.textContent = done ? "OK" : (key === "request" ? "01" : key === "data" ? "02" : key === "ai" ? "03" : "04");
+    const title = button.querySelector("strong");
+    const body = button.querySelector("small");
+    if (title && stageCopy) title.textContent = stageCopy[0];
+    if (body && stageCopy) body.textContent = done ? stageCopy[1] : stageCopy[2];
+  });
+
+  const adviceKey = !stages.request ? "request" : !stages.data ? "data" : !stages.ai ? "ai" : !stages.delivery ? "delivery" : "done";
+  const advice = copy.advice[adviceKey];
+  const action = document.querySelector("#consoleAiAction");
+  setText("#consoleAiBrief", advice[1]);
+  if (action) {
+    action.dataset.commandWorkspace = advice[0];
+    action.textContent = copy.go;
+  }
+
+  const deliveries = [
+    ...(appState.shareLinks || []).slice(-1).map((item) => [copy.labels.delivery, item.status || item.url || item.shareUrl || "Share link"]),
+    ...(appState.emailJobs || []).slice(-1).map((item) => [copy.labels.delivery, item.status || item.subject || "Email queue"]),
+  ];
+  const activities = [
+    ...(state.clients || []).slice(-2).reverse().map((client) => [copy.labels.client, client.clientName || client.name || "Untitled"]),
+    ...(state.reports || []).slice(-2).reverse().map((report) => [copy.labels.report, `${report.clientName || "Untitled"} / ${report.reportMonth || report.month || "-"}`]),
+    ...(state.invoices || []).slice(-1).reverse().map((invoice) => [copy.labels.invoice, `${invoice.invoiceNumber || invoice.id || "Draft"} / ${formatInvoiceAmount(invoice)}`]),
+    ...deliveries,
+    ...(appState.aiRuns || []).slice(-1).map((run) => [copy.labels.ai, run.status || run.model || "Generated"]),
+  ].slice(0, 4);
+  const list = document.querySelector("#consoleActivityList");
+  if (list) {
+    list.innerHTML = activities.length
+      ? activities.map(([title, body]) => `<div><i>${title.slice(0, 2).toUpperCase()}</i><span><strong>${title}</strong><span>${body}</span></span></div>`).join("")
+      : `<div><i>--</i><span><strong>${copy.emptyTitle}</strong><span>${copy.emptyCopy}</span></span></div>`;
+  }
+  const itemLabel = activities.length === 1 ? copy.itemSingular : copy.itemPlural;
+  setText("#consoleActivityCount", `${activities.length} ${itemLabel}`);
+  setText("#consoleActivityState", activities.length ? copy.activityReadyState : copy.activityEmptyState);
+}
+
+function updateReportCommandBar(state = {}) {
+  const lang = uiState.lang;
+  const copy = lang === "en" ? {
+    score: "Report Score",
+    quality: "Data Quality",
+    ai: "AI Status",
+    generated: "Last Generated",
+    noData: "No data",
+    ready: "Ready",
+    aiReady: "Generated",
+    aiPending: "Pending",
+    never: "Not generated",
+    saved: "Save",
+    exportHtml: "HTML",
+    printPdf: "PDF",
+    deliver: "Deliver",
+    previewKicker: "Report Canvas",
+    previewDraftTitle: "Monthly report is not ready yet",
+    previewReadyTitle: "Report is ready for AI review",
+    previewAiTitle: "AI narrative is ready",
+    previewDeliveryTitle: "Report is ready to deliver",
+    previewDraftCopy: "Import data and generate the report to prepare a client-ready version.",
+    previewReadyCopy: "KPI cards and charts are ready. Run AI to create the client-facing story.",
+    previewAiCopy: "Summary, risks, and next actions are ready. Review and create delivery assets.",
+    previewDeliveryCopy: "Delivery assets are queued. Keep this report as the monthly delivery record.",
+    client: "Client",
+    month: "Month",
+    status: "Status",
+    draft: "Draft",
+    ready: "Ready",
+    aiDone: "AI ready",
+    queued: "Queued",
+    checks: { data: "Data", ai: "AI", delivery: "Delivery" },
+  } : {
+    score: "報告健康分",
+    quality: "資料品質",
+    ai: "AI 狀態",
+    generated: "最近產生",
+    noData: "尚未匯入",
+    ready: "可產生",
+    aiReady: "已產生",
+    aiPending: "待產生",
+    never: "尚未產生",
+    saved: "保存",
+    exportHtml: "HTML",
+    printPdf: "PDF",
+    deliver: "交付",
+    previewKicker: "Report Canvas",
+    previewDraftTitle: "月報尚未完成",
+    previewReadyTitle: "月報已可進入 AI 審核",
+    previewAiTitle: "AI 敘事已完成",
+    previewDeliveryTitle: "月報已可交付",
+    previewDraftCopy: "匯入資料並產生月報後，這裡會顯示可交付狀態。",
+    previewReadyCopy: "KPI 與圖表已完成，接著執行 AI 產生客戶可讀的敘事。",
+    previewAiCopy: "摘要、風險與下月行動已完成，現在可審核並建立交付素材。",
+    previewDeliveryCopy: "交付素材已建立，這份報告可作為本月交付紀錄保存。",
+    client: "Client",
+    month: "Month",
+    status: "Status",
+    draft: "Draft",
+    ready: "Ready",
+    aiDone: "AI ready",
+    queued: "Queued",
+    checks: { data: "資料", ai: "AI", delivery: "交付" },
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  const healthScore = document.querySelector("#healthScore")?.textContent || "0";
+  const quality = document.querySelector("#qualityPill")?.textContent || (state.hasData ? copy.ready : copy.noData);
+  const generatedAt = appState.lastGeneratedAt
+    ? new Intl.DateTimeFormat(lang === "en" ? "en-US" : "zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(appState.lastGeneratedAt)
+    : copy.never;
+  setText("#reportCommandScoreLabel", copy.score);
+  setText("#reportCommandScore", healthScore);
+  setText("#reportCommandQualityLabel", copy.quality);
+  setText("#reportCommandQuality", quality);
+  setText("#reportCommandAiLabel", copy.ai);
+  setText("#reportCommandAi", state.hasAi ? copy.aiReady : copy.aiPending);
+  setText("#reportCommandGeneratedLabel", copy.generated);
+  setText("#reportCommandGenerated", generatedAt);
+  const previewState = state.hasDelivery ? "delivery" : state.hasAi ? "ai" : state.hasData ? "ready" : "draft";
+  const previewTitle = {
+    draft: copy.previewDraftTitle,
+    ready: copy.previewReadyTitle,
+    ai: copy.previewAiTitle,
+    delivery: copy.previewDeliveryTitle,
+  }[previewState];
+  const previewBody = {
+    draft: copy.previewDraftCopy,
+    ready: copy.previewReadyCopy,
+    ai: copy.previewAiCopy,
+    delivery: copy.previewDeliveryCopy,
+  }[previewState];
+  const previewStatus = {
+    draft: copy.draft,
+    ready: copy.ready,
+    ai: copy.aiDone,
+    delivery: copy.queued,
+  }[previewState];
+  setText("#reportPreviewKicker", copy.previewKicker);
+  setText("#reportPreviewTitle", previewTitle);
+  setText("#reportPreviewCopy", previewBody);
+  setText("#reportPreviewClientLabel", copy.client);
+  setText("#reportPreviewMonthLabel", copy.month);
+  setText("#reportPreviewStatusLabel", copy.status);
+  setText("#reportPreviewClient", fields.clientName.value || "Untitled");
+  setText("#reportPreviewMonth", fields.reportMonth.value || "-");
+  setText("#reportPreviewStatus", previewStatus);
+  const checks = [
+    ["#reportPreviewCheckData", copy.checks.data, state.hasData],
+    ["#reportPreviewCheckAi", copy.checks.ai, state.hasAi],
+    ["#reportPreviewCheckDelivery", copy.checks.delivery, state.hasDelivery],
+  ];
+  checks.forEach(([selector, label, done]) => {
+    const node = document.querySelector(selector);
+    if (node) {
+      node.textContent = `${done ? "OK" : "○"} ${label}`;
+      node.classList.toggle("done", Boolean(done));
+    }
+  });
+  const labels = { save: copy.saved, export: copy.exportHtml, print: copy.printPdf, deliver: copy.deliver };
+  document.querySelectorAll("[data-report-action]").forEach((button) => {
+    button.textContent = labels[button.dataset.reportAction] || button.textContent;
+  });
+  const navLabels = lang === "en"
+    ? { Cover: "Cover", Summary: "Summary", Kpi: "KPI", Charts: "Charts", Ai: "AI Work Order", Delivery: "Delivery" }
+    : { Cover: "封面", Summary: "摘要", Kpi: "KPI", Charts: "圖表", Ai: "AI 工作單", Delivery: "交付" };
+  Object.entries(navLabels).forEach(([key, value]) => {
+    const node = document.querySelector(`#reportNav${key}`);
+    if (node) node.textContent = value;
+  });
+}
+
+function updateDataImportAssistant() {
+  const copy = uiState.lang === "en" ? {
+    kicker: "Data Assistant",
+    title: "Start with your data",
+    body: "Paste a Sheets CSV link or upload CSV, then generate the monthly report in one click.",
+    sheet: "Paste Sheets",
+    csv: "Upload CSV",
+    generate: "Generate",
+  } : {
+    kicker: "Data Assistant",
+    title: "先把資料放進來",
+    body: "貼上 Sheets CSV 連結，或上傳 CSV，完成後即可一鍵產生月報。",
+    sheet: "貼 Sheets",
+    csv: "上傳 CSV",
+    generate: "產生月報",
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#dataImportKicker", copy.kicker);
+  setText("#dataImportTitle", copy.title);
+  setText("#dataImportCopy", copy.body);
+  document.querySelectorAll("[data-data-action]").forEach((button) => {
+    const action = button.dataset.dataAction;
+    if (action === "focus-sheet") button.textContent = copy.sheet;
+    if (action === "upload-csv") button.textContent = copy.csv;
+    if (action === "generate") button.textContent = copy.generate;
+  });
+}
+
+function updateAiDraftAssistant() {
+  const copy = uiState.lang === "en" ? {
+    kicker: "AI Assistant",
+    title: "Let AI write the first draft",
+    body: "After the client request is ready, AI generates the summary, risks, next actions, and client-facing copy.",
+    request: "Add Request",
+    run: "Run AI",
+    schedule: "Schedule",
+  } : {
+    kicker: "AI Assistant",
+    title: "讓 AI 先寫第一版",
+    body: "補上客戶需求後，AI 會產生摘要、風險、下月行動與客戶說明稿。",
+    request: "補需求",
+    run: "執行 AI",
+    schedule: "排程",
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#aiDraftKicker", copy.kicker);
+  setText("#aiDraftTitle", copy.title);
+  setText("#aiDraftCopy", copy.body);
+  document.querySelectorAll("[data-ai-action]").forEach((button) => {
+    const action = button.dataset.aiAction;
+    if (action === "focus-request") button.textContent = copy.request;
+    if (action === "run-ai") button.textContent = copy.run;
+    if (action === "schedule") button.textContent = copy.schedule;
+  });
+}
+
+function updateDeliveryAssistant() {
+  const copy = uiState.lang === "en" ? {
+    kicker: "Delivery Assistant",
+    title: "Review, then deliver to the client",
+    body: "Approve the draft, create a share link, queue email, and store the delivery record.",
+    review: "Review",
+    share: "Share",
+    email: "Email",
+    record: "Record",
+  } : {
+    kicker: "Delivery Assistant",
+    title: "審核後，一鍵交付給客戶",
+    body: "先標記審核，再建立分享連結、Email 佇列與交付紀錄。",
+    review: "審核",
+    share: "分享",
+    email: "Email",
+    record: "紀錄",
+  };
+  const setText = (selector, value) => {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value;
+  };
+  setText("#deliveryAssistantKicker", copy.kicker);
+  setText("#deliveryAssistantTitle", copy.title);
+  setText("#deliveryAssistantCopy", copy.body);
+  document.querySelectorAll("[data-delivery-action]").forEach((button) => {
+    const action = button.dataset.deliveryAction;
+    if (action === "review") button.textContent = copy.review;
+    if (action === "share") button.textContent = copy.share;
+    if (action === "email") button.textContent = copy.email;
+    if (action === "record") button.textContent = copy.record;
+  });
 }
 
 function accountDockCopy() {
@@ -3165,6 +4050,9 @@ function applyLanguage(lang) {
   updateSimpleModeCopy();
   applyMarketingLandingCopy();
   updateAccountDock();
+  updateDataImportAssistant();
+  updateAiDraftAssistant();
+  updateDeliveryAssistant();
   if (!document.querySelector("#upgradeModal")?.hidden) renderUpgradePlans();
   applyLegalText();
   renderLegalPanel();
@@ -4926,12 +5814,53 @@ document.querySelector("#quickSocialBtn").addEventListener("click", () => {
 });
 document.querySelector("#sampleSelect").addEventListener("change", () => resetForm(fields.sampleSelect.value));
 document.querySelector("#generateBtn").addEventListener("click", () => generateReportFromButton());
+document.querySelector("#essentialGenerateBtn")?.addEventListener("click", () => generateReportFromButton());
 document.querySelector("#saveTemplateBtn").addEventListener("click", () => saveTemplate().catch(() => setButtonState(document.querySelector("#saveTemplateBtn"), "error", "saveTemplate")));
 document.querySelector("#templateSelect").addEventListener("change", applyTemplate);
 document.querySelector("#saveReportBtn").addEventListener("click", () => saveCurrentReport().catch(() => setButtonState(document.querySelector("#saveReportBtn"), "error", "saveReport")));
 document.querySelector("#importSheetBtn").addEventListener("click", () => importSheet().catch((error) => alert(error.message)));
 document.querySelector("#exportHtmlBtn").addEventListener("click", exportHtml);
 document.querySelector("#printBtn").addEventListener("click", () => window.print());
+document.querySelectorAll("[data-report-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const action = button.dataset.reportAction;
+    if (action === "save") document.querySelector("#saveReportBtn")?.click();
+    if (action === "export") document.querySelector("#exportHtmlBtn")?.click();
+    if (action === "print") document.querySelector("#printBtn")?.click();
+    if (action === "deliver") document.querySelector("#deliverReportBtn")?.click();
+  });
+});
+document.querySelectorAll("[data-data-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const action = button.dataset.dataAction;
+    if (action === "focus-sheet") {
+      fields.sheetUrl.focus();
+      fields.sheetUrl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if (action === "upload-csv") document.querySelector("#csvFile")?.click();
+    if (action === "generate") document.querySelector("#generateBtn")?.click();
+  });
+});
+document.querySelectorAll("[data-ai-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const action = button.dataset.aiAction;
+    if (action === "focus-request") {
+      fields.clientRequest.focus();
+      fields.clientRequest.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if (action === "run-ai") document.querySelector("#runBackendAiBtn")?.click();
+    if (action === "schedule") document.querySelector("#createScheduleBtn")?.click();
+  });
+});
+document.querySelectorAll("[data-delivery-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const action = button.dataset.deliveryAction;
+    if (action === "review") document.querySelector("#approveDraftBtn")?.click();
+    if (action === "share") document.querySelector("#createShareLinkBtn")?.click();
+    if (action === "email") document.querySelector("#queueEmailBtn")?.click();
+    if (action === "record") document.querySelector("#deliverReportBtn")?.click();
+  });
+});
 document.querySelector("#insertCsvTemplateBtn").addEventListener("click", copyCsvTemplate);
 document.querySelector("#downloadSampleBtn").addEventListener("click", downloadSampleCsv);
 document.querySelector("#clearLocalBtn").addEventListener("click", clearLocalData);
