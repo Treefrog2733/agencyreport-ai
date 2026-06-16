@@ -61,13 +61,33 @@ EMAIL_PROVIDER=resend
 RESEND_API_KEY=your-resend-api-key
 EMAIL_FROM=AgencyReport AI <hello@reports.virtualtrendworks.com>
 WORKER_SECRET=your-long-random-worker-secret
-PAYMENT_PROVIDER=mock
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX=120
+AUTH_RATE_LIMIT_MAX=20
+APP_BASE_URL=https://app.virtualtrendworks.com
+PAYMENT_PROVIDER=ecpay
+ECPAY_MODE=production
+ECPAY_MERCHANT_ID=your-ecpay-merchant-id
+ECPAY_HASH_KEY=your-ecpay-hash-key
+ECPAY_HASH_IV=your-ecpay-hash-iv
+ECPAY_RETURN_URL=https://app.virtualtrendworks.com/api/billing/ecpay/return
+ECPAY_ORDER_RESULT_URL=https://app.virtualtrendworks.com/billing/ecpay/result
+ECPAY_CLIENT_BACK_URL=https://app.virtualtrendworks.com
 ```
+
+For a copy-paste checklist, see `RENDER_ENV_CHECKLIST.md`.
 
 After deploy, confirm:
 
 ```text
 https://your-render-service.onrender.com/api/health
+```
+
+You can also run the production smoke test:
+
+```bash
+npm run smoke:prod -- --url https://your-render-service.onrender.com
+npm run smoke:prod -- --url https://app.virtualtrendworks.com
 ```
 
 ## 3. Connect Custom Domain
@@ -77,6 +97,8 @@ In Render, add this custom domain:
 ```text
 app.virtualtrendworks.com
 ```
+
+The public homepage currently uses `https://app.virtualtrendworks.com/` for canonical, Open Graph, robots, and sitemap URLs. If the final public site should live at `https://virtualtrendworks.com/` instead, update `index.html`, `APP_BASE_URL`, `ECPAY_*_URL`, and the Render custom domain before launch.
 
 Render will show the exact DNS target. In Cloudflare DNS, add the record Render gives you. It is usually:
 
@@ -93,6 +115,17 @@ Optional redirects:
 virtualtrendworks.com -> https://app.virtualtrendworks.com
 www.virtualtrendworks.com -> https://app.virtualtrendworks.com
 ```
+
+Suggested Cloudflare DNS records:
+
+```text
+Type   Name      Target
+CNAME  app       your-render-service.onrender.com
+CNAME  www       app.virtualtrendworks.com
+CNAME  reports   resend-provided-target
+```
+
+Keep the `app` record as DNS only until Render confirms the custom domain and certificate. After TLS is active, you can decide whether to enable Cloudflare proxy.
 
 ## 4. Verify Resend Email Domain
 
@@ -130,6 +163,7 @@ The repository includes:
 
 ```text
 .github/workflows/worker-cron.yml
+.github/workflows/production-smoke.yml
 ```
 
 Add these GitHub repository secrets:
@@ -145,9 +179,17 @@ The workflow calls:
 POST https://app.virtualtrendworks.com/api/worker/run
 ```
 
+The production smoke workflow runs:
+
+```text
+npm run smoke:prod -- --url $APP_URL --strict
+```
+
+You can also open GitHub Actions and manually run **AgencyReport Production Smoke** after every Render deploy.
+
 ## 6. ECPay URLs
 
-After the app is live, use these URLs for ECPay:
+After the app is live and the custom domain is connected, set these URLs in ECPay:
 
 ```text
 Store URL: https://app.virtualtrendworks.com
@@ -156,7 +198,27 @@ Order Result URL: https://app.virtualtrendworks.com/billing/ecpay/result
 Client Back URL: https://app.virtualtrendworks.com
 ```
 
-Payment code still needs the ECPay provider implementation before production payments.
+Render environment variables:
+
+```text
+APP_BASE_URL=https://app.virtualtrendworks.com
+PAYMENT_PROVIDER=ecpay
+ECPAY_MODE=production
+ECPAY_MERCHANT_ID=your-merchant-id
+ECPAY_HASH_KEY=your-hash-key
+ECPAY_HASH_IV=your-hash-iv
+ECPAY_RETURN_URL=https://app.virtualtrendworks.com/api/billing/ecpay/return
+ECPAY_ORDER_RESULT_URL=https://app.virtualtrendworks.com/billing/ecpay/result
+ECPAY_CLIENT_BACK_URL=https://app.virtualtrendworks.com
+```
+
+Checkout behavior:
+
+1. The app creates a billing intent through `POST /api/billing/checkout`.
+2. In `PAYMENT_PROVIDER=ecpay` mode, the returned `checkoutUrl` points to `/billing/ecpay/checkout/{token}`.
+3. That page auto-submits the signed ECPay AIO form to ECPay.
+4. ECPay posts payment status to `/api/billing/ecpay/return`.
+5. The server verifies `CheckMacValue`; only verified successful payments become trusted paid subscriptions.
 
 ## 7. Final Readiness Check
 
@@ -178,4 +240,22 @@ worker
 payment
 ```
 
-Before ECPay is implemented, `payment` will remain the final blocking item.
+When ECPay credentials and callback URLs are configured, `payment` should pass readiness.
+
+Run the same checks from your local machine:
+
+```bash
+npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict
+```
+
+The smoke test verifies:
+
+- homepage responds and contains `AgencyReport AI`
+- no known mojibake appears in the shipped HTML
+- homepage and API responses include basic security headers
+- `robots.txt` and `sitemap.xml` respond for public launch indexing
+- sensitive server files such as `.env`, `server.js`, `data/db.json`, `package.json`, and `render.yaml` are blocked
+- `/api/health` is OK
+- production storage is PostgreSQL
+- OpenAI, Resend, Worker secret, and ECPay are live-ready
+- `/api/readiness` reports all required checks as passing

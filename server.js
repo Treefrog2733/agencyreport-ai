@@ -25,6 +25,17 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeSuccessUrl = process.env.STRIPE_SUCCESS_URL || "";
 const stripeCancelUrl = process.env.STRIPE_CANCEL_URL || "";
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+const appBaseUrl = (process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || "").replace(/\/$/, "");
+const ecpayMerchantId = process.env.ECPAY_MERCHANT_ID || "";
+const ecpayHashKey = process.env.ECPAY_HASH_KEY || "";
+const ecpayHashIv = process.env.ECPAY_HASH_IV || "";
+const ecpayMode = (process.env.ECPAY_MODE || process.env.PAYMENT_MODE || "production").toLowerCase();
+const ecpayCheckoutUrl = process.env.ECPAY_CHECKOUT_URL || (ecpayMode === "stage" || ecpayMode === "test" || ecpayMode === "sandbox"
+  ? "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
+  : "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5");
+const ecpayReturnUrl = process.env.ECPAY_RETURN_URL || (appBaseUrl ? `${appBaseUrl}/api/billing/ecpay/return` : "");
+const ecpayOrderResultUrl = process.env.ECPAY_ORDER_RESULT_URL || (appBaseUrl ? `${appBaseUrl}/billing/ecpay/result` : "");
+const ecpayClientBackUrl = process.env.ECPAY_CLIENT_BACK_URL || appBaseUrl || "";
 const connectorEnv = {
   google_sheets: Boolean(process.env.GOOGLE_SHEETS_API_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
   google_ads: Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_CLIENT_ID && process.env.GOOGLE_ADS_CLIENT_SECRET),
@@ -74,6 +85,8 @@ const emptyDb = {
   payment_events: [],
   billing_intents: [],
   invoices: [],
+  subscriptions: [],
+  usage_events: [],
   portal_invites: [],
   portal_submissions: [],
   auth_users: [],
@@ -93,10 +106,114 @@ const contentTypes = {
   ".jpeg": "image/jpeg",
 };
 
+const publicStaticFiles = new Set(["/index.html", "/app.js", "/styles.css"]);
+const rateBuckets = new Map();
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 120);
+const authRateLimitMax = Number(process.env.AUTH_RATE_LIMIT_MAX || 20);
+const rateLimitExemptPaths = new Set([
+  "/api/health",
+  "/api/readiness",
+  "/api/billing/ecpay/return",
+  "/api/billing/webhook",
+]);
+
+function publicStaticPath(pathname) {
+  if (pathname === "/" || pathname.startsWith("/client/intake/")) return "/index.html";
+  if (publicStaticFiles.has(pathname)) return pathname;
+  return "";
+}
+
+function publicOrigin() {
+  return appBaseUrl || "https://app.virtualtrendworks.com";
+}
+
+function robotsTxt() {
+  return [
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /api/",
+    "Disallow: /billing/",
+    "Disallow: /client/",
+    `Sitemap: ${publicOrigin()}/sitemap.xml`,
+    "",
+  ].join("\n");
+}
+
+function sitemapXml() {
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = ["/", "/legal"];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map((pathname) => `  <url>
+    <loc>${publicOrigin()}${pathname}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${pathname === "/" ? "weekly" : "monthly"}</changefreq>
+    <priority>${pathname === "/" ? "1.0" : "0.4"}</priority>
+  </url>`)
+  .join("\n")}
+</urlset>
+`;
+}
+
+function securityHeaders(extra = {}) {
+  return {
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "cross-origin-resource-policy": "same-origin",
+    ...extra,
+  };
+}
+
+function clientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || req.socket?.remoteAddress || "unknown";
+}
+
+function rateLimitForPath(pathname) {
+  if (pathname.startsWith("/api/auth/")) return authRateLimitMax;
+  return rateLimitMax;
+}
+
+function checkRateLimit(req, url) {
+  if (rateLimitExemptPaths.has(url.pathname)) return { allowed: true };
+  const max = rateLimitForPath(url.pathname);
+  if (!Number.isFinite(max) || max <= 0) return { allowed: true };
+  const now = Date.now();
+  const key = `${clientIp(req)}:${url.pathname.startsWith("/api/auth/") ? "auth" : "api"}`;
+  const current = rateBuckets.get(key);
+  const bucket = current && current.resetAt > now ? current : { count: 0, resetAt: now + rateLimitWindowMs };
+  bucket.count += 1;
+  rateBuckets.set(key, bucket);
+  if (rateBuckets.size > 5000) {
+    for (const [bucketKey, value] of rateBuckets) {
+      if (value.resetAt <= now) rateBuckets.delete(bucketKey);
+    }
+  }
+  return {
+    allowed: bucket.count <= max,
+    limit: max,
+    remaining: Math.max(0, max - bucket.count),
+    resetAt: bucket.resetAt,
+  };
+}
+
 const planPrices = {
   starter: { TWD: 790, USD: 25 },
   agency: { TWD: 2490, USD: 79 },
+  professional: { TWD: 5990, USD: 189 },
   whiteLabel: { TWD: 5990, USD: 189 },
+};
+
+const planUsageLimits = {
+  free: { ai_report: 3 },
+  starter: { ai_report: 10 },
+  agency: { ai_report: 50 },
+  professional: { ai_report: 150 },
+  whiteLabel: { ai_report: 150 },
 };
 
 function emailStatus() {
@@ -174,12 +291,12 @@ async function writeDb(db) {
 }
 
 function json(res, status, body) {
-  res.writeHead(status, {
+  res.writeHead(status, securityHeaders({
     "content-type": "application/json;charset=utf-8",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type, authorization, x-worker-secret",
-  });
+    "access-control-allow-headers": "content-type, authorization, x-worker-secret, x-agency-webhook-secret, stripe-signature",
+  }));
   res.end(JSON.stringify(body));
 }
 
@@ -189,7 +306,7 @@ function legalHtml() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AgencyReport AI Legal</title>
+  <title>AgencyReport AI Legal Notice</title>
   <style>
     body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#10201f;background:#f6f8f7}
     main{max-width:860px;margin:0 auto;padding:40px 20px}
@@ -200,23 +317,34 @@ function legalHtml() {
 <body>
   <main>
     <article>
-      <p class="eyebrow">AgencyReport AI · legal-2026-06-06</p>
-      <h1>服務條款、隱私與資料處理說明</h1>
-      <p>MVP 驗證用條款版本；正式公開收費前應替換為法務審閱版本。</p>
-      <h2>服務範圍</h2>
-      <ul><li>本服務協助代理商建立行銷報告、AI 分析草稿、客戶需求紀錄、排程與交付紀錄。</li><li>所有 AI 內容皆為草稿，交付客戶前仍需由代理商審核。</li></ul>
-      <h2>資料處理</h2>
-      <ul><li>提交的投放資料、網址、備註、Email 與客戶需求會用於產生報告與營運紀錄。</li><li>除非已取得客戶授權，請勿提交敏感個資。</li></ul>
-      <h2>AI 使用</h2>
-      <ul><li>AI 建議可能不完整或不準確。</li><li>代理商需負責確認數字、策略、聲明與客戶溝通內容。</li></ul>
-      <h2>Communication Consent</h2>
-      <ul><li>Lead and portal submissions may be used to contact the submitter about trials, requirements, reports, and service follow-up.</li><li>Users may request deletion or correction of submitted information.</li></ul>
+      <p class="eyebrow">AgencyReport AI ? legal-2026-06-16</p>
+      <h1>???????????</h1>
+      <p>???????? MVP ?????????????????????????? SaaS??????????????????</p>
+      <h2>????</h2>
+      <ul>
+        <li>AgencyReport AI ????????????????????? KPI ???AI ??????????</li>
+        <li>AI ?????????????????????????????????????????</li>
+      </ul>
+      <h2>????</h2>
+      <ul>
+        <li>?????????????????Email ????????????????????????????</li>
+        <li>?????????????????????????????????????????</li>
+      </ul>
+      <h2>AI ???</h2>
+      <ul>
+        <li>??????????????????????? AI ???</li>
+        <li>? AI ????????????????????</li>
+      </ul>
+      <h2>????</h2>
+      <ul>
+        <li>??????????????????????????????????????????????</li>
+        <li>?????????????????? Email ???????</li>
+      </ul>
     </article>
   </main>
 </body>
 </html>`;
 }
-
 async function quoteHtml(token) {
   const db = await readDb();
   const quote = db.billing_intents.find((item) => item.id === token || item.token === token);
@@ -475,6 +603,35 @@ function readBody(req) {
   });
 }
 
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+      }
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+}
+
+async function readAnyBody(req) {
+  const raw = await readRawBody(req);
+  if (!raw) return {};
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    return Object.fromEntries(new URLSearchParams(raw));
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid request body");
+  }
+}
+
 function withId(payload) {
   return {
     id: crypto.randomUUID(),
@@ -502,11 +659,132 @@ function formatMoneyValue(amount, currency = "TWD") {
 
 function paymentStatus() {
   const stripeReady = Boolean(stripeSecretKey && stripeSuccessUrl && stripeCancelUrl);
+  const ecpayReady = Boolean(ecpayMerchantId && ecpayHashKey && ecpayHashIv && ecpayReturnUrl && ecpayOrderResultUrl);
+  const liveReady = (
+    (paymentProvider === "stripe" && stripeReady && Boolean(stripeWebhookSecret)) ||
+    (paymentProvider === "ecpay" && ecpayReady)
+  );
   return {
     provider: paymentProvider,
-    mode: paymentProvider === "stripe" && stripeReady ? "live-ready" : paymentProvider === "stripe" ? "needs_credentials" : "mock",
-    webhookReady: Boolean(stripeWebhookSecret),
+    mode: liveReady ? "live-ready" : paymentProvider === "mock" ? "mock" : "needs_credentials",
+    webhookReady: paymentProvider === "stripe" ? Boolean(stripeWebhookSecret) : paymentProvider === "ecpay" ? ecpayReady : false,
+    checkoutUrl: paymentProvider === "ecpay" ? ecpayCheckoutUrl : undefined,
   };
+}
+
+function ecpayReady() {
+  return Boolean(ecpayMerchantId && ecpayHashKey && ecpayHashIv && ecpayReturnUrl && ecpayOrderResultUrl);
+}
+
+function ecpayEncode(value) {
+  return encodeURIComponent(String(value))
+    .toLowerCase()
+    .replaceAll("%20", "+")
+    .replaceAll("'", "%27")
+    .replaceAll("~", "%7e")
+    .replaceAll("%2d", "-")
+    .replaceAll("%5f", "_")
+    .replaceAll("%2e", ".")
+    .replaceAll("%21", "!")
+    .replaceAll("%2a", "*")
+    .replaceAll("%28", "(")
+    .replaceAll("%29", ")");
+}
+
+function ecpayCheckMacValue(payload) {
+  const entries = Object.entries(payload)
+    .filter(([key, value]) => key !== "CheckMacValue" && value !== undefined && value !== null)
+    .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const raw = `HashKey=${ecpayHashKey}&${entries.map(([key, value]) => `${key}=${value}`).join("&")}&HashIV=${ecpayHashIv}`;
+  return crypto.createHash("sha256").update(ecpayEncode(raw)).digest("hex").toUpperCase();
+}
+
+function verifyEcpayCheckMacValue(payload) {
+  if (!payload?.CheckMacValue || !ecpayHashKey || !ecpayHashIv) return false;
+  return safeSecretEquals(String(payload.CheckMacValue).toUpperCase(), ecpayCheckMacValue(payload));
+}
+
+function ecpayTradeNo(token) {
+  return `AR${String(token || crypto.randomBytes(6).toString("hex")).replace(/[^A-Za-z0-9]/g, "").slice(0, 18)}`.slice(0, 20);
+}
+
+function ecpayTradeDate(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function ecpayPayloadForIntent(intent) {
+  const token = intent.token || crypto.randomBytes(10).toString("hex");
+  const tradeNo = intent.ecpayMerchantTradeNo || ecpayTradeNo(token);
+  const amount = Math.max(1, Math.round(Number(intent.amount || planPrices[normalizePlan(intent.plan)]?.TWD || planPrices.starter.TWD)));
+  const payload = {
+    MerchantID: ecpayMerchantId,
+    MerchantTradeNo: tradeNo,
+    MerchantTradeDate: intent.ecpayMerchantTradeDate || ecpayTradeDate(),
+    PaymentType: "aio",
+    TotalAmount: amount,
+    TradeDesc: `AgencyReport AI ${normalizePlan(intent.plan)}`,
+    ItemName: `AgencyReport AI ${normalizePlan(intent.plan)} monthly plan`,
+    ReturnURL: ecpayReturnUrl,
+    ChoosePayment: "ALL",
+    ClientBackURL: ecpayClientBackUrl || appBaseUrl || "",
+    OrderResultURL: ecpayOrderResultUrl,
+    CustomField1: token,
+    CustomField2: intent.accountEmail || "",
+    CustomField3: normalizePlan(intent.plan),
+    EncryptType: 1,
+  };
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === "") delete payload[key];
+  });
+  payload.CheckMacValue = ecpayCheckMacValue(payload);
+  return payload;
+}
+
+function autoSubmitForm(action, fields) {
+  const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`).join("");
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Redirecting to ECPay</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#071b1b;color:#f8fafc}
+    main{max-width:520px;padding:28px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.06)}
+    h1{margin:0 0 8px;font-size:24px}p{color:#b8c7c4;line-height:1.7}.button{display:inline-block;margin-top:12px;padding:12px 16px;border:0;border-radius:8px;background:#12b3a8;color:white;font-weight:800;cursor:pointer}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>正在前往綠界付款</h1>
+    <p>若頁面沒有自動跳轉，請按下方按鈕繼續。</p>
+    <form method="post" action="${escapeHtml(action)}">
+      ${inputs}
+      <button class="button" type="submit">前往付款</button>
+    </form>
+  </main>
+  <script>document.forms[0].submit();</script>
+</body>
+</html>`;
+}
+
+function safeSecretEquals(a, b) {
+  const left = Buffer.from(String(a || ""));
+  const right = Buffer.from(String(b || ""));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function isLocalRequest(req) {
+  const address = req.socket?.remoteAddress || "";
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+function hasTrustedPaymentSignal(req, payload = {}) {
+  const headerSecret = req.headers["x-agency-webhook-secret"] || req.headers["x-worker-secret"];
+  const bodySecret = payload.webhookSecret || payload.secret || "";
+  if (stripeWebhookSecret) return safeSecretEquals(headerSecret || bodySecret, stripeWebhookSecret);
+  return paymentProvider === "mock" && isLocalRequest(req);
 }
 
 function readinessReport() {
@@ -549,9 +827,11 @@ function readinessReport() {
     {
       id: "payment",
       label: "Payment provider",
-      ok: paymentStatus().mode === "live-ready" && Boolean(stripeWebhookSecret),
+      ok: paymentStatus().mode === "live-ready" && paymentStatus().webhookReady,
       required: true,
-      detail: paymentStatus().mode === "live-ready" && stripeWebhookSecret ? "Stripe checkout and webhook configured." : "Set Stripe checkout URLs, STRIPE_SECRET_KEY, and STRIPE_WEBHOOK_SECRET.",
+      detail: paymentStatus().mode === "live-ready" && paymentStatus().webhookReady
+        ? `${paymentProvider} checkout and verified return flow configured.`
+        : "Set Stripe credentials or ECPay MerchantID, HashKey, HashIV, ReturnURL, and OrderResultURL.",
     },
     {
       id: "connectors",
@@ -647,6 +927,21 @@ async function createPaymentSession(payload) {
       checkoutSessionId: data.id,
       checkoutUrl: data.url,
       quoteUrl: localQuoteUrl,
+    };
+  }
+  if (paymentProvider === "ecpay" && ecpayReady()) {
+    const tradeNo = ecpayTradeNo(token);
+    return {
+      token,
+      amount,
+      currency: "TWD",
+      provider: "ecpay",
+      paymentStatus: "checkout_created",
+      checkoutSessionId: tradeNo,
+      checkoutUrl: `/billing/ecpay/checkout/${encodeURIComponent(token)}`,
+      quoteUrl: localQuoteUrl,
+      ecpayMerchantTradeNo: tradeNo,
+      ecpayMerchantTradeDate: ecpayTradeDate(),
     };
   }
   return {
@@ -1056,6 +1351,36 @@ async function updateBillingIntent(payload) {
   return operation;
 }
 
+function syncSubscriptionFromPayment(db, record, source) {
+  if (!record) return null;
+  db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+  const email = String(record.accountEmail || record.email || "").trim().toLowerCase();
+  if (!email) return null;
+  const now = new Date().toISOString();
+  const existingIndex = db.subscriptions.findIndex((item) => {
+    const itemEmail = String(item.accountEmail || item.email || "").trim().toLowerCase();
+    return item.status === "active" && itemEmail === email;
+  });
+  const subscription = {
+    ...(existingIndex >= 0 ? db.subscriptions[existingIndex] : {}),
+    accountEmail: record.accountEmail || record.email,
+    accountName: record.accountName || record.clientName || "",
+    plan: normalizePlan(record.plan),
+    status: "active",
+    source,
+    sourceRecordId: record.id || record.token || null,
+    paymentVerifiedAt: record.paymentVerifiedAt || now,
+    updatedAt: now,
+    createdAt: existingIndex >= 0 ? db.subscriptions[existingIndex].createdAt : now,
+  };
+  if (existingIndex >= 0) {
+    db.subscriptions[existingIndex] = subscription;
+  } else {
+    db.subscriptions.push(withId(subscription));
+  }
+  return existingIndex >= 0 ? db.subscriptions[existingIndex] : db.subscriptions[db.subscriptions.length - 1];
+}
+
 async function recordPaymentEvent(payload) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
@@ -1063,23 +1388,26 @@ async function recordPaymentEvent(payload) {
       provider: payload.provider || paymentProvider,
       type: payload.type || payload.eventType || "payment.event",
       paymentStatus: payload.paymentStatus || payload.status || "received",
-      token: payload.token || payload.data?.object?.metadata?.token || null,
-      checkoutSessionId: payload.checkoutSessionId || payload.data?.object?.id || null,
+      token: payload.token || payload.CustomField1 || payload.data?.object?.metadata?.token || null,
+      checkoutSessionId: payload.checkoutSessionId || payload.MerchantTradeNo || payload.data?.object?.id || null,
       raw: payload.raw || payload,
       receivedAt: new Date().toISOString(),
     });
     db.payment_events.push(event);
     const token = event.token;
-    if (token && ["checkout.session.completed", "payment_intent.succeeded", "mock.payment_succeeded"].includes(event.type)) {
+    if (token && ["checkout.session.completed", "payment_intent.succeeded", "mock.payment_succeeded", "ecpay.payment_succeeded"].includes(event.type)) {
       const index = db.billing_intents.findIndex((item) => item.token === token || item.checkoutSessionId === event.checkoutSessionId);
       if (index >= 0) {
         db.billing_intents[index] = {
           ...db.billing_intents[index],
           paymentStatus: "paid",
+          trustedPayment: true,
           status: db.billing_intents[index].status === "accepted" ? "accepted" : "paid",
           paidAt: new Date().toISOString(),
+          paymentVerifiedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+        syncSubscriptionFromPayment(db, db.billing_intents[index], "payment_webhook");
       }
     }
     db.audit_logs.push(withId({ action: "create:payment_events", recordId: event.id }));
@@ -1123,19 +1451,65 @@ async function createInvoiceFromQuote(payload) {
   return operation;
 }
 
+async function ecpayCheckoutHtml(token) {
+  const db = await readDb();
+  const intent = db.billing_intents.find((item) => item.token === token || item.id === token);
+  if (!intent) return null;
+  if (paymentProvider !== "ecpay" || !ecpayReady()) {
+    return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8" /><title>ECPay not configured</title></head><body><main><h1>綠界付款尚未設定完成</h1><p>請確認 PAYMENT_PROVIDER=ecpay、ECPAY_MERCHANT_ID、ECPAY_HASH_KEY、ECPAY_HASH_IV 與回調網址。</p></main></body></html>`;
+  }
+  const payload = ecpayPayloadForIntent(intent);
+  return autoSubmitForm(ecpayCheckoutUrl, payload);
+}
+
+async function ecpayResultHtml(url) {
+  const tradeNo = url.searchParams.get("MerchantTradeNo") || url.searchParams.get("merchantTradeNo") || "";
+  const token = url.searchParams.get("CustomField1") || url.searchParams.get("token") || "";
+  const db = await readDb();
+  const intent = db.billing_intents.find((item) => (token && item.token === token) || (tradeNo && item.checkoutSessionId === tradeNo));
+  const paid = intent?.trustedPayment || intent?.paymentStatus === "paid";
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgencyReport AI Payment Result</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f8f7;color:#10201f}
+    main{max-width:620px;padding:30px;border:1px solid #d9e3df;border-radius:12px;background:white;box-shadow:0 20px 60px rgba(15,23,42,.12)}
+    h1{margin:0 0 10px}.ok{color:#0f766e}.warn{color:#a16207}p{color:#60706d;line-height:1.7}a{display:inline-block;margin-top:12px;color:#0f766e;font-weight:800}
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="${paid ? "ok" : "warn"}">${paid ? "付款已完成" : "付款結果處理中"}</h1>
+    <p>${paid ? "你的方案已啟用，可以回到工作台繼續產生 AI 月報。" : "若你已完成付款，綠界通知可能需要幾秒鐘同步。請稍後回到工作台更新用量。"}</p>
+    <p>交易編號：${escapeHtml(tradeNo || intent?.checkoutSessionId || "-")}</p>
+    <a href="/">回到 AgencyReport AI</a>
+  </main>
+</body>
+</html>`;
+}
+
 async function updateInvoiceStatus(payload) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
     const index = db.invoices.findIndex((item) => item.id === payload.id || item.token === payload.token || item.invoiceNumber === payload.invoiceNumber);
     if (index === -1) throw new Error("Invoice not found");
+    const now = new Date().toISOString();
     const updated = {
       ...db.invoices[index],
       ...payload,
       status: payload.status || "paid",
-      paidAt: payload.paidAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      trustedPayment: Boolean(payload.trustedPayment),
+      paidAt: payload.paidAt || now,
+      paymentVerifiedAt: payload.trustedPayment ? payload.paymentVerifiedAt || now : db.invoices[index].paymentVerifiedAt || null,
+      updatedAt: now,
     };
     db.invoices[index] = updated;
+    if (updated.status === "paid" && updated.trustedPayment) {
+      syncSubscriptionFromPayment(db, updated, "invoice_payment");
+    }
     db.audit_logs.push(withId({ action: "update:invoices", recordId: updated.id || updated.token }));
     await writeDb(db);
     return updated;
@@ -1173,6 +1547,121 @@ async function createShareLinkRecord(payload) {
 function authHeaderToken(req) {
   const header = req.headers.authorization || "";
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+
+function currentUsagePeriod(date = new Date()) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function normalizePlan(plan) {
+  const key = String(plan || "free").trim();
+  if (key === "white_label" || key === "white-label") return "whiteLabel";
+  if (key === "pro" || key === "professional") return "professional";
+  if (planUsageLimits[key]) return key;
+  return "free";
+}
+
+function userBillingEmails(user) {
+  return new Set([user?.email, user?.billingEmail, user?.accountEmail].filter(Boolean).map((email) => String(email).trim().toLowerCase()));
+}
+
+function resolveUserSubscription(db, user) {
+  const emails = userBillingEmails(user);
+  const subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+  const activeSubscription = subscriptions
+    .filter((item) => item.status === "active" && (item.userId === user.id || emails.has(String(item.accountEmail || item.email || "").trim().toLowerCase())))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))[0];
+  if (activeSubscription) {
+    return {
+      plan: normalizePlan(activeSubscription.plan),
+      source: "subscription",
+      subscriptionId: activeSubscription.id,
+    };
+  }
+
+  const paidInvoice = (Array.isArray(db.invoices) ? db.invoices : [])
+    .filter((item) => item.status === "paid" && item.trustedPayment === true && emails.has(String(item.accountEmail || item.email || "").trim().toLowerCase()))
+    .sort((a, b) => String(b.paidAt || b.updatedAt || b.createdAt || "").localeCompare(String(a.paidAt || a.updatedAt || a.createdAt || "")))[0];
+  if (paidInvoice) {
+    return {
+      plan: normalizePlan(paidInvoice.plan),
+      source: "invoice",
+      invoiceId: paidInvoice.id,
+    };
+  }
+
+  const paidIntent = (Array.isArray(db.billing_intents) ? db.billing_intents : [])
+    .filter((item) => item.trustedPayment === true && (item.paymentStatus === "paid" || item.status === "paid") && emails.has(String(item.accountEmail || item.email || "").trim().toLowerCase()))
+    .sort((a, b) => String(b.paidAt || b.updatedAt || b.createdAt || "").localeCompare(String(a.paidAt || a.updatedAt || a.createdAt || "")))[0];
+  if (paidIntent) {
+    return {
+      plan: normalizePlan(paidIntent.plan),
+      source: "billing_intent",
+      billingIntentId: paidIntent.id,
+    };
+  }
+
+  return { plan: "free", source: "free" };
+}
+
+function usageSummary(db, user, feature = "ai_report") {
+  const subscription = resolveUserSubscription(db, user);
+  const plan = normalizePlan(subscription.plan);
+  const period = currentUsagePeriod();
+  const limit = Number(planUsageLimits[plan]?.[feature] ?? planUsageLimits.free[feature] ?? 0);
+  const events = Array.isArray(db.usage_events) ? db.usage_events : [];
+  const used = events.filter((item) => item.userId === user.id && item.feature === feature && item.period === period && item.status === "consumed").length;
+  return {
+    feature,
+    period,
+    plan,
+    limit,
+    used,
+    remaining: Math.max(0, limit - used),
+    subscription,
+  };
+}
+
+async function consumeApiUsage(user, feature = "ai_report", meta = {}) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    db.usage_events = Array.isArray(db.usage_events) ? db.usage_events : [];
+    db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+    const summary = usageSummary(db, user, feature);
+    if (summary.used >= summary.limit) {
+      db.audit_logs.push(withId({
+        action: "limit:blocked",
+        userId: user.id,
+        feature,
+        period: summary.period,
+        plan: summary.plan,
+      }));
+      await writeDb(db);
+      return { allowed: false, ...summary };
+    }
+    const event = withId({
+      userId: user.id,
+      userEmail: user.email,
+      feature,
+      period: summary.period,
+      plan: summary.plan,
+      status: "consumed",
+      meta,
+    });
+    db.usage_events.push(event);
+    db.audit_logs.push(withId({
+      action: "usage:consume",
+      recordId: event.id,
+      userId: user.id,
+      feature,
+      period: summary.period,
+      plan: summary.plan,
+    }));
+    await writeDb(db);
+    return { allowed: true, ...usageSummary(db, user, feature), eventId: event.id };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
 }
 
 async function currentSession(req) {
@@ -1244,6 +1733,15 @@ async function revokeAuthSession(token) {
 
 async function handleApi(req, res, url) {
   if (req.method === "OPTIONS") return json(res, 204, {});
+  const rateLimit = checkRateLimit(req, url);
+  if (!rateLimit.allowed) {
+    return json(res, 429, {
+      error: "Too many requests",
+      code: "RATE_LIMITED",
+      limit: rateLimit.limit,
+      resetAt: new Date(rateLimit.resetAt).toISOString(),
+    });
+  }
   if (url.pathname === "/api/health") {
     const readiness = readinessReport();
     return json(res, 200, {
@@ -1322,7 +1820,8 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/auth/me" && req.method === "GET") {
     const auth = await currentSession(req);
     if (!auth) return json(res, 401, { error: "Unauthorized" });
-    return json(res, 200, { item: { id: auth.user.id, email: auth.user.email, name: auth.user.name, role: auth.user.role, expiresAt: auth.session.expiresAt } });
+    const db = await readDb();
+    return json(res, 200, { item: { id: auth.user.id, email: auth.user.email, name: auth.user.name, role: auth.user.role, expiresAt: auth.session.expiresAt, usage: usageSummary(db, auth.user, "ai_report") } });
   }
 
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {
@@ -1337,13 +1836,36 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/billing/webhook" && req.method === "POST") {
-    const payload = await readBody(req);
+    const payload = await readAnyBody(req);
+    if (!hasTrustedPaymentSignal(req, payload)) {
+      return json(res, 403, { error: "Forbidden", code: "PAYMENT_WEBHOOK_UNVERIFIED" });
+    }
     const event = await recordPaymentEvent({
       ...payload,
       provider: payload.provider || paymentProvider,
       type: payload.type || payload.eventType || "mock.payment_event",
     });
     return json(res, 200, { item: event });
+  }
+
+  if (url.pathname === "/api/billing/ecpay/return" && req.method === "POST") {
+    const payload = await readAnyBody(req);
+    if (!verifyEcpayCheckMacValue(payload)) {
+      return json(res, 403, { error: "Forbidden", code: "ECPAY_CHECK_MAC_INVALID" });
+    }
+    const paid = String(payload.RtnCode || "") === "1";
+    const event = await recordPaymentEvent({
+      ...payload,
+      provider: "ecpay",
+      type: paid ? "ecpay.payment_succeeded" : "ecpay.payment_failed",
+      paymentStatus: paid ? "paid" : "failed",
+      token: payload.CustomField1,
+      checkoutSessionId: payload.MerchantTradeNo,
+      raw: payload,
+    });
+    res.writeHead(200, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
+    res.end("1|OK");
+    return event;
   }
 
   const isPublicWrite =
@@ -1375,8 +1897,15 @@ async function handleApi(req, res, url) {
       status: "draft",
       quoteUrl: payment.quoteUrl,
       checkoutUrl: payment.checkoutUrl,
+      ecpayMerchantTradeNo: payment.ecpayMerchantTradeNo,
+      ecpayMerchantTradeDate: payment.ecpayMerchantTradeDate,
     });
     return json(res, 201, { item: intent });
+  }
+
+  if (url.pathname === "/api/usage" && req.method === "GET") {
+    const db = await readDb();
+    return json(res, 200, { item: usageSummary(db, req.auth.user, "ai_report") });
   }
 
   if (url.pathname === "/api/data-sources/test" && req.method === "POST") {
@@ -1412,12 +1941,16 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/billing/invoice/pay" && req.method === "POST") {
     const payload = await readBody(req);
+    if (!hasTrustedPaymentSignal(req, payload)) {
+      return json(res, 403, { error: "Forbidden", code: "PAYMENT_CONFIRMATION_UNVERIFIED" });
+    }
     const invoice = await updateInvoiceStatus({
       token: payload.token,
       id: payload.id,
       invoiceNumber: payload.invoiceNumber,
       paymentMethod: payload.paymentMethod || "manual_confirmation",
       legalVersion: payload.legalVersion || "legal-2026-06-06",
+      trustedPayment: true,
       status: "paid",
     });
     return json(res, 200, { item: invoice });
@@ -1461,11 +1994,27 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/report/run" && req.method === "POST") {
     const payload = await readBody(req);
+    const usage = await consumeApiUsage(req.auth.user, "ai_report", {
+      endpoint: "/api/report/run",
+      clientName: payload.clientName || "",
+      reportMonth: payload.reportMonth || "",
+      reportType: payload.reportType || "",
+    });
+    if (!usage.allowed) {
+      return json(res, 403, {
+        error: "LIMIT_EXCEEDED",
+        code: "LIMIT_EXCEEDED",
+        message: "Monthly AI report quota exceeded. Upgrade to continue.",
+        item: usage,
+      });
+    }
     const draft = await generateAiDraft(payload);
     const run = await createRecord("ai_runs", {
       ...payload,
       status: "completed",
       ...draft,
+      usageEventId: usage.eventId,
+      usage,
     });
     return json(res, 201, { item: run });
   }
@@ -1522,6 +2071,14 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST") {
+    const protectedCollections = new Set(["subscriptions", "usage_events", "invoices", "payment_events", "billing_intents", "audit_logs"]);
+    if (protectedCollections.has(collection)) {
+      return json(res, 403, {
+        error: "Forbidden",
+        code: "PROTECTED_COLLECTION",
+        message: "Use the dedicated API flow for billing, usage, and audit records.",
+      });
+    }
     const payload = await readBody(req);
     const record = await createRecord(collection, payload);
     return json(res, 201, { item: record });
@@ -1531,28 +2088,51 @@ async function handleApi(req, res, url) {
 }
 
 async function serveStatic(req, res, url) {
+  if (url.pathname === "/robots.txt") {
+    res.writeHead(200, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
+    return res.end(robotsTxt());
+  }
+  if (url.pathname === "/sitemap.xml") {
+    res.writeHead(200, securityHeaders({ "content-type": "application/xml;charset=utf-8" }));
+    return res.end(sitemapXml());
+  }
   if (url.pathname === "/legal") {
-    res.writeHead(200, { "content-type": "text/html;charset=utf-8" });
+    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
     return res.end(legalHtml());
   }
   if (url.pathname.startsWith("/billing/quote/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await quoteHtml(token);
     if (html) {
-      res.writeHead(200, { "content-type": "text/html;charset=utf-8" });
+      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
-    res.writeHead(404, { "content-type": "text/plain;charset=utf-8" });
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     return res.end("Quote not found");
+  }
+  if (url.pathname.startsWith("/billing/ecpay/checkout/")) {
+    const token = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const html = await ecpayCheckoutHtml(token);
+    if (html) {
+      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+      return res.end(html);
+    }
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
+    return res.end("Checkout not found");
+  }
+  if (url.pathname === "/billing/ecpay/result") {
+    const html = await ecpayResultHtml(url);
+    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+    return res.end(html);
   }
   if (url.pathname.startsWith("/billing/invoice/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await invoiceHtml(token);
     if (html) {
-      res.writeHead(200, { "content-type": "text/html;charset=utf-8" });
+      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
-    res.writeHead(404, { "content-type": "text/plain;charset=utf-8" });
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     return res.end("Invoice not found");
   }
   if (url.pathname.startsWith("/client/report/")) {
@@ -1565,26 +2145,31 @@ async function serveStatic(req, res, url) {
       if (isDownload) {
         headers["content-disposition"] = `attachment; filename="agencyreport-${token}.html"`;
       }
-      res.writeHead(200, headers);
+      res.writeHead(200, securityHeaders(headers));
       return res.end(html);
     }
-    res.writeHead(404, { "content-type": "text/plain;charset=utf-8" });
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     return res.end("Report not found");
   }
-  const requested = decodeURIComponent(url.pathname === "/" || url.pathname.startsWith("/client/intake/") ? "/index.html" : url.pathname);
-  const filePath = path.normalize(path.join(root, requested));
-  if (!filePath.startsWith(root)) {
-    res.writeHead(403);
+  const requested = publicStaticPath(url.pathname);
+  if (!requested) {
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
+    return res.end("Not found");
+  }
+  const filePath = path.resolve(root, decodeURIComponent(requested).replace(/^\/+/, ""));
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    res.writeHead(403, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     return res.end("Forbidden");
   }
 
   try {
     const info = await stat(filePath);
     if (!info.isFile()) throw new Error("Not a file");
-    res.writeHead(200, { "content-type": contentTypes[path.extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, securityHeaders({ "content-type": contentTypes[path.extname(filePath)] || "application/octet-stream" }));
     createReadStream(filePath).pipe(res);
   } catch {
-    res.writeHead(404, { "content-type": "text/plain;charset=utf-8" });
+    res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     res.end("Not found");
   }
 }

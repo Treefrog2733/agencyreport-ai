@@ -19,7 +19,23 @@ services:
       - key: EMAIL_PROVIDER
         value: resend
       - key: PAYMENT_PROVIDER
-        value: mock
+        value: ecpay
+      - key: ECPAY_MODE
+        value: production
+      - key: APP_BASE_URL
+        value: https://app.virtualtrendworks.com
+      - key: ECPAY_RETURN_URL
+        value: https://app.virtualtrendworks.com/api/billing/ecpay/return
+      - key: ECPAY_ORDER_RESULT_URL
+        value: https://app.virtualtrendworks.com/billing/ecpay/result
+      - key: ECPAY_CLIENT_BACK_URL
+        value: https://app.virtualtrendworks.com
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RATE_LIMIT_MAX
+        value: "120"
+      - key: AUTH_RATE_LIMIT_MAX
+        value: "20"
       - key: DATABASE_URL
         sync: false
       - key: OPENAI_API_KEY
@@ -29,4 +45,10 @@ services:
       - key: EMAIL_FROM
         sync: false
       - key: WORKER_SECRET
+        sync: false
+      - key: ECPAY_MERCHANT_ID
+        sync: false
+      - key: ECPAY_HASH_KEY
+        sync: false
+      - key: ECPAY_HASH_IV
         sync: false
