@@ -1,0 +1,1139 @@
+const samples = {
+  ads: `channel,spend,impressions,clicks,conversions,revenue,last_spend,last_clicks,last_conversions,last_revenue
+Google Search,82000,186000,7240,318,612000,76000,6810,284,548000
+Meta Ads,54000,420000,6320,146,226000,61000,7020,158,241000
+Google Display,18000,510000,2860,42,59000,22000,3020,38,52000
+LINE OA,12000,78000,1940,64,94000,9000,1260,39,57000
+YouTube Ads,26000,240000,3180,58,86000,21000,2580,44,71000`,
+  seo: `channel,spend,impressions,clicks,conversions,revenue,last_spend,last_clicks,last_conversions,last_revenue
+Organic Blog,32000,128000,9450,186,284000,30000,8120,142,219000
+Service Pages,18000,72000,4160,154,356000,16000,3620,121,278000
+Local SEO,12000,48000,3180,96,174000,12000,2660,78,139000
+Technical SEO,9000,24000,980,22,61000,11000,860,19,52000
+Backlink Content,15000,36000,1740,38,83000,14000,1420,30,64000`,
+  social: `channel,spend,impressions,clicks,conversions,revenue,last_spend,last_clicks,last_conversions,last_revenue
+Instagram Reels,28000,360000,5120,96,148000,24000,4380,72,113000
+Facebook Posts,16000,210000,2680,48,72000,18000,2860,44,69000
+Threads,6000,98000,1320,18,26000,4000,760,9,12000
+Influencer,42000,180000,3840,82,196000,36000,3120,64,150000
+LINE Community,9000,52000,1180,36,65000,8000,940,28,48000`,
+};
+
+const planLimits = {
+  free: { reports: 3, monthlyTwd: 0, monthlyUsd: 0 },
+  starter: { reports: 10, monthlyTwd: 790, monthlyUsd: 25 },
+  agency: { reports: 50, monthlyTwd: 2490, monthlyUsd: 79 },
+  professional: { reports: 150, monthlyTwd: 5990, monthlyUsd: 189 },
+};
+
+const state = {
+  lang: localStorage.getItem("agencyReportLang") || "zh",
+  theme: localStorage.getItem("agencyReportTheme") || "dark",
+  auth: null,
+  usage: null,
+  rows: [],
+  metrics: null,
+  ai: null,
+  reports: JSON.parse(localStorage.getItem("agencyReportReports") || "[]"),
+  clients: JSON.parse(localStorage.getItem("agencyReportClients") || "[]"),
+  deliveries: JSON.parse(localStorage.getItem("agencyReportDeliveries") || "[]"),
+  invoices: JSON.parse(localStorage.getItem("agencyReportInvoices") || "[]"),
+};
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+const copy = {
+  zh: {
+    appTitle: "代理商 AI 月報平台",
+    navFeatures: "特色",
+    navWorkflow: "流程",
+    navSamples: "範例",
+    navPricing: "定價",
+    navContact: "接觸",
+    login: "登入",
+    register: "建立帳號",
+    logout: "登出",
+    startFree: "開始使用",
+    viewSample: "查看範例報告",
+    authTitle: "工作台登入",
+    authCopy: "登入後才能管理客戶、產生月報、建立付款與追蹤交付。",
+    authName: "名稱 / 公司",
+    authPassword: "密碼",
+    heroEyebrow: "AI 驅動的代理商報告",
+    heroCopy: "上傳廣告資料與客戶需求，AgencyReport AI 會在數秒內產生可交付的品牌化月報。",
+    heroAiTitle: "AI 下月行動",
+    heroAiCopy: "提高搜尋預算、暫停低轉換受眾，並更新登陸頁 CTA。",
+    trustTrial: "14 天免費試用",
+    trustImport: "CSV / Sheets 匯入",
+    trustAi: "AI 摘要與交付草稿",
+    featureOneTitle: "資料匯入",
+    featureOneCopy: "CSV、Google Sheets、客戶需求與交付 Email 集中管理。",
+    featureTwoTitle: "AI 分析",
+    featureTwoCopy: "自動產生摘要、風險、下月行動與客戶說明稿。",
+    featureThreeTitle: "視覺月報",
+    featureThreeCopy: "KPI、趨勢、渠道表現與互動圖表可直接審核。",
+    featureFourTitle: "交付追蹤",
+    featureFourCopy: "HTML / PDF / Email 草稿、付款與交付紀錄都連在案件裡。",
+    workflowKicker: "流程",
+    workflowTitle: "四個步驟，把月報變成可重複交付的系統",
+    workflowCopy: "從資料收集到 AI 產出，再到品牌化交付，每一步都為小型代理商設計。",
+    stepOneLabel: "收集",
+    stepOneTitle: "收回資料",
+    stepOneCopy: "客戶需求、報告月份、CSV 或 Sheets。",
+    stepTwoLabel: "整理",
+    stepTwoTitle: "新增上下文",
+    stepTwoCopy: "補上產業、KPI、預算與交付語氣。",
+    stepThreeLabel: "AI",
+    stepThreeTitle: "產生報告",
+    stepThreeCopy: "AI 產生摘要、風險、下月建議與客戶說明。",
+    stepFourLabel: "交付",
+    stepFourTitle: "審核並發送",
+    stepFourCopy: "輸出 HTML/PDF，排入 Email 任務並留下紀錄。",
+    sampleTitle: "一份真正能交給客戶看的 AI 月報",
+    sampleCopy: "它不是只列數字，而是把 KPI 變化、風險、下一步行動整理成代理商能直接使用的說明。",
+    sampleClient: "晨光牙醫診所 / 2026-06",
+    sampleHeadline: "本月 ROAS 提升，Meta CPA 需控管",
+    sampleInsightOne: "搜尋廣告帶來穩定轉換，整體營收優於上月。",
+    sampleInsightTwo: "下月建議把預算移往搜尋，並重新整理 Meta 受眾。",
+    pricingTitle: "先用低成本驗證，再逐步自動化交付",
+    pricingCopy: "方案設計給單人工作室、小型代理商與需要半自動化月報交付的團隊。",
+    starterPlanName: "入門版",
+    agencyPlanName: "代理商版",
+    professionalPlanName: "專業版",
+    starterPrice: "NT$790/月",
+    agencyPrice: "NT$2,490/月",
+    whiteLabelPrice: "NT$5,990/月",
+    starterCopy: "每月 10 份 AI 月報、CSV/Sheets 匯入、AI 建議、PDF/HTML 匯出。",
+    agencyCopy: "每月 50 份 AI 月報、多客戶、品牌化報告、付款與交付紀錄。",
+    whiteLabelCopy: "更高月報量、客戶入口、排程、Email 草稿、白標與進階 AI 分析。",
+    finalTitle: "讓第一份 AI 月報成為你的產品化服務",
+    finalCopy: "登入後匯入範例資料，先跑出一份完整月報，再逐步接上正式資料源與收款流程。",
+    agencyBrand: "代理商品牌",
+    clientName: "客戶名稱",
+    reportMonth: "報告月份",
+    reportType: "報告類型",
+    currency: "幣別",
+    tone: "語氣",
+    clientRequest: "客戶需求",
+    dataSource: "資料匯入",
+    dataSourceCopy: "貼上 CSV 或匯入 Google Sheets，系統會先產生基礎 KPI 與圖表。",
+    csvData: "CSV 資料",
+    generateReport: "產生月報",
+    aiWorkOrderTitle: "AI 工作單",
+    aiWorkOrderCopy: "把客戶需求、CSV 指標與最佳/最弱渠道送給後端 AI。",
+    businessType: "產業",
+    automationLevel: "自動化程度",
+    deliveryEmail: "交付 Email",
+    savedReports: "已存報告",
+    latestReport: "最新月份",
+    saveReport: "儲存目前報告",
+    billingTitle: "方案與收款",
+    billingCopy: "管理方案、付款草稿、發票與 AI 用量。",
+    accountName: "帳戶名稱",
+    selectedPlan: "選擇方案",
+    checkoutStatus: "付款狀態",
+    createInvoice: "建立發票",
+    clientCount: "客戶數",
+    reportUsage: "報告用量",
+    consentData: "客戶同意資料用於月報分析",
+    consentAi: "客戶同意使用 AI 產生建議",
+    consentDelivery: "客戶同意 Email / PDF / HTML 交付",
+    saveConsent: "儲存同意",
+    healthScoreLabel: "健康分數",
+    executiveSummary: "執行摘要",
+    executiveSummaryCopy: "AI 會將本月成效濃縮成客戶看得懂的重點。",
+    riskAlerts: "風險提醒",
+    nextActions: "下月行動建議",
+    trendChartTitle: "營收與花費趨勢",
+    revenueChartTitle: "渠道營收占比",
+    roasChartTitle: "渠道 ROAS 排名",
+    funnelChartTitle: "轉換漏斗",
+    detailData: "渠道明細資料",
+    saveLead: "儲存名單",
+  },
+  en: {
+    appTitle: "Agency AI Reporting Platform",
+    navFeatures: "Features",
+    navWorkflow: "Workflow",
+    navSamples: "Samples",
+    navPricing: "Pricing",
+    navContact: "Contact",
+    login: "Sign in",
+    register: "Create account",
+    logout: "Sign out",
+    startFree: "Start free",
+    viewSample: "View sample report",
+    authTitle: "Workspace sign in",
+    authCopy: "Sign in to manage clients, reports, payments, and delivery tracking.",
+    authName: "Name / Company",
+    authPassword: "Password",
+    heroEyebrow: "AI-powered agency reporting",
+    heroCopy: "Upload campaign data and client requirements. AgencyReport AI generates a branded monthly report in seconds.",
+    heroAiTitle: "AI Next Action",
+    heroAiCopy: "Increase search budget, pause weak audiences, and refresh the landing page CTA.",
+    trustTrial: "14-day free trial",
+    trustImport: "CSV / Sheets import",
+    trustAi: "AI summary and delivery draft",
+    featureOneTitle: "Data import",
+    featureOneCopy: "Manage CSV, Google Sheets, client requirements, and delivery email in one place.",
+    featureTwoTitle: "AI analysis",
+    featureTwoCopy: "Generate summaries, risks, next-month actions, and client-ready explanations.",
+    featureThreeTitle: "Visual report",
+    featureThreeCopy: "Review KPI, trends, channel performance, and interactive charts.",
+    featureFourTitle: "Delivery tracking",
+    featureFourCopy: "Connect HTML / PDF / Email drafts, payment, and handoff records to each case.",
+    workflowKicker: "Workflow",
+    workflowTitle: "Four steps turn reporting into a repeatable system",
+    workflowCopy: "From data collection to AI output and branded delivery, each step is built for small agencies.",
+    stepOneLabel: "Collect",
+    stepOneTitle: "Collect assets",
+    stepOneCopy: "Client needs, report month, CSV, or Sheets.",
+    stepTwoLabel: "Context",
+    stepTwoTitle: "Add context",
+    stepTwoCopy: "Add industry, KPI, budget, and delivery tone.",
+    stepThreeLabel: "AI",
+    stepThreeTitle: "Generate report",
+    stepThreeCopy: "AI creates summary, risks, next actions, and client wording.",
+    stepFourLabel: "Delivery",
+    stepFourTitle: "Review and send",
+    stepFourCopy: "Export HTML/PDF, queue email, and keep a record.",
+    sampleTitle: "An AI report your client can actually read",
+    sampleCopy: "It turns KPI changes, risks, and next actions into agency-ready narrative.",
+    sampleClient: "Sunrise Dental / 2026-06",
+    sampleHeadline: "ROAS improved while Meta CPA needs control",
+    sampleInsightOne: "Search ads brought stable conversions and revenue improved month over month.",
+    sampleInsightTwo: "Move more budget to search and rebuild Meta audiences next month.",
+    pricingTitle: "Validate cheaply, then automate delivery",
+    pricingCopy: "Plans for solo studios, small agencies, and teams scaling monthly report delivery.",
+    starterPlanName: "Starter",
+    agencyPlanName: "Agency",
+    professionalPlanName: "Professional",
+    starterPrice: "NT$790/mo",
+    agencyPrice: "NT$2,490/mo",
+    whiteLabelPrice: "NT$5,990/mo",
+    starterCopy: "10 AI reports per month, CSV/Sheets import, AI recommendations, PDF/HTML export.",
+    agencyCopy: "50 AI reports per month, multiple clients, branded reports, payment and delivery records.",
+    whiteLabelCopy: "Higher report volume, client portal, schedules, email drafts, white label, advanced AI.",
+    finalTitle: "Turn the first AI report into a productized service",
+    finalCopy: "Sign in, load sample data, generate a full report, then connect production data and payments.",
+    agencyBrand: "Agency brand",
+    clientName: "Client name",
+    reportMonth: "Report month",
+    reportType: "Report type",
+    currency: "Currency",
+    tone: "Tone",
+    clientRequest: "Client request",
+    dataSource: "Data import",
+    dataSourceCopy: "Paste CSV or import Google Sheets to create KPI and charts first.",
+    csvData: "CSV data",
+    generateReport: "Generate report",
+    aiWorkOrderTitle: "AI work order",
+    aiWorkOrderCopy: "Send client needs, CSV metrics, and best/worst channels to backend AI.",
+    businessType: "Industry",
+    automationLevel: "Automation level",
+    deliveryEmail: "Delivery Email",
+    savedReports: "Saved reports",
+    latestReport: "Latest month",
+    saveReport: "Save current report",
+    billingTitle: "Plans & payments",
+    billingCopy: "Manage plans, checkout drafts, invoices, and AI usage.",
+    accountName: "Account name",
+    selectedPlan: "Selected plan",
+    checkoutStatus: "Checkout status",
+    createInvoice: "Create invoice",
+    clientCount: "Clients",
+    reportUsage: "Report usage",
+    consentData: "Client approved data processing for report analysis",
+    consentAi: "Client approved AI-generated recommendations",
+    consentDelivery: "Client approved Email / PDF / HTML delivery",
+    saveConsent: "Save consent",
+    healthScoreLabel: "Health score",
+    executiveSummary: "Executive summary",
+    executiveSummaryCopy: "AI condenses the month into client-readable points.",
+    riskAlerts: "Risk alerts",
+    nextActions: "Next-month actions",
+    trendChartTitle: "Revenue and spend trend",
+    revenueChartTitle: "Revenue by channel",
+    roasChartTitle: "Channel ROAS ranking",
+    funnelChartTitle: "Conversion funnel",
+    detailData: "Channel detail data",
+    saveLead: "Save lead",
+  },
+};
+
+function t(key) {
+  return copy[state.lang]?.[key] || copy.zh[key] || key;
+}
+
+function setText(selector, text) {
+  const node = $(selector);
+  if (node) node.textContent = text;
+}
+
+function authToken() {
+  return localStorage.getItem("agencyReportAuthToken") || "";
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      ...(authToken() ? { authorization: `Bearer ${authToken()}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(body.code || body.error || body.message || `HTTP ${response.status}`);
+    error.status = response.status;
+    error.code = body.code;
+    error.details = body.item;
+    throw error;
+  }
+  return body.item ?? body;
+}
+
+function applyLanguage(lang = state.lang) {
+  state.lang = lang === "en" ? "en" : "zh";
+  localStorage.setItem("agencyReportLang", state.lang);
+  document.documentElement.lang = state.lang === "en" ? "en" : "zh-Hant";
+  $$("[data-lang]").forEach((button) => button.classList.toggle("active", button.dataset.lang === state.lang));
+  $$("[data-i18n]").forEach((node) => {
+    const key = node.dataset.i18n;
+    if (copy[state.lang][key]) node.textContent = copy[state.lang][key];
+  });
+  const heroTitle = $("#heroTitle");
+  if (heroTitle) {
+    heroTitle.innerHTML = state.lang === "en"
+      ? "Stop writing reports.<br />Send them instead."
+      : '<span class="title-line"><span class="title-word title-word-a">別再</span><span class="title-word title-word-b">寫報告了，</span></span><span class="title-line"><span class="title-word title-word-c">直接</span><span class="title-word title-word-d">發送報告吧。</span></span>';
+  }
+  const labels = state.lang === "en"
+    ? ["Overview", "Case setup", "Data import", "Report preview", "AI advice", "Delivery & payment", "Usage plan", "Settings"]
+    : ["總覽首頁", "案件設定", "資料匯入", "報告預覽", "AI 建議", "交付付款", "用量方案", "設定"];
+  $$("[data-workspace-view]").forEach((button, index) => {
+    if (labels[index]) button.textContent = labels[index];
+  });
+  syncDockLanguageLabels();
+  renderUpgradePlans();
+  if (state.metrics) renderReport();
+}
+
+function applyTheme(theme = state.theme) {
+  state.theme = theme === "light" ? "light" : "dark";
+  localStorage.setItem("agencyReportTheme", state.theme);
+  document.documentElement.classList.toggle("theme-light", state.theme === "light");
+  document.documentElement.classList.toggle("theme-dark", state.theme !== "light");
+  setText("#dockThemeLabel", state.lang === "en" ? (state.theme === "light" ? "Dark background" : "Light background") : (state.theme === "light" ? "切換深色" : "切換淺色"));
+  if (state.metrics) drawCharts();
+}
+
+function syncDockLanguageLabels() {
+  const zh = state.lang !== "en";
+  setText("#dockProfileLabel", zh ? "個人檔案" : "Profile");
+  setText("#dockUsageLabel", zh ? "剩餘用量" : "Remaining usage");
+  setText("#dockUpgradeLabel", zh ? "升級 Pro" : "Upgrade Pro");
+  setText("#dockResetLabel", zh ? "可用重設" : "Available reset");
+  setText("#dockInviteLabel", zh ? "邀請好友" : "Invite");
+  setText("#dockLogoutLabel", zh ? "登出" : "Sign out");
+  setText("#billingPlanLabel", zh ? "目前方案" : "Current plan");
+  setText("#usageTitle", zh ? "AI 月報用量" : "AI report usage");
+  setText("#usagePlanLabel", zh ? "方案" : "Plan");
+  setText("#usageRemainingLabel", zh ? "剩餘" : "Remaining");
+  applyTheme(state.theme);
+}
+
+function setAuthState(auth) {
+  state.auth = auth;
+  if (auth?.token) localStorage.setItem("agencyReportAuthToken", auth.token);
+  const isAuthed = Boolean(state.auth);
+  document.documentElement.classList.toggle("public-landing", !isAuthed);
+  $("#overviewHome").hidden = isAuthed;
+  $("#caseWorkspace").hidden = !isAuthed;
+  $("#report").hidden = !isAuthed;
+  $("#logoutBtn").hidden = !isAuthed;
+  $("#authGate").hidden = true;
+  if (isAuthed) {
+    openWorkspace("overview");
+    refreshUsage();
+    renderWorkspace();
+  }
+}
+
+function showAuthGate() {
+  $("#authGate").hidden = false;
+  $("#authEmail")?.focus();
+}
+
+function hideAuthGate() {
+  $("#authGate").hidden = true;
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  const payload = {
+    name: $("#authName").value.trim(),
+    email: $("#authEmail").value.trim(),
+    password: $("#authPassword").value,
+  };
+  try {
+    const auth = await api("/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Signed in" : "已登入", auth.user?.email || payload.email);
+    setAuthState(auth);
+  } catch (error) {
+    setStatus("#authStatus", "error", state.lang === "en" ? "Sign in failed" : "登入失敗", error.message);
+  }
+}
+
+async function registerAuth() {
+  const payload = {
+    name: $("#authName").value.trim() || "AgencyReport AI",
+    email: $("#authEmail").value.trim(),
+    password: $("#authPassword").value,
+  };
+  try {
+    const auth = await api("/api/auth/register", { method: "POST", body: JSON.stringify(payload) });
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Account created" : "帳號已建立", auth.user?.email || payload.email);
+    setAuthState(auth);
+  } catch (error) {
+    setStatus("#authStatus", "error", state.lang === "en" ? "Registration failed" : "建立帳號失敗", error.message);
+  }
+}
+
+async function logoutAuth() {
+  try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch {}
+  localStorage.removeItem("agencyReportAuthToken");
+  state.auth = null;
+  $("#overviewHome").hidden = false;
+  $("#caseWorkspace").hidden = true;
+  $("#report").hidden = true;
+  $("#logoutBtn").hidden = true;
+  document.documentElement.classList.add("public-landing");
+}
+
+function setStatus(selector, type, title, body = "") {
+  const node = $(selector);
+  if (!node) return;
+  node.className = `status-panel ${type || ""}`.trim();
+  node.innerHTML = body ? `<strong>${title}</strong><span>${body}</span>` : `<strong>${title}</strong>`;
+}
+
+function openWorkspace(view) {
+  const allowed = new Set(["overview", "case", "data", "report", "ai", "delivery", "billing", "settings"]);
+  const current = allowed.has(view) ? view : "overview";
+  $$("[data-workspace-view]").forEach((button) => button.classList.toggle("active", button.dataset.workspaceView === current));
+  $$("[data-workspace-group]").forEach((section) => { section.hidden = section.dataset.workspaceGroup !== current; });
+  const info = {
+    overview: ["01 / 08", state.lang === "en" ? "Overview command center" : "總覽首頁", state.lang === "en" ? "See the next step, case status, recent reports, AI, and usage." : "查看下一步、案件狀態、最近報告、AI 與用量。"],
+    case: ["02 / 08", state.lang === "en" ? "Case setup" : "案件設定", state.lang === "en" ? "Only keep the fields needed to generate a monthly report." : "只保留產生月報必要欄位。"],
+    data: ["03 / 08", state.lang === "en" ? "Data import" : "資料匯入", state.lang === "en" ? "Paste CSV, connect Sheets, or load demo data and check quality." : "匯入 CSV / Sheets / Demo，並檢查資料品質。"],
+    report: ["04 / 08", state.lang === "en" ? "Report preview" : "報告預覽", state.lang === "en" ? "Read the monthly report as a client-facing deliverable." : "把月報產物獨立成可閱讀的客戶報告。"],
+    ai: ["05 / 08", state.lang === "en" ? "AI advice" : "AI 建議", state.lang === "en" ? "Review summary, risks, next actions, and client wording." : "查看摘要、風險、下月行動與客戶說明稿。"],
+    delivery: ["06 / 08", state.lang === "en" ? "Delivery & payment" : "交付付款", state.lang === "en" ? "Prepare email drafts, export files, and track payment." : "準備 Email 草稿、匯出檔案並追蹤付款。"],
+    billing: ["07 / 08", state.lang === "en" ? "Usage plan" : "用量方案", state.lang === "en" ? "Manage plan, checkout drafts, invoices, and AI usage." : "管理方案、付款草稿、發票與 AI 用量。"],
+    settings: ["08 / 08", state.lang === "en" ? "Trust settings" : "設定", state.lang === "en" ? "Manage consent and audit notes." : "管理同意與稽核紀錄。"],
+  }[current];
+  setText("#workspaceFocusStep", info[0]);
+  setText("#viewMastheadStep", info[0]);
+  setText("#workspaceFocusTitle", info[1]);
+  setText("#viewMastheadTitle", info[1]);
+  setText("#workspaceFocusCopy", info[2]);
+  setText("#viewMastheadCopy", info[2]);
+}
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const values = line.split(",");
+    return Object.fromEntries(headers.map((header, index) => {
+      const raw = (values[index] || "").trim();
+      return [header, Number(raw) || raw];
+    }));
+  }).filter((row) => row.channel);
+}
+
+function calculateMetrics(rows) {
+  const totals = rows.reduce((acc, row) => {
+    acc.spend += Number(row.spend) || 0;
+    acc.impressions += Number(row.impressions) || 0;
+    acc.clicks += Number(row.clicks) || 0;
+    acc.conversions += Number(row.conversions) || 0;
+    acc.revenue += Number(row.revenue) || 0;
+    acc.lastRevenue += Number(row.last_revenue) || 0;
+    return acc;
+  }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0, lastRevenue: 0 });
+  const channels = rows.map((row) => ({
+    ...row,
+    roas: (Number(row.revenue) || 0) / Math.max(Number(row.spend) || 0, 1),
+    cpa: (Number(row.spend) || 0) / Math.max(Number(row.conversions) || 0, 1),
+  })).sort((a, b) => b.roas - a.roas);
+  return {
+    totals,
+    channels,
+    roas: totals.revenue / Math.max(totals.spend, 1),
+    cpa: totals.spend / Math.max(totals.conversions, 1),
+    ctr: totals.clicks / Math.max(totals.impressions, 1),
+    conversionRate: totals.conversions / Math.max(totals.clicks, 1),
+    revenueGrowth: totals.lastRevenue ? (totals.revenue - totals.lastRevenue) / totals.lastRevenue : 0,
+    best: channels[0],
+    worst: channels[channels.length - 1],
+  };
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW", {
+    style: "currency",
+    currency: $("#currency")?.value || "TWD",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+}
+
+function formatPercent(value) {
+  return new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW", { style: "percent", maximumFractionDigits: 1 }).format(Number(value) || 0);
+}
+
+function buildRuleDraft(metrics = state.metrics) {
+  if (!metrics) return null;
+  const zh = state.lang !== "en";
+  return {
+    summary: zh
+      ? `本月整體 ROAS 為 ${metrics.roas.toFixed(2)}x，營收 ${formatMoney(metrics.totals.revenue)}，最佳渠道是 ${metrics.best.channel}。`
+      : `Overall ROAS is ${metrics.roas.toFixed(2)}x with ${formatMoney(metrics.totals.revenue)} revenue. Best channel: ${metrics.best.channel}.`,
+    risks: [
+      zh ? `${metrics.worst.channel} ROAS 較低，需檢查受眾、素材或關鍵字。` : `${metrics.worst.channel} has the weakest ROAS; review audience, creative, or keywords.`,
+      zh ? `CPA 目前為 ${formatMoney(metrics.cpa)}，下月需持續控管。` : `CPA is ${formatMoney(metrics.cpa)} and needs monitoring next month.`,
+    ],
+    actions: [
+      zh ? `將 10-15% 預算移往 ${metrics.best.channel}。` : `Move 10-15% budget toward ${metrics.best.channel}.`,
+      zh ? `暫停或重建 ${metrics.worst.channel} 的低效投放組合。` : `Pause or rebuild weak campaigns in ${metrics.worst.channel}.`,
+      zh ? "更新登陸頁 CTA，讓高意圖流量更容易轉換。" : "Refresh landing page CTAs to convert high-intent traffic.",
+    ],
+    clientMessage: zh
+      ? `本月主要成長來自 ${metrics.best.channel}，下月會優先擴大有效渠道並修正低效來源。`
+      : `Growth came mainly from ${metrics.best.channel}. Next month we will scale what works and fix weak sources.`,
+  };
+}
+
+async function runBackendAi() {
+  if (!state.metrics) generateReport();
+  if (!state.metrics) return;
+  setStatus("#aiReportStatus", "", state.lang === "en" ? "Running AI..." : "AI 分析中...");
+  try {
+    const payload = {
+      clientName: $("#clientName").value,
+      agencyName: $("#agencyName").value,
+      reportMonth: $("#reportMonth").value,
+      reportType: $("#reportType").value,
+      clientRequest: $("#clientRequest").value,
+      metrics: state.metrics,
+      channels: state.metrics.channels,
+    };
+    const result = await api("/api/report/run", { method: "POST", body: JSON.stringify(payload) });
+    state.ai = {
+      summary: result.executiveSummary || result.summary || buildRuleDraft().summary,
+      risks: result.risks || result.riskAlerts || buildRuleDraft().risks,
+      actions: result.recommendations || result.nextActions || buildRuleDraft().actions,
+      clientMessage: result.clientMessage || result.clientReplyDraft || buildRuleDraft().clientMessage,
+    };
+    state.usage = result.usage || state.usage;
+    renderAi();
+    updateUsageUi();
+    setStatus("#aiReportStatus", "ok", state.lang === "en" ? "AI draft ready" : "AI 草稿已完成", state.ai.clientMessage);
+  } catch (error) {
+    if (isLimitExceededError(error)) {
+      openLimitExceededUpgrade(error);
+      return;
+    }
+    state.ai = buildRuleDraft();
+    renderAi();
+    setStatus("#aiReportStatus", "error", state.lang === "en" ? "AI failed; rule fallback used" : "AI 失敗，已使用規則型備援", error.message);
+  }
+}
+
+function generateReport() {
+  const rows = parseCsv($("#csvInput").value || "");
+  if (!rows.length) {
+    setStatus("#dataStatus", "error", state.lang === "en" ? "No CSV data" : "尚未匯入 CSV", state.lang === "en" ? "Paste sample data first." : "請先貼上範例資料。");
+    return;
+  }
+  state.rows = rows;
+  state.metrics = calculateMetrics(rows);
+  state.ai = state.ai || buildRuleDraft(state.metrics);
+  renderReport();
+  renderAi();
+  renderWorkspace();
+  $("#report").hidden = false;
+  setStatus("#dataStatus", "ok", state.lang === "en" ? "Report generated" : "月報已產生", `${rows.length} channels`);
+  setText("#reportCommandGenerated", new Date().toLocaleString(state.lang === "en" ? "en-US" : "zh-TW"));
+}
+
+async function generateReportFromButton() {
+  generateReport();
+  await runBackendAi();
+}
+
+async function runWorkspacePrimaryAction(event) {
+  const target = event?.currentTarget?.dataset.workspaceTarget || "data";
+  if (target === "report") {
+    if (!state.metrics) await generateReportFromButton();
+    openWorkspace("report");
+    if (state.metrics) $("#report")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  if (target === "ai") {
+    openWorkspace("ai");
+    if (!state.ai && state.metrics) await runBackendAi();
+    return;
+  }
+  openWorkspace(target);
+}
+
+function renderReport() {
+  const m = state.metrics;
+  if (!m) return;
+  setText("#coverAgency", $("#agencyName").value || "AgencyReport AI");
+  setText("#coverTitle", `${$("#clientName").value || "Demo Client"} ${$("#reportType").selectedOptions[0]?.textContent || "月報"}`);
+  setText("#coverMonth", $("#reportMonth").value || "-");
+  setText("#qualityPill", `${Math.round(Math.min(m.roas / 5, 1) * 100)}%`);
+  setText("#scoreLabel", `${Math.round(Math.min(m.roas / 5, 1) * 100)}%`);
+  setText("#reportCommandQuality", state.lang === "en" ? "Ready" : "已就緒");
+  const cards = [
+    ["ROAS", `${m.roas.toFixed(2)}x`],
+    ["CPA", formatMoney(m.cpa)],
+    [state.lang === "en" ? "Revenue" : "營收", formatMoney(m.totals.revenue)],
+    [state.lang === "en" ? "Growth" : "成長", formatPercent(m.revenueGrowth)],
+  ];
+  $("#insights").innerHTML = cards.map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
+  const topRevenue = [...m.channels].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))[0];
+  const lowestCpa = [...m.channels].sort((a, b) => Number(a.cpa || 0) - Number(b.cpa || 0))[0];
+  $("#detailTable").innerHTML = `
+    <thead><tr><th>Channel</th><th>Spend</th><th>Revenue</th><th>Conversions</th><th>ROAS</th><th>CPA</th><th>Decision</th></tr></thead>
+    <tbody>${m.channels.map((row) => {
+      const isBestRoas = row.channel === m.best?.channel;
+      const isWeakRoas = row.channel === m.worst?.channel;
+      const isTopRevenue = row.channel === topRevenue?.channel;
+      const isLowestCpa = row.channel === lowestCpa?.channel;
+      const decision = isBestRoas
+        ? (state.lang === "en" ? "Scale" : "擴大")
+        : isWeakRoas
+          ? (state.lang === "en" ? "Fix" : "修正")
+          : (state.lang === "en" ? "Monitor" : "觀察");
+      return `<tr class="${isWeakRoas ? "is-weak" : ""}">
+        <td><strong>${row.channel}</strong>${isBestRoas ? `<span class="table-badge good">${state.lang === "en" ? "Best ROAS" : "最佳 ROAS"}</span>` : ""}</td>
+        <td class="num">${formatMoney(row.spend)}</td>
+        <td class="num ${isTopRevenue ? "is-best" : ""}">${formatMoney(row.revenue)}</td>
+        <td class="num">${row.conversions}</td>
+        <td class="num ${isBestRoas ? "is-best" : isWeakRoas ? "is-warn" : ""}">${row.roas.toFixed(2)}x</td>
+        <td class="num ${isLowestCpa ? "is-best" : ""}">${formatMoney(row.cpa)}</td>
+        <td><span class="table-badge ${isWeakRoas ? "warn" : isBestRoas ? "good" : ""}">${decision}</span></td>
+      </tr>`;
+    }).join("")}</tbody>`;
+  renderChartInsights(m);
+  drawCharts();
+}
+
+function renderChartInsights(m) {
+  const zh = state.lang !== "en";
+  const channelCount = m.channels.length;
+  const topRevenue = [...m.channels].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))[0] || m.best;
+  const totalRevenue = Math.max(Number(m.totals.revenue) || 0, 1);
+  const topShare = topRevenue ? Number(topRevenue.revenue || 0) / totalRevenue : 0;
+  const roasDecision = m.roas >= 3
+    ? (zh ? "可放大投放" : "Ready to scale")
+    : m.roas >= 1.8
+      ? (zh ? "先優化再放大" : "Optimize first")
+      : (zh ? "需修正預算" : "Fix budget");
+  const funnelDecision = m.conversionRate >= 0.035
+    ? (zh ? "轉換健康" : "Healthy conversion")
+    : m.ctr >= 0.02
+      ? (zh ? "優先查落地頁" : "Check landing page")
+      : (zh ? "優先查素材" : "Check creatives");
+  const stat = (label, value, tone = "", hint = "") => `<div class="${tone}"><span>${label}</span><strong>${value}</strong>${hint ? `<em>${hint}</em>` : ""}</div>`;
+  const setStats = (selector, items) => {
+    const node = $(selector);
+    if (node) node.innerHTML = items.join("");
+  };
+
+  setStats("#trendChartStats", [
+    stat(zh ? "本月營收" : "Revenue", formatMoney(m.totals.revenue), "good", zh ? "客戶最關心" : "Client-facing"),
+    stat(zh ? "廣告花費" : "Spend", formatMoney(m.totals.spend), "", zh ? "需搭配 ROAS" : "Pair with ROAS"),
+    stat(zh ? "營收成長" : "Growth", formatPercent(m.revenueGrowth), m.revenueGrowth >= 0 ? "good" : "warn", zh ? "與上期比較" : "Vs previous"),
+    stat(zh ? "下一步" : "Next step", m.revenueGrowth >= 0 ? (zh ? "保留主力渠道" : "Keep winners") : (zh ? "檢查下滑渠道" : "Find decline"), m.revenueGrowth >= 0 ? "good" : "warn"),
+  ]);
+  setStats("#revenueChartStats", [
+    stat(zh ? "最高營收渠道" : "Top channel", topRevenue?.channel || "-", "good", zh ? "優先保護" : "Protect first"),
+    stat(zh ? "占總營收" : "Share", formatPercent(topShare), topShare >= 0.5 ? "warn" : "good", topShare >= 0.5 ? (zh ? "集中度偏高" : "High dependency") : (zh ? "分布較穩" : "Balanced")),
+    stat(zh ? "渠道數" : "Channels", String(channelCount), "", zh ? "本月有數據" : "With data"),
+    stat(zh ? "下一步" : "Next step", topShare >= 0.5 ? (zh ? "降低單點風險" : "Reduce risk") : (zh ? "複製成功模式" : "Clone winner"), topShare >= 0.5 ? "warn" : "good"),
+  ]);
+  setStats("#roasChartStats", [
+    stat(zh ? "整體 ROAS" : "Overall ROAS", `${m.roas.toFixed(2)}x`, m.roas >= 3 ? "good" : "warn", roasDecision),
+    stat(zh ? "最佳渠道" : "Best", `${m.best?.channel || "-"} ${m.best ? m.best.roas.toFixed(2) : "0.00"}x`, "good", zh ? "可測試加碼" : "Test scale"),
+    stat(zh ? "需改善" : "Needs work", `${m.worst?.channel || "-"} ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x`, "warn", zh ? "先降預算" : "Reduce first"),
+    stat(zh ? "下一步" : "Next step", zh ? "預算重分配" : "Reallocate", m.roas >= 3 ? "good" : "warn"),
+  ]);
+  setStats("#funnelChartStats", [
+    stat(zh ? "曝光" : "Impressions", new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW").format(m.totals.impressions), "", zh ? "流量規模" : "Traffic size"),
+    stat(zh ? "點擊率" : "CTR", formatPercent(m.ctr), m.ctr >= 0.02 ? "good" : "warn", zh ? "素材吸引力" : "Creative pull"),
+    stat(zh ? "轉換率" : "CVR", formatPercent(m.conversionRate), m.conversionRate >= 0.035 ? "good" : "warn", zh ? "頁面/表單效率" : "Page efficiency"),
+    stat(zh ? "判讀" : "Decision", funnelDecision, m.conversionRate >= 0.035 ? "good" : "warn"),
+  ]);
+
+  setText("#trendChartNote", zh
+    ? `本月營收 ${formatMoney(m.totals.revenue)}，相較前期 ${m.revenueGrowth >= 0 ? "成長" : "下滑"} ${formatPercent(Math.abs(m.revenueGrowth))}，建議同步檢查花費是否跟著效率提升。`
+    : `Revenue reached ${formatMoney(m.totals.revenue)}, ${m.revenueGrowth >= 0 ? "up" : "down"} ${formatPercent(Math.abs(m.revenueGrowth))}; compare spend efficiency before scaling.`);
+  setText("#revenueChartNote", zh
+    ? `${topRevenue?.channel || "-"} 貢獻 ${formatPercent(topShare)} 營收，是本月最需要優先維持品質與預算的渠道。`
+    : `${topRevenue?.channel || "-"} contributes ${formatPercent(topShare)} of revenue and should be protected before scaling other channels.`);
+  setText("#roasChartNote", zh
+    ? `最佳渠道為 ${m.best?.channel || "-"}，最弱渠道為 ${m.worst?.channel || "-"}；下月可把 10-15% 預算從低效來源移往高 ROAS 來源。`
+    : `Best channel: ${m.best?.channel || "-"}; weakest: ${m.worst?.channel || "-"}. Move 10-15% budget toward higher ROAS sources next month.`);
+  setText("#funnelChartNote", zh
+    ? `目前 CTR ${formatPercent(m.ctr)}、轉換率 ${formatPercent(m.conversionRate)}，若點擊足夠但轉換不足，優先檢查落地頁與表單阻力。`
+    : `CTR is ${formatPercent(m.ctr)} and CVR is ${formatPercent(m.conversionRate)}. If clicks are healthy but conversions lag, inspect landing page friction first.`);
+}
+
+function renderAi() {
+  const draft = state.ai || buildRuleDraft();
+  if (!draft) return;
+  const zh = state.lang !== "en";
+  $("#riskList").innerHTML = draft.risks.map((item) => `<div><span>${zh ? "風險" : "Risk"}</span><strong>${item}</strong></div>`).join("");
+  $("#recommendations").innerHTML = draft.actions.map((item) => `<div><span>${zh ? "行動" : "Action"}</span><strong>${item}</strong></div>`).join("");
+  $("#aiWorkOrder").innerHTML = `
+    <article><span>${zh ? "輸入資料" : "Input data"}</span><p>${$("#clientRequest").value || (zh ? "尚未填寫客戶需求，會先使用 KPI 與渠道資料產生建議。" : "No client request yet. KPI and channel data will be used first.")}</p></article>
+    <article><span>${zh ? "AI 任務" : "AI task"}</span><p>${zh ? "根據需求、KPI、最佳/最弱渠道，產生摘要、風險、下月行動與客戶說明稿。" : "Use goals, KPI, best/worst channels to produce summary, risks, next actions, and client wording."}</p></article>
+  `;
+  setText("#aiSummaryOutput", draft.summary);
+  const riskOutput = $("#aiRiskOutput");
+  if (riskOutput) riskOutput.innerHTML = draft.risks.map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><strong>${item}</strong></div>`).join("");
+  const actionOutput = $("#aiActionOutput");
+  if (actionOutput) actionOutput.innerHTML = draft.actions.map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><strong>${item}</strong></div>`).join("");
+  setText("#aiClientMessageOutput", draft.clientMessage);
+  $("#clientReplyDraft").value = draft.clientMessage;
+  setText("#reportCommandAi", state.lang === "en" ? "Ready" : "已完成");
+  renderWorkspace();
+}
+
+function drawCharts() {
+  const m = state.metrics;
+  if (!m) return;
+  drawBar("#roasChart", m.channels.map((row) => [row.channel, row.roas]), "#2dd4bf");
+  drawBar("#revenueChart", m.channels.map((row) => [row.channel, Number(row.revenue)]), "#8b5cf6");
+  drawBar("#trendChart", [["Last", m.totals.lastRevenue], ["Current", m.totals.revenue], ["Spend", m.totals.spend]], "#38bdf8");
+  drawBar("#funnelChart", [["Impr.", m.totals.impressions], ["Clicks", m.totals.clicks], ["Conv.", m.totals.conversions]], "#f59e0b");
+}
+
+function drawBar(selector, data, color) {
+  const canvas = $(selector);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const isDark = document.documentElement.classList.contains("theme-dark") && !document.documentElement.classList.contains("public-landing");
+  const palette = isDark
+    ? { bg: "#101720", grid: "rgba(226,232,240,.09)", label: "#cbd5e1", value: "#f8fafc", fade: "rgba(16,23,32,.15)" }
+    : { bg: "#ffffff", grid: "rgba(15,23,42,.08)", label: "#526174", value: "#0f172a", fade: "rgba(255,255,255,.2)" };
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = palette.bg;
+  ctx.fillRect(0, 0, width, height);
+  const max = Math.max(...data.map(([, value]) => Number(value) || 0), 1);
+  const gap = Math.max(16, Math.min(34, width / 24));
+  const chartTop = 28;
+  const chartBottom = height - 52;
+  const chartHeight = Math.max(80, chartBottom - chartTop);
+  const barWidth = Math.max(28, (width - gap * (data.length + 1)) / data.length);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = palette.grid;
+  ctx.font = "12px system-ui";
+  ctx.fillStyle = palette.label;
+  for (let i = 0; i <= 3; i += 1) {
+    const y = chartTop + (chartHeight / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(gap, y);
+    ctx.lineTo(width - gap, y);
+    ctx.stroke();
+  }
+  data.forEach(([label, value], index) => {
+    const numeric = Number(value) || 0;
+    const barHeight = Math.max(8, (numeric / max) * chartHeight);
+    const x = gap + index * (barWidth + gap);
+    const y = chartBottom - barHeight;
+    const gradient = ctx.createLinearGradient(0, y, 0, chartBottom);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, palette.fade);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, barWidth, barHeight);
+    ctx.fillStyle = palette.value;
+    ctx.font = "700 12px system-ui";
+    const valueLabel = numeric >= 1000000 ? `${Math.round(numeric / 1000000)}M` : numeric >= 1000 ? `${Math.round(numeric / 1000)}K` : numeric.toFixed(numeric < 10 ? 1 : 0);
+    ctx.fillText(valueLabel, x, Math.max(18, y - 8));
+    ctx.fillStyle = palette.label;
+    ctx.font = "12px system-ui";
+    ctx.fillText(String(label).slice(0, 12), x, height - 18);
+  });
+}
+
+function renderWorkspace() {
+  const m = state.metrics;
+  const steps = [
+    Boolean($("#clientName").value),
+    Boolean($("#csvInput").value.trim()),
+    Boolean(state.metrics),
+    Boolean(state.ai),
+    state.deliveries.length > 0,
+    state.invoices.length > 0,
+  ];
+  const score = Math.round((steps.filter(Boolean).length / steps.length) * 100);
+  const zh = state.lang !== "en";
+  const nextSteps = [
+    { done: steps[0], view: "case", label: "Step 1", title: zh ? "確認案件設定" : "Confirm case setup", copy: zh ? "填入客戶、月份、月報類型與需求，讓系統知道報告目標。" : "Fill client, month, report type, and goals so the report has context.", action: zh ? "前往案件設定" : "Open case setup" },
+    { done: steps[1], view: "data", label: "Step 2", title: zh ? "匯入資料" : "Import data", copy: zh ? "貼上 CSV、匯入 Demo 或串接 Sheets，建立 KPI 與渠道資料。" : "Paste CSV, load demo data, or connect Sheets to build KPI data.", action: zh ? "前往資料匯入" : "Open data import" },
+    { done: steps[2], view: "report", label: "Step 3", title: zh ? "產生月報" : "Generate report", copy: zh ? "用目前資料產出報告預覽、圖表與表格判讀。" : "Generate report preview, charts, and table diagnostics from current data.", action: zh ? "產生月報" : "Generate report" },
+    { done: steps[3], view: "ai", label: "Step 4", title: zh ? "產生 AI 建議" : "Generate AI advice", copy: zh ? "建立摘要、風險、下月行動與客戶說明稿。" : "Create summary, risks, next actions, and client wording.", action: zh ? "前往 AI 建議" : "Open AI advice" },
+    { done: steps[4], view: "delivery", label: "Step 5", title: zh ? "建立交付紀錄" : "Create delivery record", copy: zh ? "確認 Email 草稿、匯出方式與交付紀錄。" : "Confirm email draft, exports, and delivery record.", action: zh ? "前往交付付款" : "Open delivery" },
+    { done: steps[5], view: "billing", label: "Step 6", title: zh ? "建立付款草稿" : "Create payment draft", copy: zh ? "補上付款狀態，讓月報交付與收款有紀錄。" : "Add payment status so delivery and billing stay connected.", action: zh ? "前往用量方案" : "Open usage plan" },
+  ];
+  const next = nextSteps.find((item) => !item.done) || { view: "report", label: "Ready", title: zh ? "可以交付月報" : "Ready to deliver", copy: zh ? "案件、資料、AI、交付與付款都已有紀錄。" : "Case, data, AI, delivery, and payment are recorded.", action: zh ? "查看報告預覽" : "View report preview" };
+  setText("#launchScore", `${score}%`);
+  $("#consoleReadinessBar").style.width = `${score}%`;
+  $("#launchChecklist").innerHTML = [
+    [steps[0], state.lang === "en" ? "Case setup" : "案件設定"],
+    [steps[1], state.lang === "en" ? "Data imported" : "資料匯入"],
+    [steps[2], state.lang === "en" ? "Report preview" : "報告預覽"],
+    [steps[3], state.lang === "en" ? "AI advice" : "AI 建議"],
+    [steps[4], state.lang === "en" ? "Delivery record" : "交付紀錄"],
+    [steps[5], state.lang === "en" ? "Payment draft" : "付款草稿"],
+  ].map(([done, label]) => `<div><span class="${done ? "ok" : ""}">${done ? "OK" : "..."}</span><strong>${label}</strong></div>`).join("");
+  setText("#overviewNextBadge", next.label);
+  setText("#overviewNextTitle", next.title);
+  setText("#overviewNextCopy", next.copy);
+  setText("#overviewPrimaryAction", next.action);
+  $("#overviewPrimaryAction").dataset.workspaceTarget = next.view;
+  $("#viewMastheadAction").dataset.workspaceTarget = next.view;
+  $("#workspaceFocusAction").dataset.workspaceTarget = next.view;
+  setText("#viewMastheadPrimary", score >= 100 ? (zh ? "可交付" : "Ready") : (zh ? "準備中" : "In progress"));
+  setText("#viewMastheadPrimaryLabel", zh ? "目前狀態" : "Status");
+  setText("#viewMastheadNextLabel", zh ? "下一步" : "Next step");
+  setText("#viewMastheadAction", next.action);
+  $("#homeFeed").innerHTML = [
+    [state.lang === "en" ? "Recent report" : "最近報告", state.reports[0]?.month || (m ? $("#reportMonth").value : "-")],
+    [state.lang === "en" ? "Revenue" : "營收", m ? formatMoney(m.totals.revenue) : "-"],
+    [state.lang === "en" ? "AI usage" : "AI 用量", state.usage ? `${state.usage.used}/${state.usage.limit}` : "0/3"],
+    [state.lang === "en" ? "Payment" : "付款", state.invoices.length ? "Draft" : "-"],
+  ].map(([a, b]) => `<div><strong>${a}</strong><span>${b}</span></div>`).join("");
+  setText("#overviewCaseStatus", steps[0] ? (zh ? "已設定" : "Ready") : (zh ? "未完成" : "Missing"));
+  setText("#overviewCaseMeta", $("#clientName").value || (zh ? "尚未確認客戶資料" : "No client yet"));
+  setText("#overviewDataStatus", steps[1] ? (zh ? "已匯入" : "Imported") : (zh ? "未匯入" : "Missing"));
+  setText("#overviewDataMeta", steps[1] ? `${state.rows?.length || parseCsv($("#csvInput").value || "").length} channels` : (zh ? "CSV / Sheets 尚未建立" : "No CSV or Sheets data"));
+  setText("#overviewAiStatus", steps[3] ? (zh ? "已產生" : "Ready") : (zh ? "待產生" : "Pending"));
+  setText("#overviewAiMeta", steps[3] ? (zh ? "摘要與建議已可預覽" : "Summary and advice ready") : (zh ? "摘要、風險與建議尚未產生" : "Summary, risks, and advice pending"));
+  setText("#overviewDeliveryStatus", steps[4] ? (zh ? "已交付" : "Recorded") : (zh ? "待交付" : "Pending"));
+  setText("#overviewDeliveryMeta", steps[4] ? (state.deliveries[0]?.email || "client@example.com") : (zh ? "尚未建立 Email / 匯出紀錄" : "No email/export record"));
+  setText("#reportPreviewMonth", $("#reportMonth").value || "-");
+  setText("#reportPreviewStatus", m ? (zh ? "可預覽" : "Ready") : (zh ? "尚未產生" : "Not generated"));
+  setText("#reportPreviewHint", m ? (zh ? "報告已產生，可以向下查看完整報告內容。" : "Report generated. Scroll down to read the full report.") : (zh ? "先完成案件設定與資料匯入，這裡會顯示可閱讀的報告預覽。" : "Complete case setup and data import to unlock report preview."));
+  const reportBrief = $("#reportPreviewBrief");
+  const reportChecks = $("#reportDeliveryChecks");
+  if (reportBrief) {
+    reportBrief.innerHTML = m ? [
+      [zh ? "本月結論" : "Monthly conclusion", zh ? `${$("#clientName").value || "Demo Client"} 本月 ROAS ${m.roas.toFixed(2)}x` : `${$("#clientName").value || "Demo Client"} reached ${m.roas.toFixed(2)}x ROAS`, zh ? `營收 ${formatMoney(m.totals.revenue)}，CPA ${formatMoney(m.cpa)}，整體狀態${m.roas >= 3 ? "適合放大有效渠道" : "需要先優化效率"}。` : `Revenue ${formatMoney(m.totals.revenue)}, CPA ${formatMoney(m.cpa)}. ${m.roas >= 3 ? "Ready to scale efficient channels." : "Optimize efficiency before scaling."}`],
+      [zh ? "最佳渠道" : "Best channel", m.best?.channel || "-", zh ? `目前 ROAS ${m.best ? m.best.roas.toFixed(2) : "0.00"}x，建議保留並測試加碼。` : `ROAS ${m.best ? m.best.roas.toFixed(2) : "0.00"}x. Keep and test scaling.`],
+      [zh ? "需修正渠道" : "Weakest channel", m.worst?.channel || "-", zh ? `目前 ROAS ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x，下月優先檢查素材、受眾或關鍵字。` : `ROAS ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x. Review creative, audience, or keywords next.`],
+    ].map(([label, title, copy]) => `<div><span>${label}</span><strong>${title}</strong><p>${copy}</p></div>`).join("") : `<div><span>${zh ? "目前狀態" : "Status"}</span><strong>${zh ? "尚未產生月報" : "Report not generated"}</strong><p>${zh ? "完成資料匯入後，這裡會自動整理客戶可以閱讀的摘要。" : "After importing data, this area will become a client-readable brief."}</p></div>`;
+  }
+  if (reportChecks) {
+    const draft = state.ai || buildRuleDraft();
+    const checkItems = [
+      [steps[2], "01", zh ? "本月結果" : "Monthly result", m ? `${formatMoney(m.totals.revenue)} / ROAS ${m.roas.toFixed(2)}x` : (zh ? "等待資料" : "Waiting for data")],
+      [Boolean(m?.best), "02", zh ? "最佳渠道" : "Best channel", m?.best ? `${m.best.channel} ${m.best.roas.toFixed(2)}x` : "-"],
+      [Boolean(draft?.risks?.length), "03", zh ? "主要風險" : "Main risk", draft?.risks?.[0] || (zh ? "等待 AI 建議" : "Waiting for AI advice")],
+      [Boolean(draft?.actions?.length), "04", zh ? "下月行動" : "Next action", draft?.actions?.[0] || (zh ? "等待 AI 建議" : "Waiting for AI advice")],
+    ];
+    reportChecks.innerHTML = checkItems.map(([done, no, title, copy]) => `<div class="${done ? "done" : ""}"><span>${done ? "OK" : no}</span><strong>${title}</strong><p>${copy}</p></div>`).join("");
+  }
+  $("#clientList").innerHTML = state.clients.map((c) => `<div><strong>${c.name}</strong><span>${c.month}</span></div>`).join("") || `<div><strong>${$("#clientName").value}</strong><span>${$("#reportMonth").value}</span></div>`;
+  $("#clientCount").textContent = String(Math.max(state.clients.length, 1));
+  $("#libraryCount").textContent = String(state.reports.length);
+  $("#latestReportMonth").textContent = state.reports[0]?.month || "-";
+}
+
+function planDisplayName(plan) {
+  const zh = state.lang !== "en";
+  const names = zh
+    ? { free: "免費版", starter: "入門版", agency: "代理商版", professional: "專業版" }
+    : { free: "Free", starter: "Starter", agency: "Agency", professional: "Professional" };
+  return names[plan] || names.free;
+}
+
+async function refreshUsage() {
+  if (!authToken()) return;
+  try {
+    state.usage = await api("/api/usage");
+  } catch {
+    state.usage = state.usage || { plan: "free", used: 0, limit: 3, remaining: 3, period: "local" };
+  }
+  updateUsageUi();
+}
+
+function currentUsage() {
+  return state.usage || { plan: "free", used: 0, limit: 3, remaining: 3 };
+}
+
+function updateUsageUi() {
+  const usage = currentUsage();
+  const used = Number(usage.used || 0);
+  const limit = Number(usage.limit || 3);
+  const remaining = Math.max(0, Number(usage.remaining ?? limit - used));
+  const percent = Math.min(100, Math.round((used / Math.max(limit, 1)) * 100));
+  const planName = planDisplayName(usage.plan);
+  setText("#usageUsed", String(used));
+  setText("#usageLimit", String(limit));
+  setText("#usageRemaining", String(remaining));
+  setText("#usagePlan", planName);
+  setText("#billingPlan", planName);
+  setText("#reportUsage", `${used} / ${limit}`);
+  setText("#dockUsagePercent", `${percent}%`);
+  setText("#dockResetValue", state.lang === "en" ? `${remaining} left` : `剩 ${remaining} 次`);
+  if ($("#usageBar")) $("#usageBar").style.width = `${percent}%`;
+  setStatus("#usageStatus", percent >= 100 ? "error" : percent >= 80 ? "warn" : "ok", percent >= 100 ? (state.lang === "en" ? "AI quota reached" : "AI 用量已達上限") : (state.lang === "en" ? "AI usage available" : "AI 用量可用"), state.lang === "en" ? `${remaining} reports remaining.` : `本月剩餘 ${remaining} 份月報。`);
+}
+
+function renderUpgradePlans() {
+  const cycle = $(".upgrade-tabs button.active")?.dataset.upgradeCycle || "monthly";
+  const zh = state.lang !== "en";
+  setText("#upgradeModalTitle", zh ? "升級方案" : "Upgrade Plan");
+  $$("[data-upgrade-cycle]").forEach((button) => {
+    button.textContent = button.dataset.upgradeCycle === "annual" ? (zh ? "年繳" : "Annual") : (zh ? "月繳" : "Monthly");
+  });
+  const plans = {
+    starter: [zh ? "入門版" : "Starter", ["10 AI reports", "CSV / Sheets", "AI recommendations", "PDF / HTML export"]],
+    agency: [zh ? "代理商版" : "Agency", ["50 AI reports", "Multi-client workspace", "Branded reports", "Payment records"]],
+    professional: [zh ? "專業版" : "Professional", ["150 AI reports", "Client portal", "Email drafts", "White label"]],
+  };
+  $("#upgradePlans").innerHTML = Object.entries(plans).map(([key, [name, features]]) => {
+    const plan = planLimits[key];
+    const currency = $("#currency")?.value || "TWD";
+    const monthly = currency === "USD" ? plan.monthlyUsd : plan.monthlyTwd;
+    const amount = cycle === "annual" ? Math.round(monthly * 12 * 0.85) : monthly;
+    const price = new Intl.NumberFormat(zh ? "zh-TW" : "en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+    return `<article class="upgrade-plan ${key === "agency" ? "featured" : ""}">
+      <h3>${name}</h3>
+      <div class="upgrade-price">${price}<small>${cycle === "annual" ? "/yr" : (zh ? "/月" : "/mo")}</small></div>
+      <ul class="upgrade-feature-list">${features.map((f) => `<li><span></span>${f}</li>`).join("")}</ul>
+      <button type="button" data-upgrade-plan="${key}">${zh ? "選擇方案" : "Choose plan"}</button>
+    </article>`;
+  }).join("");
+  setText("#upgradeStatus", zh ? "選擇方案後建立付款草稿。" : "Choose a plan to create a checkout draft.");
+}
+
+function openUpgradeModal() {
+  renderUpgradePlans();
+  $("#upgradeModal").hidden = false;
+}
+
+function closeUpgradeModal() {
+  $("#upgradeModal").hidden = true;
+}
+
+function isLimitExceededError(error) {
+  return error?.status === 403 && (error.code === "LIMIT_EXCEEDED" || error.message === "LIMIT_EXCEEDED");
+}
+
+function openLimitExceededUpgrade(error) {
+  const usage = error?.details || currentUsage();
+  state.usage = usage;
+  openUpgradeModal();
+  const zh = state.lang !== "en";
+  setText("#upgradeModalTitle", zh ? "AI 用量已達上限" : "AI quota reached");
+  $("#upgradeStatus").innerHTML = `<strong>${zh ? `你的 ${planDisplayName(usage.plan)} 本月已使用 ${usage.used}/${usage.limit} 份 AI 月報。` : `Your ${planDisplayName(usage.plan)} plan used ${usage.used}/${usage.limit} AI reports this month.`}</strong><span>${zh ? "升級後即可繼續產生客戶可交付報告。" : "Upgrade to keep generating client-ready reports."}</span>`;
+  updateUsageUi();
+}
+
+async function chooseUpgradePlan(plan) {
+  $("#planSelect").value = plan;
+  const payload = {
+    plan,
+    currency: $("#currency").value || "TWD",
+    accountName: $("#accountName").value || $("#agencyName").value,
+    accountEmail: $("#accountEmail").value || state.auth?.user?.email,
+  };
+  try {
+    const intent = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
+    state.invoices.unshift(intent);
+    localStorage.setItem("agencyReportInvoices", JSON.stringify(state.invoices));
+    setStatus("#upgradeStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", intent.checkoutUrl || intent.quoteUrl || "");
+    setStatus("#billingStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", planDisplayName(plan));
+    renderWorkspace();
+  } catch (error) {
+    setStatus("#upgradeStatus", "error", state.lang === "en" ? "Checkout failed" : "建立付款失敗", error.message);
+  }
+}
+
+function saveClient() {
+  const client = { name: $("#clientName").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
+  state.clients.unshift(client);
+  localStorage.setItem("agencyReportClients", JSON.stringify(state.clients));
+  setStatus("#clientHubStatus", "ok", state.lang === "en" ? "Client saved" : "客戶已儲存", client.name);
+  renderWorkspace();
+}
+
+function saveCurrentReport() {
+  const report = { client: $("#clientName").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
+  state.reports.unshift(report);
+  localStorage.setItem("agencyReportReports", JSON.stringify(state.reports));
+  renderWorkspace();
+}
+
+function deliverReport() {
+  const delivery = { email: $("#deliveryEmail").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
+  state.deliveries.unshift(delivery);
+  localStorage.setItem("agencyReportDeliveries", JSON.stringify(state.deliveries));
+  $("#deliveryCenter").innerHTML = state.deliveries.map((item) => `<div><strong>${item.email || "client@example.com"}</strong><span>${item.month}</span></div>`).join("");
+  renderWorkspace();
+}
+
+function loadSample(sample = "ads") {
+  $("#csvInput").value = samples[sample] || samples.ads;
+  $("#reportType").value = sample;
+  generateReport();
+}
+
+function downloadSampleCsv() {
+  const blob = new Blob([$("#csvInput").value || samples.ads], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "agencyreport-sample.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLocalData() {
+  ["agencyReportReports", "agencyReportClients", "agencyReportDeliveries", "agencyReportInvoices"].forEach((key) => localStorage.removeItem(key));
+  state.reports = [];
+  state.clients = [];
+  state.deliveries = [];
+  state.invoices = [];
+  renderWorkspace();
+}
+
+function setupEvents() {
+  $("#landingLoginBtn")?.addEventListener("click", showAuthGate);
+  $("#landingStartBtn")?.addEventListener("click", showAuthGate);
+  $("#openCaseDetailBtn")?.addEventListener("click", showAuthGate);
+  $(".landing-bottom-start")?.addEventListener("click", showAuthGate);
+  $("#homeLoadDemoBtn")?.addEventListener("click", () => { showAuthGate(); });
+  $("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
+  $("#authForm")?.addEventListener("submit", submitAuth);
+  $("#registerBtn")?.addEventListener("click", registerAuth);
+  $("#logoutBtn")?.addEventListener("click", logoutAuth);
+  $$("[data-lang]").forEach((button) => button.addEventListener("click", () => applyLanguage(button.dataset.lang)));
+  $$("[data-workspace-view]").forEach((button) => button.addEventListener("click", () => openWorkspace(button.dataset.workspaceView)));
+  $("#viewMastheadAction")?.addEventListener("click", runWorkspacePrimaryAction);
+  $("#workspaceFocusAction")?.addEventListener("click", runWorkspacePrimaryAction);
+  $("#overviewPrimaryAction")?.addEventListener("click", runWorkspacePrimaryAction);
+  $("#reportPreviewGenerateBtn")?.addEventListener("click", generateReportFromButton);
+  $("#reportPreviewJumpBtn")?.addEventListener("click", () => $("#report")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  $("#completeDemoBtn")?.addEventListener("click", () => loadSample("ads"));
+  $("#insertCsvTemplateBtn")?.addEventListener("click", () => { $("#csvInput").value = samples.ads; });
+  $("#downloadSampleBtn")?.addEventListener("click", downloadSampleCsv);
+  $("#quickAdsBtn")?.addEventListener("click", () => loadSample("ads"));
+  $("#quickSeoBtn")?.addEventListener("click", () => loadSample("seo"));
+  $("#quickSocialBtn")?.addEventListener("click", () => loadSample("social"));
+  $("#generateBtn")?.addEventListener("click", generateReportFromButton);
+  $("#runBackendAiBtn")?.addEventListener("click", runBackendAi);
+  $("#saveClientBtn")?.addEventListener("click", saveClient);
+  $("#syncClientsBtn")?.addEventListener("click", saveClient);
+  $("#saveReportBtn")?.addEventListener("click", saveCurrentReport);
+  $("#deliverReportBtn")?.addEventListener("click", deliverReport);
+  $("#approveDraftBtn")?.addEventListener("click", () => setStatus("#shareLinkPanel", "ok", state.lang === "en" ? "Draft approved" : "草稿已審核"));
+  $("#createShareLinkBtn")?.addEventListener("click", () => setStatus("#shareLinkPanel", "ok", "Share Link", `${location.origin}/report/demo`));
+  $("#queueEmailBtn")?.addEventListener("click", () => setStatus("#emailJobPanel", "ok", state.lang === "en" ? "Email draft created" : "Email 草稿已建立"));
+  $("#saveAccountBtn")?.addEventListener("click", () => setStatus("#billingStatus", "ok", state.lang === "en" ? "Account saved" : "帳戶已儲存", $("#accountEmail").value));
+  $("#createCheckoutBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
+  $("#createInvoiceBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
+  $("#saveConsentBtn")?.addEventListener("click", () => setStatus("#trustStatus", "ok", state.lang === "en" ? "Consent saved" : "同意已儲存"));
+  $("#refreshAuditBtn")?.addEventListener("click", () => { setText("#auditCount", "1"); setText("#auditStatus", "OK"); });
+  $("#clearLocalBtn")?.addEventListener("click", clearLocalData);
+  $("#runAutopilotBtn")?.addEventListener("click", () => {
+    const draft = buildRuleDraft();
+    $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${item}</strong></div>`).join("") : "";
+  });
+  $("#accountDockToggle")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    $("#accountDockMenu").hidden = !$("#accountDockMenu").hidden;
+  });
+  document.addEventListener("click", () => { if ($("#accountDockMenu")) $("#accountDockMenu").hidden = true; });
+  $("#accountDockMenu")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const action = event.target.closest("[data-dock-action]")?.dataset.dockAction;
+    if (action === "theme") applyTheme(state.theme === "light" ? "dark" : "light");
+    if (action === "billing") openUpgradeModal();
+    if (action === "usage") openWorkspace("billing");
+    if (action === "profile") openWorkspace("case");
+    if (action === "logout") logoutAuth();
+  });
+  $("#upgradeCloseBtn")?.addEventListener("click", closeUpgradeModal);
+  $("#upgradeModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "upgradeModal") closeUpgradeModal();
+    const cycle = event.target.closest("[data-upgrade-cycle]");
+    if (cycle) {
+      $$("[data-upgrade-cycle]").forEach((button) => button.classList.toggle("active", button === cycle));
+      renderUpgradePlans();
+    }
+    const plan = event.target.closest("[data-upgrade-plan]");
+    if (plan) chooseUpgradePlan(plan.dataset.upgradePlan);
+  });
+  $("#csvFile")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    $("#csvInput").value = await file.text();
+    generateReport();
+  });
+  $("#leadForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    setStatus("#leadStatus", "ok", state.lang === "en" ? "Lead saved" : "名單已儲存", $("#leadEmail").value);
+  });
+}
+
+async function restoreSession() {
+  if (!authToken()) {
+    setAuthState(null);
+    return;
+  }
+  try {
+    const user = await api("/api/auth/me", { method: "GET" });
+    setAuthState({ token: authToken(), user });
+    state.usage = user.usage || state.usage;
+    updateUsageUi();
+  } catch {
+    localStorage.removeItem("agencyReportAuthToken");
+    setAuthState(null);
+  }
+}
+
+function init() {
+  $("#csvInput").value = samples.ads;
+  $("#report").hidden = true;
+  setupEvents();
+  applyTheme(state.theme);
+  applyLanguage(state.lang);
+  renderWorkspace();
+  restoreSession();
+}
+
+Object.assign(window, {
+  generateReportFromButton,
+  openLimitExceededUpgrade,
+  openUpgradeModal,
+  openWorkspace,
+  runBackendAi,
+  showAuthGate,
+  syncDockLanguageLabels,
+});
+
+init();

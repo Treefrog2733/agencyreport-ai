@@ -1,0 +1,83 @@
+{
+  "overview": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\overview.png",
+    "state": {
+      "visible": [
+        "overview"
+      ],
+      "navItems": 8,
+      "chartCards": 4,
+      "tableRows": 5,
+      "reportBrief": true,
+      "aiSummary": true,
+      "bodyClass": "theme-dark"
+    }
+  },
+  "report": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\report.png",
+    "state": {
+      "visible": [
+        "report"
+      ],
+      "navItems": 8,
+      "chartCards": 4,
+      "tableRows": 5,
+      "reportBrief": true,
+      "aiSummary": true,
+      "bodyClass": "theme-dark"
+    }
+  },
+  "ai": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\ai.png",
+    "state": {
+      "visible": [
+        "ai"
+      ],
+      "navItems": 8,
+      "chartCards": 4,
+      "tableRows": 5,
+      "reportBrief": true,
+      "aiSummary": true,
+      "bodyClass": "theme-dark"
+    }
+  },
+  "delivery": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\delivery.png",
+    "state": {
+      "visible": [
+        "delivery"
+      ],
+      "navItems": 8,
+      "chartCards": 4,
+      "tableRows": 5,
+      "reportBrief": true,
+      "aiSummary": true,
+      "bodyClass": "theme-dark"
+    }
+  },
+  "billing": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\billing.png",
+    "state": {
+      "visible": [
+        "billing"
+      ],
+      "navItems": 8,
+      "chartCards": 4,
+      "tableRows": 5,
+      "reportBrief": true,
+      "aiSummary": true,
+      "bodyClass": "theme-dark"
+    }
+  },
+  "charts": {
+    "file": "C:\\Users\\chenb\\Documents\\New project\\artifacts\\workspace-visual-4301\\charts.png",
+    "state": {
+      "chartCards": 4,
+      "chartNotes": 4,
+      "tableRows": 5,
+      "highlightedRows": 1,
+      "bestCells": 3,
+      "canvasCount": 4
+    }
+  }
+}

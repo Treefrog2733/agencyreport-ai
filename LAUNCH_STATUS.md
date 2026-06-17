@@ -53,6 +53,7 @@ Failing:
 - Payment provider is still `mock`.
 - `/api/readiness` reports `ready: false`.
 - Required readiness check `payment` fails.
+- Newer backend builds return `payment.missing` and a detailed readiness message showing the exact missing payment environment variables.
 
 Required next Render environment variables:
 

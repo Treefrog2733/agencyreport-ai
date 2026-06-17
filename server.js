@@ -317,28 +317,28 @@ function legalHtml() {
 <body>
   <main>
     <article>
-      <p class="eyebrow">AgencyReport AI ? legal-2026-06-16</p>
-      <h1>???????????</h1>
-      <p>???????? MVP ?????????????????????????? SaaS??????????????????</p>
-      <h2>????</h2>
+      <p class="eyebrow">AgencyReport AI &middot; legal-2026-06-16</p>
+      <h1>&#26381;&#21209;&#26781;&#27454;&#33287;&#36039;&#26009;&#20351;&#29992;&#32882;&#26126;</h1>
+      <p>&#26412;&#38913;&#26159;&#20844;&#38283;&#28204;&#35430;&#33287; MVP &#38542;&#27573;&#30340;&#27861;&#24459;&#36039;&#35338;&#25688;&#35201;&#12290;&#27491;&#24335;&#25910;&#36027;&#19978;&#32218;&#21069;&#65292;&#20173;&#24314;&#35696;&#30001;&#29087;&#24713;&#21488;&#28771; SaaS&#12289;&#20491;&#36039;&#33287;&#38651;&#23376;&#21830;&#21209;&#35215;&#31684;&#30340;&#27861;&#24459;&#39015;&#21839;&#23529;&#38321;&#12290;</p>
+      <h2>&#26381;&#21209;&#29992;&#36884;</h2>
       <ul>
-        <li>AgencyReport AI ????????????????????? KPI ???AI ??????????</li>
-        <li>AI ?????????????????????????????????????????</li>
+        <li>AgencyReport AI &#21332;&#21161;&#20195;&#29702;&#21830;&#25972;&#29702;&#23458;&#25142;&#38656;&#27714;&#12289;&#21295;&#20837;&#34892;&#37559;&#25976;&#25818;&#12289;&#29986;&#29983; KPI &#22294;&#34920;&#12289;AI &#25688;&#35201;&#33287;&#19979;&#26376;&#34892;&#21205;&#24314;&#35696;&#12290;</li>
+        <li>AI &#20839;&#23481;&#20677;&#20379;&#29151;&#36939;&#33287;&#22577;&#21578;&#33609;&#31295;&#21443;&#32771;&#65292;&#20351;&#29992;&#32773;&#20173;&#38656;&#30906;&#35469;&#25976;&#25818;&#27491;&#30906;&#24615;&#12289;&#24291;&#21578;&#24460;&#21488;&#21475;&#24465;&#33287;&#23458;&#25142;&#28317;&#36890;&#20839;&#23481;&#12290;</li>
       </ul>
-      <h2>????</h2>
+      <h2>&#36039;&#26009;&#20351;&#29992;</h2>
       <ul>
-        <li>?????????????????Email ????????????????????????????</li>
-        <li>?????????????????????????????????????????</li>
+        <li>&#31995;&#32113;&#26371;&#20445;&#23384;&#24115;&#34399;&#12289;&#23458;&#25142;&#12289;&#22577;&#21578;&#12289;&#20184;&#27454;&#12289;Email &#33287;&#25805;&#20316;&#32000;&#37636;&#65292;&#20197;&#25552;&#20379;&#30331;&#20837;&#12289;&#29986;&#22577;&#12289;&#20132;&#20184;&#12289;&#29992;&#37327;&#25511;&#31649;&#33287;&#23458;&#26381;&#25903;&#25588;&#12290;</li>
+        <li>&#20351;&#29992;&#32773;&#21487;&#35201;&#27714;&#26356;&#27491;&#12289;&#21295;&#20986;&#25110;&#21034;&#38500;&#20854;&#25552;&#20132;&#36039;&#26009;&#65307;&#20381;&#27861;&#25110;&#20184;&#27454;&#31293;&#26680;&#25152;&#38656;&#36039;&#26009;&#21487;&#33021;&#38656;&#20445;&#23384;&#24517;&#35201;&#26399;&#38291;&#12290;</li>
       </ul>
-      <h2>AI ???</h2>
+      <h2>AI &#36879;&#26126;&#24230;</h2>
       <ul>
-        <li>??????????????????????? AI ???</li>
-        <li>? AI ????????????????????</li>
+        <li>&#26376;&#22577;&#25688;&#35201;&#12289;&#39080;&#38570;&#21028;&#35712;&#12289;&#19979;&#26376;&#24314;&#35696;&#33287;&#23458;&#25142;&#35498;&#26126;&#31295;&#21487;&#33021;&#30001; AI &#29986;&#29983;&#12290;</li>
+        <li>&#33509; AI &#26381;&#21209;&#22833;&#25943;&#65292;&#31995;&#32113;&#26371;&#25913;&#29992;&#35215;&#21063;&#22411;&#24314;&#35696;&#20316;&#28858;&#20633;&#25588;&#12290;</li>
       </ul>
-      <h2>????</h2>
+      <h2>&#32879;&#32097;&#21516;&#24847;</h2>
       <ul>
-        <li>??????????????????????????????????????????????</li>
-        <li>?????????????????? Email ???????</li>
+        <li>&#20351;&#29992;&#32773;&#36865;&#20986;&#35430;&#29992;&#12289;&#38656;&#27714;&#20837;&#21475;&#25110;&#22577;&#21578;&#36039;&#26009;&#24460;&#65292;&#21516;&#24847;&#25105;&#20497;&#21487;&#23601;&#35430;&#29992;&#12289;&#38656;&#27714;&#12289;&#22577;&#21578;&#12289;&#20184;&#27454;&#33287;&#26381;&#21209;&#20132;&#20184;&#36914;&#34892;&#32879;&#32363;&#12290;</li>
+        <li>&#33509;&#38656;&#20572;&#27490;&#32879;&#32363;&#25110;&#35519;&#25972;&#36039;&#26009;&#65292;&#35531;&#36879;&#36942;&#32178;&#31449;&#25110; Email &#32879;&#32097;&#26381;&#21209;&#22296;&#38538;&#12290;</li>
       </ul>
     </article>
   </main>
@@ -657,6 +657,28 @@ function formatMoneyValue(amount, currency = "TWD") {
   }).format(Number(amount || 0));
 }
 
+function missingEcpaySettings() {
+  const missing = [];
+  if (paymentProvider !== "ecpay") missing.push("PAYMENT_PROVIDER=ecpay");
+  if (!ecpayMerchantId) missing.push("ECPAY_MERCHANT_ID");
+  if (!ecpayHashKey) missing.push("ECPAY_HASH_KEY");
+  if (!ecpayHashIv) missing.push("ECPAY_HASH_IV");
+  if (!ecpayReturnUrl) missing.push("ECPAY_RETURN_URL or APP_BASE_URL");
+  if (!ecpayOrderResultUrl) missing.push("ECPAY_ORDER_RESULT_URL or APP_BASE_URL");
+  if (!ecpayClientBackUrl) missing.push("ECPAY_CLIENT_BACK_URL or APP_BASE_URL");
+  return missing;
+}
+
+function missingStripeSettings() {
+  const missing = [];
+  if (paymentProvider !== "stripe") missing.push("PAYMENT_PROVIDER=stripe");
+  if (!stripeSecretKey) missing.push("STRIPE_SECRET_KEY");
+  if (!stripeSuccessUrl) missing.push("STRIPE_SUCCESS_URL");
+  if (!stripeCancelUrl) missing.push("STRIPE_CANCEL_URL");
+  if (!stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
+  return missing;
+}
+
 function paymentStatus() {
   const stripeReady = Boolean(stripeSecretKey && stripeSuccessUrl && stripeCancelUrl);
   const ecpayReady = Boolean(ecpayMerchantId && ecpayHashKey && ecpayHashIv && ecpayReturnUrl && ecpayOrderResultUrl);
@@ -664,11 +686,13 @@ function paymentStatus() {
     (paymentProvider === "stripe" && stripeReady && Boolean(stripeWebhookSecret)) ||
     (paymentProvider === "ecpay" && ecpayReady)
   );
+  const missing = paymentProvider === "stripe" ? missingStripeSettings() : missingEcpaySettings();
   return {
     provider: paymentProvider,
     mode: liveReady ? "live-ready" : paymentProvider === "mock" ? "mock" : "needs_credentials",
     webhookReady: paymentProvider === "stripe" ? Boolean(stripeWebhookSecret) : paymentProvider === "ecpay" ? ecpayReady : false,
     checkoutUrl: paymentProvider === "ecpay" ? ecpayCheckoutUrl : undefined,
+    missing,
   };
 }
 
@@ -757,11 +781,11 @@ function autoSubmitForm(action, fields) {
 </head>
 <body>
   <main>
-    <h1>正在前往綠界付款</h1>
-    <p>若頁面沒有自動跳轉，請按下方按鈕繼續。</p>
+    <h1>&#27491;&#22312;&#21069;&#24448;&#32160;&#30028;&#20184;&#27454;</h1>
+    <p>&#31995;&#32113;&#27491;&#22312;&#24314;&#31435;&#23433;&#20840;&#20184;&#27454;&#34920;&#21934;&#65292;&#33509;&#27794;&#26377;&#33258;&#21205;&#36339;&#36681;&#65292;&#35531;&#25353;&#19979;&#26041;&#25353;&#37397;&#32380;&#32396;&#12290;</p>
     <form method="post" action="${escapeHtml(action)}">
       ${inputs}
-      <button class="button" type="submit">前往付款</button>
+      <button class="button" type="submit">&#21069;&#24448;&#20184;&#27454;</button>
     </form>
   </main>
   <script>document.forms[0].submit();</script>
@@ -788,6 +812,8 @@ function hasTrustedPaymentSignal(req, payload = {}) {
 }
 
 function readinessReport() {
+  const payment = paymentStatus();
+  const paymentOk = payment.mode === "live-ready" && payment.webhookReady;
   const checks = [
     {
       id: "database",
@@ -827,11 +853,11 @@ function readinessReport() {
     {
       id: "payment",
       label: "Payment provider",
-      ok: paymentStatus().mode === "live-ready" && paymentStatus().webhookReady,
+      ok: paymentOk,
       required: true,
-      detail: paymentStatus().mode === "live-ready" && paymentStatus().webhookReady
+      detail: paymentOk
         ? `${paymentProvider} checkout and verified return flow configured.`
-        : "Set Stripe credentials or ECPay MerchantID, HashKey, HashIV, ReturnURL, and OrderResultURL.",
+        : `Missing payment setup: ${payment.missing.join(", ")}.`,
     },
     {
       id: "connectors",

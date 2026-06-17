@@ -72,6 +72,7 @@ Useful checks:
 node --check server.js
 node --check app.js
 node --check scripts/production-smoke.js
+npm run smoke:browser -- --url=http://127.0.0.1:4173/
 npm run db:check
 ```
 
@@ -81,6 +82,24 @@ If PowerShell blocks `npm`, use:
 npm.cmd install
 npm.cmd start
 ```
+
+### Browser smoke test
+
+If Chrome headless stalls during GPU initialization, run:
+
+```powershell
+npm run smoke:browser -- --url=http://127.0.0.1:4280/
+```
+
+The script launches Chrome or Edge with GPU and sandbox-safe flags:
+
+- `--disable-gpu`
+- `--disable-software-rasterizer`
+- `--no-sandbox`
+- `--disable-setuid-sandbox`
+- `--disable-dev-shm-usage`
+
+It writes a DOM dump, screenshot, and log to `artifacts/browser-smoke/`. A healthy run reports `DOM: OK`, `Screenshot: OK`, and no blocking GPU warning.
 
 ## Production Environment
 

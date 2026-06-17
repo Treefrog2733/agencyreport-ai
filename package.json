@@ -8,6 +8,8 @@
     "dev": "node server.js",
     "db:check": "node scripts/db-check.js",
     "email:check": "node scripts/email-check.js",
+    "smoke:browser": "node scripts/browser-smoke.js",
+    "smoke:workspace": "node scripts/workspace-visual-smoke.js",
     "smoke:prod": "node scripts/production-smoke.js"
   },
   "dependencies": {

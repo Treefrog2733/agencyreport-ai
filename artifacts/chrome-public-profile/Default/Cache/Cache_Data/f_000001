@@ -1,0 +1,1735 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgencyReport AI | 代理商 AI 月報產生與交付系統</title>
+    <link rel="stylesheet" href="/styles.css?v=20260614-layout-cleanup" />
+  </head>
+  <body>
+    <div class="landing-info-bar">
+      <div>
+        <span>support@virtualtrendworks.com</span>
+        <span>工作時間：上午 9:00 至下午 6:00</span>
+      </div>
+      <div>
+        <a href="#about">關於</a>
+        <a href="#contact">聯絡</a>
+      </div>
+    </div>
+    <section class="auth-gate" id="authGate" hidden>
+      <form class="auth-card" id="authForm">
+        <button class="ghost auth-close" id="closeAuthBtn" type="button" aria-label="Close">×</button>
+        <p class="eyebrow">AgencyReport AI</p>
+        <h2 data-i18n="authTitle">工作台登入</h2>
+        <p data-i18n="authCopy">登入後才能管理客戶、報告、付款與 AI 自動化流程。</p>
+        <label>
+          <span data-i18n="authName">名稱 / 公司</span>
+          <input id="authName" type="text" placeholder="Northstar Marketing" />
+        </label>
+        <label>
+          <span>Email</span>
+          <input id="authEmail" type="email" placeholder="owner@example.com" required />
+        </label>
+        <label>
+          <span data-i18n="authPassword">密碼</span>
+          <input id="authPassword" type="password" placeholder="至少 8 位數" required />
+        </label>
+        <div class="auth-actions">
+          <button class="primary" id="loginBtn" type="submit" data-i18n="login">登入</button>
+          <button class="ghost" id="registerBtn" type="button" data-i18n="register">建立帳號</button>
+        </div>
+        <div class="status-panel" id="authStatus"></div>
+      </form>
+    </section>
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark">AR</span>
+        <div>
+          <p class="eyebrow">AgencyReport AI</p>
+          <h1 data-i18n="appTitle">代理商 AI 月報產生與交付系統</h1>
+        </div>
+      </div>
+      <nav class="landing-nav-links" aria-label="Landing navigation">
+        <a href="#features">特徵</a>
+        <a href="#cases">案例</a>
+        <a href="#samples">範本</a>
+        <a href="#pricing">定價</a>
+        <a href="#deployment">部署路徑</a>
+        <a href="#contact">聯絡</a>
+      </nav>
+      <div class="top-actions">
+        <div class="language-toggle" aria-label="Language">
+          <button class="active" data-lang="zh" type="button">繁中</button>
+          <button data-lang="en" type="button">EN</button>
+        </div>
+        <div class="theme-toggle" aria-label="Theme">
+          <button class="active" data-theme="dark" type="button">深色</button>
+          <button data-theme="light" type="button">白色</button>
+        </div>
+        <button class="ghost" id="loadDemoBtn" type="button" data-i18n="loadDemo">載入範例</button>
+        <button class="ghost" id="saveTemplateBtn" type="button" data-i18n="saveTemplate">儲存範本</button>
+        <button class="ghost" id="exportHtmlBtn" type="button" data-i18n="exportHtml">匯出 HTML</button>
+        <button class="primary" id="printBtn" type="button" data-i18n="printPdf">列印 PDF</button>
+        <button class="ghost landing-cta" id="landingLoginBtn" type="button">登入</button>
+        <button class="primary landing-cta" id="landingStartBtn" type="button">開始使用</button>
+        <button class="ghost" id="logoutBtn" type="button" data-i18n="logout" hidden>Logout</button>
+      </div>
+    </header>
+
+    <section class="legal-panel" id="legalPanel" hidden>
+      <div class="legal-card">
+        <button class="ghost legal-close" id="closeLegalBtn" type="button" onclick="hideLegalPanel()">Close</button>
+        <div id="legalContent"></div>
+      </div>
+    </section>
+
+    <section class="portal-page" id="portalPage" hidden>
+      <div class="portal-shell">
+        <div class="portal-hero">
+          <p class="eyebrow">AgencyReport AI</p>
+          <h2 data-i18n="portalTitle">摰Ｘ?瘙??/h2>
+          <p data-i18n="portalCopy">隢‵撖急?璅???皞?鋆?隤芣?嚗頂蝯望?鈭斤策隞???? AI 撌乩?瘚蝥???/p>
+          <div class="portal-token" id="portalToken">-</div>
+        </div>
+        <form class="portal-form" id="portalForm">
+          <label>
+            <span data-i18n="portalContact">?舐窗 Email</span>
+            <input id="portalContactEmail" type="email" placeholder="client@example.com" />
+          </label>
+          <label>
+            <span data-i18n="portalGoal">?祆??格?</span>
+            <textarea id="portalGoal" data-i18n-placeholder="portalGoalPlaceholder" placeholder="靘??? CPA??擃?ROAS??頛?Google Ads ??Meta ????></textarea>
+          </label>
+          <label>
+            <span data-i18n="portalSource">鞈?靘???Sheets URL</span>
+            <input id="portalSourceUrl" type="url" placeholder="https://docs.google.com/spreadsheets/..." />
+          </label>
+          <label>
+            <span data-i18n="portalNotes">鋆?隤芣?</span>
+            <textarea id="portalNotes" data-i18n-placeholder="portalNotesPlaceholder" placeholder="?航票銝暑??蝔晞?蝞??畾???撣??勗?????憿?></textarea>
+          </label>
+          <button class="primary full" id="submitPortalBtn" type="submit" data-i18n="submitPortal">??瘙?/button>
+          <label class="legal-consent">
+            <input id="portalLegalConsent" type="checkbox" />
+            <span data-legal-copy="portalConsent">I agree to data processing, AI analysis, and report delivery terms.</span>
+          </label>
+          <a class="ghost full legal-link" id="portalLegalBtn" href="/legal" target="_blank" rel="noreferrer" data-legal-copy="viewLegal">View Terms & Privacy</a>
+          <div class="status-panel" id="portalStatus"></div>
+        </form>
+      </div>
+    </section>
+
+    <nav class="product-switcher" id="productSwitcher" aria-label="Workspace mode">
+      <button class="active" type="button" data-app-page="home">總覽首頁</button>
+      <button type="button" data-app-page="case">案件工作台</button>
+    </nav>
+
+    <section class="home-page app-page" id="overviewHome" aria-label="總覽首頁">
+      <div class="home-hero">
+        <div>
+          <p class="eyebrow">AgencyReport AI</p>
+          <h2>別再寫報告了，直接發送報告吧。</h2>
+          <p>上傳廣告資料與客戶需求，AgencyReport AI 會在數秒內產生可直接交付的品牌化月報。</p>
+        </div>
+        <div class="home-hero-actions">
+          <button class="ghost" id="homeLoadDemoBtn" type="button">查看範例報告</button>
+          <button class="primary" id="openCaseDetailBtn" type="button">免費開始</button>
+        </div>
+        <div class="landing-trust-row" aria-label="AgencyReport AI benefits">
+          <span>14 天免費試用</span>
+          <span>CSV / Sheets 匯入</span>
+          <span>AI 摘要與交付草稿</span>
+        </div>
+      </div>
+
+      <div class="landing-hero-visual" aria-hidden="true">
+        <div class="visual-panel main-panel">
+          <div class="visual-bar"></div>
+          <div class="visual-kpis"><span></span><span></span><span></span></div>
+          <div class="visual-chart"></div>
+          <div class="visual-lines"><span></span><span></span><span></span></div>
+        </div>
+        <div class="visual-panel side-panel">
+          <div></div><div></div><div></div>
+        </div>
+        <div class="visual-status-card status-upload">CSV / Sheets 已就緒</div>
+        <div class="visual-status-card status-ai">AI 摘要已產生</div>
+        <div class="visual-status-card status-email">Email 交付已排程</div>
+        <div class="visual-orbit"></div>
+      </div>
+
+      <section class="landing-proof-rail" aria-label="AgencyReport AI operating proof">
+        <div>
+          <span id="landingProofOneLabel">平均節省時間</span>
+          <strong id="landingProofOneValue">6 hr</strong>
+          <p id="landingProofOneCopy">每位客戶每月少做一次人工整理。</p>
+        </div>
+        <div>
+          <span id="landingProofTwoLabel">可交付內容</span>
+          <strong id="landingProofTwoValue">4-in-1</strong>
+          <p id="landingProofTwoCopy">KPI、圖表、AI 摘要、Email 草稿一次完成。</p>
+        </div>
+        <div>
+          <span id="landingProofThreeLabel">營運狀態</span>
+          <strong id="landingProofThreeValue">Live</strong>
+          <p id="landingProofThreeCopy">案件、收款與交付紀錄集中追蹤。</p>
+        </div>
+      </section>
+
+      <section class="landing-workflow-band" aria-label="AgencyReport AI workflow preview">
+        <div class="workflow-band-copy">
+          <span id="workflowBandKicker">Live Workflow</span>
+          <strong id="workflowBandTitle">A report line that does not depend on manual formatting</strong>
+          <p id="workflowBandCopy">The system keeps requirements, data, AI narrative, client delivery, and payment records connected.</p>
+        </div>
+        <div class="workflow-band-steps">
+          <article>
+            <i>01</i>
+            <span id="workflowBandStepOneLabel">Intake</span>
+            <strong id="workflowBandStepOneTitle">Client request</strong>
+            <small id="workflowBandStepOneCopy">Goal, month, channel, budget</small>
+          </article>
+          <article>
+            <i>02</i>
+            <span id="workflowBandStepTwoLabel">Data</span>
+            <strong id="workflowBandStepTwoTitle">KPI engine</strong>
+            <small id="workflowBandStepTwoCopy">CSV, Sheets, charts</small>
+          </article>
+          <article>
+            <i>03</i>
+            <span id="workflowBandStepThreeLabel">AI</span>
+            <strong id="workflowBandStepThreeTitle">Client narrative</strong>
+            <small id="workflowBandStepThreeCopy">Summary, risk, next action</small>
+          </article>
+          <article>
+            <i>04</i>
+            <span id="workflowBandStepFourLabel">Delivery</span>
+            <strong id="workflowBandStepFourTitle">Send and track</strong>
+            <small id="workflowBandStepFourCopy">PDF, email, payment record</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="landing-product-map" aria-label="AgencyReport AI product map">
+        <div class="product-map-copy">
+          <p class="landing-kicker" id="productMapKicker">Operating System</p>
+          <h2 id="productMapTitle">One workspace from client data to delivery</h2>
+          <p id="productMapCopy">AgencyReport AI connects intake, KPI generation, AI analysis, review, delivery, and billing into one repeatable monthly workflow.</p>
+        </div>
+        <div class="product-map-canvas" aria-hidden="true">
+          <div class="product-map-node input">
+            <span id="productMapInputLabel">Input</span>
+            <strong id="productMapInputTitle">CSV / Sheets</strong>
+            <small id="productMapInputCopy">Client request</small>
+          </div>
+          <div class="product-map-node ai">
+            <span id="productMapAiLabel">AI</span>
+            <strong id="productMapAiTitle">Analysis</strong>
+            <small id="productMapAiCopy">Risk and next action</small>
+          </div>
+          <div class="product-map-node report">
+            <span id="productMapReportLabel">Report</span>
+            <strong id="productMapReportTitle">Dashboard</strong>
+            <small id="productMapReportCopy">KPI and charts</small>
+          </div>
+          <div class="product-map-node delivery">
+            <span id="productMapDeliveryLabel">Delivery</span>
+            <strong id="productMapDeliveryTitle">Email / PDF</strong>
+            <small id="productMapDeliveryCopy">Record and payment</small>
+          </div>
+          <div class="product-map-flow"></div>
+        </div>
+      </section>
+
+      <section class="landing-system-strip" aria-label="AgencyReport AI system architecture">
+        <article>
+          <span id="landingSystemStepOne">01</span>
+          <strong id="landingSystemTitleOne">鞈??亙</strong>
+          <p id="landingSystemCopyOne">CSV?heets?恥?園?瘙?鈭支? Email ?葉?啣銝獢辣??/p>
+        </article>
+        <article>
+          <span id="landingSystemStepTwo">02</span>
+          <strong id="landingSystemTitleTwo">AI ??撘?</strong>
+          <p id="landingSystemCopyTwo">?芸??渡? KPI??箸?雿唾??撘望????Ｙ?銝?銵???/p>
+        </article>
+        <article>
+          <span id="landingSystemStepThree">03</span>
+          <strong id="landingSystemTitleThree">隞???祟??/strong>
+          <p id="landingSystemCopyThree">靽?鈭箏極??嚗翰?矽?渲?瘞??暺?摰Ｘ隤芣?蝔踴?/p>
+        </article>
+        <article>
+          <span id="landingSystemStepFour">04</span>
+          <strong id="landingSystemTitleFour">???漱隞?/strong>
+          <p id="landingSystemCopyFour">頛詨 HTML/PDF?mail ?阮??鈭恍????甈曆漱隞???/p>
+        </article>
+      </section>
+
+      <div class="landing-marketing">
+        <section class="landing-section problem-section" id="about">
+          <p class="landing-kicker">??</p>
+          <h2>?勗??琿</h2>
+          <p class="landing-copy">摰Ｘ?閬??脣漲嚗誨???閬????策蝑??????賢榆嚗虜撣賊??渡?鞈???神????閬圾??/p>
+          <div class="problem-grid">
+            <article>
+              <h3>摰Ｘ?閬?暻?/h3>
+              <ul>
+                <li>撠??脣漲皜??</li>
+                <li>?賜???摰??湔</li>
+                <li>撠??暹???靽∪?</li>
+                <li>?航◤?折?澈??隞?/li>
+              </ul>
+            </article>
+            <article class="warning-card">
+              <h3>隞????函??</h3>
+              <ul>
+                <li>?勗之???撘??勗?</li>
+                <li>銝??雿??亥店隤芣???</li>
+                <li>瘥?鈭支??質????渡?</li>
+                <li>??誑??撖???????/li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section metric-section" id="cases">
+          <p class="landing-kicker">蝯梯??豢?</p>
+          <h2>鈭箏極?勗???扳???/h2>
+          <div class="metric-grid">
+            <article><span>6 撠?</span><p>瘥?撟喳??渡?銝隞賢恥?嗆??梁???</p></article>
+            <article><span>40%</span><p>銵?撘?撌乩??????交???/p></article>
+            <article><span>NT$9,600</span><p>隞交???1,600 ?摯蝞??桐遢璈??</p></article>
+          </div>
+        </section>
+
+        <section class="landing-section process-section" id="deployment">
+          <p class="landing-kicker">瘚?</p>
+          <h2>?郊撽?撠勗?????/h2>
+          <p class="landing-copy">敺??? AI ?Ｗ嚗??啣???鈭支?嚗?銝甇仿鋡怨身閮?隞?????雿輻??蝔?/p>
+          <div class="process-grid">
+            <article><span>01</span><strong>?嗅?鞈?</strong><p>摰Ｘ?漱?瘙??隞賬SV ??Google Sheets??/p></article>
+            <article><span>02</span><strong>?啣?銝???/strong><p>鋆??Ｘ平?PI??蝞璅?鈭支?隤除??/p></article>
+            <article><span>03</span><strong>?Ｙ??勗?</strong><p>AI ?Ｙ????◢?芥??遣霅啗?摰Ｘ隤芣?蝔踴?/p></article>
+            <article><span>04</span><strong>撖拇銝衣??/strong><p>頛詨 HTML/PDF嚗???Email 雿?銝衣?銝???/p></article>
+          </div>
+        </section>
+
+        <section class="landing-section production-section" id="workflow">
+          <div class="production-copy">
+            <p class="landing-kicker">Production Flow</p>
+            <h2>???梯ˊ雿???璇????AI ?蝺?/h2>
+            <p class="landing-copy">摰Ｘ?芷?閬?鈭日?瘙?鞈?嚗頂蝯望??芸??渡? KPI???撖遣蝡撖拇?漱隞??穿??敺?銝??渡???/p>
+          </div>
+          <div class="production-stage">
+            <div class="production-rail" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <article>
+              <i>01</i>
+              <strong>鞈??亙</strong>
+              <p>CSV?oogle Sheets?恥?園?瘙?鈭支? Email ?葉?啣?銝??隞嗚?/p>
+            </article>
+            <article>
+              <i>02</i>
+              <strong>AI 閫??</strong>
+              <p>?芸??斗?雿??撘望??◢?芾???銝??芸??孵???/p>
+            </article>
+            <article class="featured">
+              <i>03</i>
+              <strong>PM 撖拇</strong>
+              <p>靽?鈭箏極??嚗翰?耨?寞?閬?瘞??暺?鈭支?隤芣???/p>
+            </article>
+            <article>
+              <i>04</i>
+              <strong>???漱隞?/strong>
+              <p>頛詨 HTML/PDF?mail ?阮??鈭恍????甈曆漱隞???/p>
+            </article>
+          </div>
+          <div class="production-preview">
+            <div class="preview-source">
+              <span>Input</span>
+              <strong>Google Ads + Meta + GA4</strong>
+              <p>channel, spend, clicks, conversions, revenue</p>
+            </div>
+            <div class="preview-ai">
+              <span>AI Narrative</span>
+              <strong>ROAS ?? 22%嚗? Meta CPA ??抒恣</strong>
+              <p>銝?撱箄降嚗?擃?Search ????皜?Meta ??矽?渲?圈? CTA??/p>
+            </div>
+            <div class="preview-output">
+              <span>Client-ready</span>
+              <strong>??mail?漱隞???/strong>
+              <p>撖拇敺?湔?喲策摰Ｘ??/p>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section feature-section" id="features">
+          <p class="landing-kicker">?孵噩</p>
+          <h2>瘥遢?勗???芯??批捆</h2>
+          <p class="landing-copy">撠平?勗?銝?暹摮???摮??恥?嗥?敺??銵??漱隞??/p>
+          <div class="feature-grid">
+            <article><div class="feature-media media-a"></div><strong>?瑁???</strong><p>AI ???祆?????????蝞∠?撅方敹恍?閫??蝯???/p></article>
+            <article><div class="feature-media media-b"></div><strong>閬死??頠?/strong><p>靘????????曄???皜??頞典?撣詻?/p></article>
+            <article><div class="feature-media media-c"></div><strong>鞈?汗</strong><p>??銵具PI?◢?芣???銝?銵??游????????/p></article>
+            <article><strong>敺?甇仿?</strong><p>?芸??Ｗ銝??芸?撱箄降??蝞矽?湔??摰Ｘ皞店銵?/p></article>
+            <article><strong>?函???</strong><p>憟隞??????瘞??鈭支?璅⊥嚗??勗??絲靘?雿?????/p></article>
+          </div>
+        </section>
+
+        <section class="landing-section report-gallery-section" id="templates">
+          <p class="landing-kicker">Report Styles</p>
+          <h2>??憟?蝔??Ｗ銝?摰Ｘ?閬??璅??</h2>
+          <p class="landing-copy">撱???EO?冗蝢方??游??恥?塚??臭誑雿輻?詨?鞈??亙嚗?頛詨銝???暺?銵刻?皞?瘞??/p>
+          <div class="report-gallery">
+            <article class="gallery-main">
+              <div class="gallery-report-window">
+                <div class="gallery-toolbar"><span></span><span></span><span></span></div>
+                <div class="gallery-report-head">
+                  <span>Performance Report</span>
+                  <strong>撱?????</strong>
+                </div>
+                <div class="gallery-kpi-row">
+                  <div><span>ROAS</span><strong>4.8x</strong></div>
+                  <div><span>CPA</span><strong>-18%</strong></div>
+                  <div><span>Leads</span><strong>326</strong></div>
+                </div>
+                <div class="gallery-chart"></div>
+                <div class="gallery-report-lines"><span></span><span></span><span></span></div>
+              </div>
+            </article>
+            <article>
+              <span>Ads</span>
+              <strong>????勗?</strong>
+              <p>? CPA?OAS????蝞矽?渲?蝝?憸券??/p>
+            </article>
+            <article>
+              <span>SEO</span>
+              <strong>?芰瘚??勗?</strong>
+              <p>????????摰寞????銵耨甇??/p>
+            </article>
+            <article>
+              <span>Social</span>
+              <strong>蝷曄黎?批捆?勗?</strong>
+              <p>?鈭??孛?摰寡”?曇?銝?鞎潭??孵???/p>
+            </article>
+            <article>
+              <span>Mixed</span>
+              <strong>?游?銵?勗?</strong>
+              <p>?游?憭???KPI嚗?摰Ｘ??????鞎?/p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section sample-report-section" id="sample-report">
+          <div class="sample-report-copy">
+            <p class="landing-kicker" id="sampleReportKicker">Sample Report</p>
+            <h2 id="sampleReportTitle">霈恥?嗆??停???????</h2>
+            <p class="landing-copy" id="sampleReportCopy">??KPI?隅?Ｕ◢?芾?銝?銵??渡???隞賢撖拇?銝??撖??????/p>
+          </div>
+          <div class="sample-report-stage">
+            <div class="sample-report-browser">
+              <div class="sample-browser-bar">
+                <span></span><span></span><span></span>
+                <strong>agencyreport.ai/report/demo</strong>
+              </div>
+              <div class="sample-report-layout">
+                <aside>
+                  <span>AgencyReport AI</span>
+                  <b></b><b></b><b></b>
+                </aside>
+                <main>
+                  <div class="sample-report-head">
+                    <span id="sampleReportClient">?典??閮箸? / 2026-06</span>
+                    <strong id="sampleReportHeadline">?祆? ROAS 蝛拙???嚗eta CPA ??抒恣</strong>
+                  </div>
+                  <div class="sample-report-kpis">
+                    <div><span>ROAS</span><strong>4.8x</strong></div>
+                    <div><span>CPA</span><strong>-18%</strong></div>
+                    <div><span>Leads</span><strong>326</strong></div>
+                  </div>
+                  <div class="sample-report-chart"></div>
+                  <div class="sample-report-insights">
+                    <article><span>AI Summary</span><p id="sampleReportInsightOne">??撱??撣嗡??擃??????舀?擃?蝞?瘥?/p></article>
+                    <article><span>Next Action</span><p id="sampleReportInsightTwo">?皜祈岫 Meta ?嚗蒂隤踵?賢??CTA??/p></article>
+                  </div>
+                </main>
+              </div>
+            </div>
+            <div class="sample-report-notes">
+              <article>
+                <span>01</span>
+                <strong id="sampleReportNoteOneTitle">摰Ｘ??閬?/strong>
+                <p id="sampleReportNoteOneCopy">?摮??恥?嗥?敺????牧??/p>
+              </article>
+              <article>
+                <span>02</span>
+                <strong id="sampleReportNoteTwoTitle">鈭??”</strong>
+                <p id="sampleReportNoteTwoCopy">??KPI ?隅?Ｗ??瘥???霈???/p>
+              </article>
+              <article>
+                <span>03</span>
+                <strong id="sampleReportNoteThreeTitle">鈭支?蝝??/strong>
+                <p id="sampleReportNoteThreeCopy">靽? Email?DF??鈭恍???祟?貊???/p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section deliverable-section" id="deliverables">
+          <div class="deliverable-copy">
+            <p class="landing-kicker">Deliverable</p>
+            <h2>摰Ｘ?迤?嗅?銝隞賢?湔鈭支?????/h2>
+            <p class="landing-copy">AgencyReport AI ??鞈???瘙? AI 撱箄降?渡??誨???臬祟?詻銝??撖??????/p>
+          </div>
+          <div class="deliverable-showcase">
+            <div class="deliverable-report-card">
+              <div class="deliverable-report-head">
+                <span>Monthly Performance Report</span>
+                <strong>?典??閮箸? / 2026-06</strong>
+              </div>
+              <div class="deliverable-kpis">
+                <div><span>ROAS</span><strong>4.8x</strong></div>
+                <div><span>CPA</span><strong>-18%</strong></div>
+                <div><span>Leads</span><strong>326</strong></div>
+              </div>
+              <div class="deliverable-chart"></div>
+              <div class="deliverable-lines"><span></span><span></span><span></span></div>
+            </div>
+            <div class="deliverable-side-list">
+              <article><span>01</span><strong>AI ?瑁???</strong><p>?典恥?嗥?敺???瘞?牧?????????/p></article>
+              <article><span>02</span><strong>憸券?撣?/strong><p>?芸?璅? CPA?OAS????蝑?閬釣??????/p></article>
+              <article><span>03</span><strong>銝?銵?撱箄降</strong><p>??撖???臬銵???摰寡???隤踵??/p></article>
+              <article><span>04</span><strong>鈭支?蝝??/strong><p>靽? Email??鈭恍???祟蝔輻???隞狡蝝??/p></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section command-section" id="samples">
+          <p class="landing-kicker">?銵冽</p>
+          <h2>?函??銝剖?</h2>
+          <p class="landing-copy">?典?銝???啁恣?恥?嗚???皞I ?阮????研mail 鈭支???甈曄???/p>
+          <div class="command-preview">
+            <div class="command-sidebar"></div>
+            <div class="command-content">
+              <div class="command-row"></div>
+              <div class="command-chart"></div>
+              <div class="command-cards"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="landing-section pricing-section" id="pricing">
+          <p class="landing-kicker">摰</p>
+          <h2>敺洵銝雿恥?園?憪??</h2>
+          <div class="landing-pricing-grid">
+            <article><strong>?仿???/strong><span>NT$790/??/span><p>瘥? 10 隞賣??晞SV/Sheets ?臬?I 撱箄降?TML/PDF ?臬??/p></article>
+            <article><strong>隞????</strong><span>NT$2,490/??/span><p>瘥? 50 隞賣??晞?摰Ｘ?????勗??漱隞?隞狡蝝??/p></article>
+            <article><strong>撠平??/strong><span>NT$5,990/??/span><p>?湧???恥?嗅???蝔mail ?阮?脤? AI ????/p></article>
+          </div>
+        </section>
+
+        <section class="landing-section rollout-section" id="rollout">
+          <div class="rollout-copy">
+            <p class="landing-kicker">Deployment Path</p>
+            <h2>銝?蝑??港葡?伐?銋??憪漱隞洵銝隞?AI ?</h2>
+            <p class="landing-copy">? CSV / Google Sheets 撽?瘚??鞎鳴??郊?乩? Email??蝔Auth ?迤撘?????/p>
+          </div>
+          <div class="rollout-grid">
+            <article>
+              <span>01</span>
+              <strong>隞予撠梯頝?Demo</strong>
+              <p>鞎潔? Sheets CSV ????CSV嚗??喟??KPI??銵具I ???漱隞??/p>
+            </article>
+            <article>
+              <span>02</span>
+              <strong>????漱隞?/strong>
+              <p>撱箇?摰Ｘ??摮???研???Email ?阮嚗? PM ?芸?撖拇?凝隤踴?/p>
+            </article>
+            <article>
+              <span>03</span>
+              <strong>??甇???芸???/strong>
+              <p>銝脫 OpenAI?upabase?mail??甈曇?蝚砌??孵誨????嚗脣甇???瘚???/p>
+            </article>
+          </div>
+        </section>
+
+        <section class="landing-section contact-section" id="contact">
+          <div>
+            <p class="landing-kicker">?亥孛</p>
+            <h2>皞????望?蝔??嚗?/h2>
+            <p class="landing-copy">撱箇?撣唾?敺?舫脣撌乩??堆??臬鞈?銝衣?洵銝隞?Demo ???/p>
+          </div>
+          <button class="primary landing-bottom-start" type="button">??雿輻</button>
+        </section>
+      </div>
+
+      <section class="home-system-map" aria-label="蝟餌絞?嗆?">
+        <div class="section-heading split">
+          <div>
+            <h3>敺??鈭支????渡頂蝯?/h3>
+            <p>撠?蜓蝺????蝣粹?畾蛛?霈恥?嗅?閬?靘????瘙??園??梁頂蝯勗??拙???/p>
+          </div>
+          <span class="system-badge">System Architecture</span>
+        </div>
+        <div class="home-flow-grid">
+          <article>
+            <span>01</span>
+            <strong>?園??瘙?/strong>
+            <p>摰Ｘ?亙??瘙?摮??隞賬漱隞?Email ???身摰?/p>
+          </article>
+          <article>
+            <span>02</span>
+            <strong>?臬鞈?</strong>
+            <p>CSV / Google Sheets 鞈??脣??憟?KPI ?????芋??/p>
+          </article>
+          <article>
+            <span>03</span>
+            <strong>AI ??</strong>
+            <p>OpenAI ?Ｙ????◢?芥??遣霅啗?摰Ｘ隤芣?蝔踴?/p>
+          </article>
+          <article>
+            <span>04</span>
+            <strong>鈭支?餈質馱</strong>
+            <p>????TML/PDF?mail 雿???蝔?隞狡蝝??/p>
+          </article>
+        </div>
+      </section>
+
+      <section class="home-system-map compact-system" aria-label="?詨?璅∠?">
+        <div class="section-heading">
+          <div>
+            <h3>?詨?璅∠?</h3>
+            <p>??????舐???SaaS ?閬?蝟餌絞?惜??/p>
+          </div>
+        </div>
+        <div class="home-module-grid">
+          <article><strong>Client Intake</strong><span>?瘙撓?乓???鈭扎???甈?/span></article>
+          <article><strong>Data Engine</strong><span>CSV / Sheets????KPI??頛皞?/span></article>
+          <article><strong>AI Narrative</strong><span>???◢?芥??遣霅啜恥?嗉店銵?/span></article>
+          <article><strong>Report Studio</strong><span>鈭??”?????勗????/span></article>
+          <article><strong>Delivery Ops</strong><span>Resend Email??鈭恍????蝔?worker</span></article>
+          <article><strong>Revenue Layer</strong><span>?寞???嫘蟡具???甈暹???/span></article>
+        </div>
+      </section>
+
+      <div class="home-kpi-grid">
+        <article class="home-kpi-card">
+          <span>Launch readiness</span>
+          <strong id="homeLaunchScore">0%</strong>
+          <p>?芸????漱隞??嗆狡摰?摨艾?/p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Active clients</span>
+          <strong id="homeClientCount">0</strong>
+          <p>撌脣遣蝡??航蕭頩斤?摰Ｘ獢辣??/p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Saved reports</span>
+          <strong id="homeReportCount">0</strong>
+          <p>撌脖?摮鈭支??銴ˊ???/p>
+        </article>
+        <article class="home-kpi-card">
+          <span>Revenue ops</span>
+          <strong id="homeRevenueStatus">Draft</strong>
+          <p>隞狡?蟡刻??寞?皞????/p>
+        </article>
+      </div>
+
+      <div class="home-layout">
+        <section class="home-panel home-current-case">
+          <div class="section-heading split">
+            <div>
+              <h3>?桀?獢辣</h3>
+              <p>?極雿??典銝摰Ｘ嚗?????賢????函洵銝撅?/p>
+            </div>
+            <button class="ghost" id="homeOpenCurrentCaseBtn" type="button">?亦?閰單?</button>
+          </div>
+          <div class="home-case-summary">
+            <div><span>Client</span><strong id="homeCaseName">Untitled</strong></div>
+            <div><span>Month</span><strong id="homeCaseMonth">-</strong></div>
+            <div><span>Currency</span><strong id="homeCaseCurrency">TWD</strong></div>
+            <div><span>Report type</span><strong id="homeCaseType">Mixed</strong></div>
+          </div>
+          <div class="home-next-actions" id="homeNextActions"></div>
+        </section>
+
+        <section class="home-panel">
+          <div class="section-heading">
+            <div>
+              <h3>獢辣蝞∠?</h3>
+              <p>?餈恥?嗚???潛巨????/p>
+            </div>
+          </div>
+          <div class="home-feed" id="homeFeed"></div>
+        </section>
+      </div>
+
+      <div class="home-panel">
+        <div class="section-heading">
+          <div>
+            <h3>撌乩?瘚敺?/h3>
+            <p>靘隞???漱隞?蝔?憿?銝?閬???????賬?/p>
+          </div>
+        </div>
+        <div class="home-shortcuts">
+          <button type="button" data-home-workspace="case"><span>01</span><strong>獢辣鞈?</strong><small>摰Ｘ??瘙????/small></button>
+          <button type="button" data-home-workspace="data"><span>02</span><strong>鞈?銝脫</strong><small>Sheets?SV??皞?霅?/small></button>
+          <button type="button" data-home-workspace="ai"><span>03</span><strong>AI ?芸???/strong><small>?瘙圾??蝔踴?蝔?/small></button>
+          <button type="button" data-home-workspace="delivery"><span>04</span><strong>鈭支?銝剖?</strong><small>撖拍阮????mail</small></button>
+          <button type="button" data-home-workspace="billing"><span>05</span><strong>?撣喳?</strong><small>?寞??甈整蟡?/small></button>
+          <button type="button" data-home-workspace="settings"><span>06</span><strong>閮剖??縑隞?/strong><small>????里??/small></button>
+        </div>
+      </div>
+    </section>
+
+    <main class="workspace app-page" id="caseWorkspace" hidden>
+      <section class="workspace-context-bar" aria-label="獢辣撌乩????">
+        <div class="workspace-context-main">
+          <span id="workspaceContextKicker">Active Case</span>
+          <strong id="workspaceContextTitle">?典??閮箸? / 撱?????</strong>
+          <p id="workspaceContextCopy">敺??I ???唬漱隞????葉蝞∠????恥?嗆??晞?/p>
+        </div>
+        <div class="workspace-context-meta">
+          <div><span id="workspaceContextMonthLabel">Month</span><strong id="workspaceContextMonth">2026-06</strong></div>
+          <div><span id="workspaceContextAiLabel">AI</span><strong id="workspaceContextAi">敺??/strong></div>
+          <div><span id="workspaceContextDeliveryLabel">Delivery</span><strong id="workspaceContextDelivery">?阮</strong></div>
+        </div>
+        <div class="workspace-context-actions">
+          <button class="ghost" type="button" data-command-workspace="data" id="workspaceContextDataBtn">?臬鞈?</button>
+          <button class="primary" type="button" data-command-workspace="overview" id="workspaceContextReportBtn">?亦??</button>
+        </div>
+      </section>
+      <section class="workspace-view-masthead" id="workspaceViewMasthead" aria-label="Workspace view status">
+        <div class="view-masthead-copy">
+          <span id="viewMastheadStep">01 / 07</span>
+          <h2 id="viewMastheadTitle">Overview command center</h2>
+          <p id="viewMastheadCopy">Review the current case, generate the monthly report, and move the workflow forward.</p>
+        </div>
+        <div class="view-masthead-status">
+          <div><span id="viewMastheadPrimaryLabel">Primary</span><strong id="viewMastheadPrimary">Ready</strong></div>
+          <div><span id="viewMastheadNextLabel">Next</span><strong id="viewMastheadNext">Import data</strong></div>
+          <button class="primary" id="viewMastheadAction" type="button" data-command-workspace="data">Continue</button>
+        </div>
+      </section>
+      <aside class="panel controls" aria-label="?勗?閮剖?">
+        <section class="case-card">
+          <div>
+            <span data-i18n="caseLabel">?桀?獢辣</span>
+            <strong id="caseSummary">?典??閮箸? / 撱?????</strong>
+          </div>
+          <div class="case-chips">
+            <span id="caseMonthChip">2026-06</span>
+            <span id="caseCurrencyChip">TWD</span>
+          </div>
+        </section>
+
+        <nav class="workspace-nav" id="workspaceNav" aria-label="Workspace sections">
+          <button class="active" type="button" data-workspace-view="overview">蝮質汗</button>
+          <button type="button" data-workspace-view="case">獢辣</button>
+          <button type="button" data-workspace-view="data">鞈?</button>
+          <button type="button" data-workspace-view="ai">AI</button>
+          <button type="button" data-workspace-view="delivery">鈭支?</button>
+          <button type="button" data-workspace-view="billing">撣喳?</button>
+          <button type="button" data-workspace-view="settings">閮剖?</button>
+        </nav>
+
+        <section class="workspace-focus-card" id="workspaceFocusCard">
+          <span id="workspaceFocusStep">01 / 07</span>
+          <strong id="workspaceFocusTitle">蝮質汗??箇???/strong>
+          <p id="workspaceFocusCopy">瑼Ｘ?桀?獢辣?臬?瑕??瘙??I ???漱隞身摰?/p>
+          <button class="ghost full" id="workspaceFocusAction" type="button">????</button>
+        </section>
+
+        <section class="essential-flow-card" aria-label="?詨??撌乩?瘚?>
+          <div class="section-title compact">
+            <h2 data-i18n="essentialFlowTitle">銝郊撽????/h2>
+            <p data-i18n="essentialFlowCopy">?啣恥?嗅?閬????I?漱隞?隞嗡???/p>
+          </div>
+          <button class="essential-step" type="button" data-command-workspace="data" data-essential-step="data">
+            <i id="essentialDataBadge">01</i>
+            <span>
+              <strong data-i18n="essentialDataTitle">?臬鞈?</strong>
+              <small id="essentialDataCopy">鞎潔? CSV ??Google Sheets ?????/small>
+            </span>
+          </button>
+          <button class="essential-step" type="button" data-command-workspace="ai" data-essential-step="ai">
+            <i id="essentialAiBadge">02</i>
+            <span>
+              <strong data-i18n="essentialAiTitle">?Ｙ? AI 撱箄降</strong>
+              <small id="essentialAiCopy">?Ｗ???◢?芾?銝?銵???/small>
+            </span>
+          </button>
+          <button class="essential-step" type="button" data-command-workspace="delivery" data-essential-step="delivery">
+            <i id="essentialDeliveryBadge">03</i>
+            <span>
+              <strong data-i18n="essentialDeliveryTitle">撖拇銝虫漱隞?/strong>
+              <small id="essentialDeliveryCopy">撱箇? PDF?mail ??鈭恍????/small>
+            </span>
+          </button>
+          <button class="primary full essential-generate" id="essentialGenerateBtn" type="button" data-i18n="essentialGenerate">銝?萇????/button>
+        </section>
+
+        <section class="quick-command-card" aria-label="敹恍銵?>
+          <div class="section-title compact">
+            <h2 id="quickCommandTitle">敹恍銵?/h2>
+            <p id="quickCommandCopy">撣貊???葉?券ㄐ嚗??典撌乩??啗ㄐ靘?撠??/p>
+          </div>
+          <div class="quick-command-grid">
+            <button type="button" data-quick-command="generate">
+              <i>01</i>
+              <span><strong id="quickCommandGenerateTitle">?Ｙ??</strong><small id="quickCommandGenerateCopy">?函?????KPI ??銵具?/small></span>
+            </button>
+            <button type="button" data-quick-command="ai">
+              <i>02</i>
+              <span><strong id="quickCommandAiTitle">?瑁? AI</strong><small id="quickCommandAiCopy">?Ｙ????◢?芾?銝?撱箄降??/small></span>
+            </button>
+            <button type="button" data-quick-command="deliver">
+              <i>03</i>
+              <span><strong id="quickCommandDeliverTitle">鈭支?蝝??/strong><small id="quickCommandDeliverCopy">撱箇??澈?mail ?漱隞???/small></span>
+            </button>
+            <button type="button" data-quick-command="billing">
+              <i>04</i>
+              <span><strong id="quickCommandBillingTitle">隞狡?阮</strong><small id="quickCommandBillingCopy">撱箇??寞?隞狡?蟡刻?蝔踴?/small></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="onboarding-card">
+          <h2 data-i18n="quickStart">敹恍?憪?/h2>
+          <div class="steps-list">
+            <div><span>1</span><p data-i18n="stepOne">?訾???靘?摰Ｘ璅⊥??/p></div>
+            <div><span>2</span><p data-i18n="stepTwo">鞎潔? CSV嚗?敺?Google Sheets ?臬??/p></div>
+            <div><span>3</span><p data-i18n="stepThree">?Ｙ??勗?敺???PDF ???HTML??/p></div>
+          </div>
+        </section>
+
+        <section class="launch-card">
+          <div class="section-title compact">
+            <h2 data-i18n="launchAssistantTitle">銝??拇?</h2>
+            <p data-i18n="launchAssistantCopy">銝?菜??撅內????鈭支???Demo 獢辣??/p>
+          </div>
+          <div class="launch-meter">
+            <span data-i18n="launchReadiness">銝?皞?摨?/span>
+            <strong id="launchScore">0%</strong>
+          </div>
+          <div class="launch-checklist" id="launchChecklist"></div>
+          <div class="setup-wizard" id="setupWizard"></div>
+          <div class="status-panel compact-status" id="setupWizardStatus"></div>
+          <button class="primary full" id="completeDemoBtn" type="button" data-i18n="completeDemoSetup">銝?萄???Demo 閮剖?</button>
+        </section>
+
+        <section class="health-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="healthHubTitle">?游??亙熒</h2>
+            <p data-i18n="healthHubCopy">敹恍炎?亥??I??蝔漱隞?甈曇?甈????/p>
+          </div>
+          <div class="health-score-card">
+            <span data-i18n="healthHubScore">???亙熒?</span>
+            <strong id="integrationScore">0%</strong>
+          </div>
+          <div class="integration-list" id="integrationList"></div>
+        </section>
+
+        <section class="client-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="clientHubTitle">摰Ｘ蝞∠?</h2>
+            <p data-i18n="clientHubCopy">撱箇?摰Ｘ蝝?蒂瑼Ｘ?寞??券???/p>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="planLabel">?寞?</span>
+              <select id="planSelect">
+                <option value="starter">?仿???/option>
+                <option value="agency">隞????</option>
+                <option value="whiteLabel">撠平??/option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="apiModeLabel">鞈?璅∪?</span>
+              <input id="apiMode" type="text" value="Local fallback" readonly />
+            </label>
+          </div>
+          <div class="client-stats">
+            <div><span data-i18n="clientCount">摰Ｘ??/span><strong id="clientCount">0</strong></div>
+            <div><span data-i18n="reportUsage">?勗??券?</span><strong id="reportUsage">0 / 5</strong></div>
+          </div>
+          <div class="actions-row">
+            <button class="primary" id="saveClientBtn" type="button" data-i18n="saveClient">?脣?摰Ｘ</button>
+            <button class="ghost" id="syncClientsBtn" type="button" data-i18n="syncClients">?郊鞈?</button>
+          </div>
+          <button class="ghost full" id="createPortalInviteBtn" type="button" data-i18n="createPortalInvite">撱箇?摰Ｘ?亙</button>
+          <div class="portal-invite-list" id="portalInviteList"></div>
+          <div class="client-list" id="clientList"></div>
+          <div class="status-panel compact-status" id="clientHubStatus"></div>
+        </section>
+
+        <section class="report-library">
+          <div class="section-title compact">
+            <h2 data-i18n="reportLibraryTitle">?勗?摨?/h2>
+            <p data-i18n="reportLibraryCopy">靽????餈???研?/p>
+          </div>
+          <div class="library-summary">
+            <div><span data-i18n="savedReports">撌脖?摮??/span><strong id="libraryCount">0</strong></div>
+            <div><span data-i18n="latestReport">?餈??/span><strong id="latestReportMonth">-</strong></div>
+          </div>
+          <button class="ghost full" id="saveReportBtn" type="button" data-i18n="saveReport">靽??桀??勗?</button>
+          <div class="report-list" id="reportList"></div>
+        </section>
+
+        <section class="billing-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="billingTitle">撣唾???甈?/h2>
+            <p data-i18n="billingCopy">撱箇?隞???董?蒂?Ｙ?隞狡?阮??/p>
+          </div>
+          <label>
+            <span data-i18n="accountName">撣唾??迂</span>
+            <input id="accountName" type="text" placeholder="Northstar Marketing" data-i18n-placeholder="accountNamePlaceholder" />
+          </label>
+          <label>
+            <span data-i18n="accountEmail">撣唾? Email</span>
+            <input id="accountEmail" type="email" placeholder="owner@example.com" data-i18n-placeholder="accountEmailPlaceholder" />
+          </label>
+          <div class="billing-summary">
+            <div><span data-i18n="selectedPlan">?桀??寞?</span><strong id="billingPlan">Starter</strong></div>
+            <div><span data-i18n="checkoutStatus">隞狡???/span><strong id="checkoutStatus">Draft</strong></div>
+          </div>
+          <div class="actions-row">
+            <button class="primary" id="saveAccountBtn" type="button" data-i18n="saveAccount">?脣?撣唾?</button>
+            <button class="ghost" id="createCheckoutBtn" type="button" data-i18n="createCheckout">撱箇?隞狡?阮</button>
+          </div>
+          <button class="ghost full" id="createInvoiceBtn" type="button" data-i18n="createInvoice">撱箇??潛巨?阮</button>
+          <div class="status-panel compact-status" id="billingStatus"></div>
+          <div class="invoice-list" id="invoiceList"></div>
+        </section>
+
+        <section class="access-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="accessTitle">??甈?</h2>
+            <p data-i18n="accessCopy">?隢?PM??擃???蝞∠??∴?撱箇??箸撌乩??甈???/p>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="memberEmail">? Email</span>
+              <input id="memberEmail" type="email" placeholder="pm@example.com" />
+            </label>
+            <label>
+              <span data-i18n="memberRole">閫</span>
+              <select id="memberRole">
+                <option value="admin">Admin</option>
+                <option value="pm">PM</option>
+                <option value="media_buyer">Media Buyer</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </label>
+          </div>
+          <button class="ghost full" id="inviteMemberBtn" type="button" data-i18n="inviteMember">?隢???/button>
+          <div class="member-list" id="memberList"></div>
+          <div class="access-status" id="accessStatus"></div>
+        </section>
+
+        <section class="trust-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="trustTitle">靽∩遙??甈?/h2>
+            <p data-i18n="trustCopy">靽?鞈?????AI ????嚗迤撘?蝺?敹???/p>
+          </div>
+          <div class="consent-list">
+            <label><input id="consentData" type="checkbox" /> <span data-i18n="consentData">摰Ｘ???臬???誨??/ ??鞈???/span></label>
+            <label><input id="consentAi" type="checkbox" /> <span data-i18n="consentAi">摰Ｘ??雿輻 AI ?Ｗ???阮??/span></label>
+            <label><input id="consentDelivery" type="checkbox" /> <span data-i18n="consentDelivery">摰Ｘ??隞?Email / PDF / HTML 鈭支??勗???/span></label>
+          </div>
+          <button class="ghost full" id="saveConsentBtn" type="button" data-i18n="saveConsent">靽???</button>
+          <div class="trust-status" id="trustStatus"></div>
+        </section>
+
+        <section class="audit-hub">
+          <div class="section-title compact">
+            <h2 data-i18n="auditTitle">蝔賣蝝??/h2>
+            <p data-i18n="auditCopy">餈質馱 API ??嚗靘踹恥??航?銝?????/p>
+          </div>
+          <div class="audit-summary">
+            <div><span data-i18n="auditEvents">鈭辣??/span><strong id="auditCount">0</strong></div>
+            <div><span data-i18n="auditStatus">???/span><strong id="auditStatus">-</strong></div>
+          </div>
+          <button class="ghost full" id="refreshAuditBtn" type="button" data-i18n="refreshAudit">?瑟蝝??/button>
+          <div class="audit-list" id="auditList"></div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title">
+            <h2 data-i18n="reportSettings">?勗?閮剖?</h2>
+            <p data-i18n="settingsCopy">撠?Sheets / CSV ?豢?頧?摰Ｘ???????/p>
+          </div>
+
+          <div class="quick-actions">
+            <button class="soft-action" id="quickAdsBtn" type="button">Ads</button>
+            <button class="soft-action" id="quickSeoBtn" type="button">SEO</button>
+            <button class="soft-action" id="quickSocialBtn" type="button">Social</button>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              <span data-i18n="clientTemplate">摰Ｘ璅⊥</span>
+              <select id="templateSelect"></select>
+            </label>
+            <label>
+              <span data-i18n="sampleReport">?勗?蝭?</span>
+              <select id="sampleSelect">
+                <option value="ads">Google / Meta 撱???</option>
+                <option value="seo">SEO ???</option>
+                <option value="social">蝷曄黎???</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="agencyBrand">隞??????/span>
+              <input id="agencyName" type="text" value="Northstar Marketing" />
+            </label>
+            <label>
+              <span data-i18n="clientName">摰Ｘ?迂</span>
+              <input id="clientName" type="text" value="?典??閮箸?" />
+            </label>
+            <label>
+              <span data-i18n="reportMonth">?勗??遢</span>
+              <input id="reportMonth" type="month" />
+            </label>
+            <label>
+              <span data-i18n="reportType">?勗?憿?</span>
+              <select id="reportType">
+                <option value="ads">撱?????</option>
+                <option value="seo">SEO ???</option>
+                <option value="social">蝷曄黎???</option>
+                <option value="mixed">?游?銵?</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="currency">撟?</span>
+              <select id="currency">
+                <option value="TWD">TWD</option>
+                <option value="USD">USD</option>
+                <option value="JPY">JPY</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="tone">?勗?隤除</span>
+              <select id="tone">
+                <option value="executive">擃惜??</option>
+                <option value="consultative">憿批?撘牧??/option>
+                <option value="direct">?湔銵?撠?</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title compact">
+            <h2 data-i18n="dataSource">鞈?靘?</h2>
+            <p data-i18n="dataSourceCopy">撱箄降??Google Sheets ?潔???CSV??/p>
+          </div>
+          <div class="data-import-assistant" aria-label="鞈??臬?拇?">
+            <div>
+              <span id="dataImportKicker">Data Assistant</span>
+              <strong id="dataImportTitle">??鞈??暸脖?</strong>
+              <p id="dataImportCopy">鞎潔? Sheets CSV ???嚗?銝 CSV嚗????喳銝?萇???晞?/p>
+            </div>
+            <div class="data-import-actions">
+              <button class="ghost" type="button" data-data-action="focus-sheet">鞎?Sheets</button>
+              <button class="ghost" type="button" data-data-action="upload-csv">銝 CSV</button>
+              <button class="primary" type="button" data-data-action="generate">?Ｙ??</button>
+            </div>
+          </div>
+          <label>
+            <span>Google Sheets CSV URL</span>
+            <input id="sheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv" />
+          </label>
+          <div class="source-box">
+            <div class="field-grid">
+              <label>
+                <span data-i18n="sourceType">鞈?靘?憿?</span>
+                <select id="sourceType">
+                  <option value="google_sheets">Google Sheets CSV</option>
+                  <option value="manual_csv">Manual CSV</option>
+                  <option value="google_ads">Google Ads API</option>
+                  <option value="meta_ads">Meta Ads API</option>
+                  <option value="ga4">GA4 API</option>
+                  <option value="search_console">Search Console API</option>
+                  <option value="oauth_ready">OAuth / Supermetrics Ready</option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n="sourceOwner">靘?鞎痊鈭?/span>
+                <input id="sourceOwner" type="email" placeholder="ops@example.com" />
+              </label>
+            </div>
+            <div class="actions-row">
+              <button class="ghost" id="testSourceBtn" type="button" data-i18n="testSource">皜祈岫靘?</button>
+              <button class="ghost" id="saveSourceBtn" type="button" data-i18n="saveSource">靽?靘?</button>
+            </div>
+            <div class="source-status" id="sourceStatus"></div>
+            <div class="source-list" id="sourceList"></div>
+          </div>
+          <div class="actions-row">
+            <button class="ghost" id="importSheetBtn" type="button" data-i18n="importSheets">敺?Sheets ?臬</button>
+            <label class="file-button">
+              <span data-i18n="importCsv">?臬 CSV</span>
+              <input id="csvFile" type="file" accept=".csv,text/csv" />
+            </label>
+          </div>
+          <div class="actions-row helper-actions">
+            <button class="ghost" id="insertCsvTemplateBtn" type="button" data-i18n="copyCsvTemplate">? CSV 蝭</button>
+            <button class="ghost" id="downloadSampleBtn" type="button" data-i18n="downloadSample">銝?蝭? CSV</button>
+            <button class="ghost danger" id="clearLocalBtn" type="button" data-i18n="clearLocal">皜?祆?鞈?</button>
+          </div>
+          <label class="wide">
+            <span data-i18n="csvData">CSV ?豢?</span>
+            <textarea id="csvInput" spellcheck="false"></textarea>
+          </label>
+          <div class="hint" data-i18n="csvHint">
+            敹‵甈?嚗hannel, spend, impressions, clicks, conversions, revenue??豢?雿?last_spend, last_clicks, last_conversions, last_revenue?馳?亙?寡?憿舐內?澆?嚗????蝞?          </div>
+          <button class="primary full" id="generateBtn" type="button" data-i18n="generateReport">?Ｙ??勗?</button>
+          <div class="status-panel" id="dataStatus" aria-live="polite"></div>
+          <div class="checklist-panel internal-only">
+            <h3 data-i18n="deployChecklist">?祇??函蔡?炎??/h3>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkNoBackend">?∪?蝡臬?臬?蝷?/span></label>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkNoSensitive">鞈??芸??其蝙?刻汗??/span></label>
+            <label><input type="checkbox" checked disabled /> <span data-i18n="checkExport">?舀 PDF / HTML 鈭支?</span></label>
+            <label><input type="checkbox" /> <span data-i18n="checkPayment">甇???嗉祥?隞狡?董??/span></label>
+          </div>
+        </section>
+
+        <section class="control-section autopilot-panel">
+          <div class="section-title compact">
+            <h2 data-i18n="autopilotTitle">AI Autopilot</h2>
+            <p data-i18n="autopilotCopy">霈恥?嗥?芰隤??膩?瘙?蝟餌絞?芸??蔭?勗???/p>
+          </div>
+          <div class="ai-draft-assistant" aria-label="AI ?阮?拇?">
+            <div>
+              <span id="aiDraftKicker">AI Assistant</span>
+              <strong id="aiDraftTitle">霈?AI ?神蝚砌???/strong>
+              <p id="aiDraftCopy">鋆?摰Ｘ?瘙?嚗I ???閬◢?芥?????摰Ｘ隤芣?蝔踴?/p>
+            </div>
+            <div class="ai-draft-actions">
+              <button class="ghost" type="button" data-ai-action="focus-request">鋆?瘙?/button>
+              <button class="primary" type="button" data-ai-action="run-ai">?瑁? AI</button>
+              <button class="ghost" type="button" data-ai-action="schedule">??</button>
+            </div>
+          </div>
+          <label>
+            <span data-i18n="clientRequest">摰Ｘ?瘙?/span>
+            <textarea id="clientRequest" class="short-textarea" data-i18n-placeholder="clientRequestPlaceholder" placeholder="靘???閮箸?嚗?仿??? Google Ads ??Meta ?芸葆靘憭?蝝?銝阡?雿?CPA??></textarea>
+          </label>
+          <div class="prompt-presets">
+            <button class="soft-action" data-prompt-preset="cpa" type="button">CPA</button>
+            <button class="soft-action" data-prompt-preset="roas" type="button">ROAS</button>
+            <button class="soft-action" data-prompt-preset="seo" type="button">SEO</button>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="businessType">?Ｘ平</span>
+              <select id="businessType">
+                <option value="local">?典??</option>
+                <option value="ecommerce">?餃?</option>
+                <option value="b2b">B2B</option>
+                <option value="content">?批捆 / 慦?</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="automationLevel">?芸???摨?/span>
+              <select id="automationLevel">
+                <option value="assist">AI 頛</option>
+                <option value="draft">AI ?Ｚ?蝔?/option>
+                <option value="auto">?刻?漱隞?獢?/option>
+              </select>
+            </label>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span data-i18n="deliveryEmail">鈭支? Email</span>
+              <input id="deliveryEmail" type="email" placeholder="client@example.com" data-i18n-placeholder="deliveryEmailPlaceholder" />
+            </label>
+            <label>
+              <span data-i18n="scheduleCadence">鈭支???</span>
+              <select id="scheduleCadence">
+                <option value="manual">??撖拇敺漱隞?/option>
+                <option value="monthly">瘥? 1 ???阮</option>
+                <option value="weekly">瘥曹??芸??Ｚ?蝔?/option>
+              </select>
+            </label>
+          </div>
+          <button class="primary full" id="runAutopilotBtn" type="button" data-i18n="runAutopilot">AI ?芸??蔭獢辣</button>
+          <div class="ai-output" id="autopilotOutput"></div>
+          <div class="intake-box">
+            <div>
+              <strong data-i18n="intakeTitle">摰Ｘ?瘙?Intake</strong>
+              <span data-i18n="intakeCopy">靽?摰Ｘ?瘙?霈?蝡?AI ?恥?隞交蝥???/span>
+            </div>
+            <button class="ghost full" id="saveIntakeBtn" type="button" data-i18n="saveIntake">??瘙?/button>
+            <div class="intake-status" id="intakeStatus"></div>
+            <div class="portal-submission-actions">
+              <button class="ghost" id="refreshPortalSubmissionsBtn" type="button" data-i18n="refreshPortalSubmissions">?瑟摰Ｘ?漱</button>
+              <button class="ghost" id="applyPortalSubmissionBtn" type="button" data-i18n="applyPortalSubmission">憟??唳?鈭?/button>
+              <button class="ghost" id="processPortalSubmissionBtn" type="button" data-i18n="processPortalSubmission">?芸?撱箸?</button>
+              <button class="ghost" id="runPortalAiDraftBtn" type="button" data-i18n="runPortalAiDraft">撱箸? + AI ?阮</button>
+            </div>
+            <div class="portal-submission-list" id="portalSubmissionList"></div>
+          </div>
+          <div class="agent-box">
+            <div>
+              <strong data-i18n="agentBackendTitle">敺垢 AI ??蝔?/strong>
+              <span data-i18n="agentBackendCopy">?Ｙ?敺垢 AI ?阮銝血遣蝡摰?頝?蝔?/span>
+            </div>
+            <div class="actions-row">
+              <button class="ghost" id="runBackendAiBtn" type="button" data-i18n="runBackendAi">?瑁?敺垢 AI</button>
+              <button class="ghost" id="createScheduleBtn" type="button" data-i18n="createSchedule">撱箇???</button>
+            </div>
+            <div class="agent-status" id="agentStatus"></div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="report-shell" aria-label="?勗??汗">
+        <section class="console-overview" aria-label="獢辣??蝮質汗">
+          <div class="console-overview-copy">
+            <p class="eyebrow">Command Center</p>
+            <h2>獢辣??蝮質汗</h2>
+            <p>敺?銝??Ｘ炎?亥??I???鈭支????摰?敺?舐???曹蒂鈭支?摰Ｘ??/p>
+          </div>
+          <div class="console-overview-actions">
+            <button class="primary" type="button" data-command-workspace="data">?臬鞈?</button>
+            <button class="ghost" type="button" data-command-workspace="ai">AI ?阮</button>
+            <button class="ghost" type="button" data-command-workspace="delivery">鈭支?銝剖?</button>
+          </div>
+          <div class="console-signal-strip" aria-label="Case operating signals">
+            <button type="button" data-command-workspace="data" data-console-signal="data">
+              <i></i>
+              <span id="consoleSignalDataLabel">Data</span>
+              <strong id="consoleSignalDataValue">Pending</strong>
+            </button>
+            <button type="button" data-command-workspace="ai" data-console-signal="ai">
+              <i></i>
+              <span id="consoleSignalAiLabel">AI</span>
+              <strong id="consoleSignalAiValue">Pending</strong>
+            </button>
+            <button type="button" data-command-workspace="delivery" data-console-signal="delivery">
+              <i></i>
+              <span id="consoleSignalDeliveryLabel">Delivery</span>
+              <strong id="consoleSignalDeliveryValue">Draft</strong>
+            </button>
+            <button type="button" data-command-workspace="billing" data-console-signal="billing">
+              <i></i>
+              <span id="consoleSignalBillingLabel">Billing</span>
+              <strong id="consoleSignalBillingValue">Open</strong>
+            </button>
+          </div>
+          <div class="console-readiness-strip is-empty" id="consoleReadinessStrip">
+            <div class="readiness-pulse" aria-hidden="true"></div>
+            <div class="readiness-main">
+              <span id="consoleReadinessBadge">撠??</span>
+              <strong id="consoleReadinessTitle">????瘙?鞈?</strong>
+              <p id="consoleReadinessCopy">鋆?摰Ｘ?瘙蒂?臬 CSV / Sheets 敺??喳?Ｙ????/p>
+            </div>
+            <div class="readiness-meter" aria-label="Case readiness">
+              <span id="consoleReadinessPercent">0%</span>
+              <i><b id="consoleReadinessBar"></b></i>
+            </div>
+            <button class="primary" id="consoleReadinessAction" type="button" data-command-workspace="case">????</button>
+          </div>
+          <div class="console-primary-flow" aria-label="Monthly report main flow">
+            <button type="button" data-command-workspace="data">
+              <i>01</i>
+              <span>?臬鞈?</span>
+              <strong>CSV / Sheets</strong>
+            </button>
+            <button type="button" data-command-workspace="ai">
+              <i>02</i>
+              <span>AI ?Ｗ</span>
+              <strong>???◢?芥遣霅?/strong>
+            </button>
+            <button type="button" data-command-workspace="delivery">
+              <i>03</i>
+              <span>撖拇鈭支?</span>
+              <strong>PDF / Email / 蝝??/strong>
+            </button>
+          </div>
+          <div class="console-status-grid">
+            <article>
+              <span>銝?皞?</span>
+              <strong id="consoleLaunchScore">0%</strong>
+              <p>Demo???I ?漱隞身摰?摰?摨艾?/p>
+            </article>
+            <article>
+              <span>鞈?靘?</span>
+              <strong id="consoleDataStatus">敺??/strong>
+              <p>CSV / Sheets ?臬敺?舀?啣?銵具?/p>
+            </article>
+            <article>
+              <span>AI ??</span>
+              <strong id="consoleAiStatus">敺??/strong>
+              <p>???◢?芥??遣霅啗?摰Ｘ隤芣?蝔踴?/p>
+            </article>
+            <article>
+              <span>鈭支?</span>
+              <strong id="consoleDeliveryStatus">?阮</strong>
+              <p>Email??鈭恍???漱隞???/p>
+            </article>
+          </div>
+          <div class="console-health-radar" aria-label="案件健康雷達">
+            <div class="health-radar-visual" aria-hidden="true">
+              <span class="ring ring-one"></span>
+              <span class="ring ring-two"></span>
+              <span class="ring ring-three"></span>
+              <b id="healthRadarNeedle"></b>
+              <i id="healthRadarScore">0%</i>
+            </div>
+            <div class="health-radar-copy">
+              <span id="healthRadarKicker">Case Health</span>
+              <strong id="healthRadarTitle">案件健康雷達</strong>
+              <p id="healthRadarCopy">把資料、AI、交付與付款進度集中成一個可判斷下一步的狀態。</p>
+            </div>
+            <div class="health-signal-list">
+              <div data-health-signal="data"><span></span><strong id="healthSignalDataTitle">資料</strong><small id="healthSignalDataCopy">待匯入</small></div>
+              <div data-health-signal="ai"><span></span><strong id="healthSignalAiTitle">AI</strong><small id="healthSignalAiCopy">待分析</small></div>
+              <div data-health-signal="delivery"><span></span><strong id="healthSignalDeliveryTitle">交付</strong><small id="healthSignalDeliveryCopy">草稿</small></div>
+              <div data-health-signal="billing"><span></span><strong id="healthSignalBillingTitle">收款</strong><small id="healthSignalBillingCopy">待建立</small></div>
+            </div>
+          </div>
+          <div class="console-action-board" aria-label="Today action board">
+            <article class="action-board-primary">
+              <span id="actionBoardKicker">Today</span>
+              <strong id="actionBoardTitle">Complete the next workflow step</strong>
+              <p id="actionBoardCopy">The workspace will guide you from data import to AI analysis and delivery.</p>
+              <button class="primary" id="actionBoardButton" type="button" data-command-workspace="data">Go to next step</button>
+            </article>
+            <article class="action-board-card risk">
+              <span id="actionRiskKicker">Risk</span>
+              <strong id="actionRiskTitle">Missing source data</strong>
+              <p id="actionRiskCopy">Import data before sending the report to AI.</p>
+            </article>
+            <article class="action-board-card automation">
+              <span id="actionAutomationKicker">Automation</span>
+              <strong id="actionAutomationTitle">Workflow draft</strong>
+              <p id="actionAutomationCopy">Once AI is ready, create delivery and billing records.</p>
+            </article>
+          </div>
+          <div class="console-ops-board" aria-label="案件營運工作板">
+            <article class="console-pipeline-card">
+              <div class="console-card-head">
+                <span id="consolePipelineKicker">Pipeline</span>
+                <strong id="consolePipelineTitle">獢辣?脣漲</strong>
+              </div>
+              <div class="console-pipeline-meter">
+                <div>
+                  <span id="consolePipelineProgressLabel">摰?摨?/span>
+                  <strong id="consolePipelineProgress">0%</strong>
+                </div>
+                <i><b id="consolePipelineProgressBar"></b></i>
+              </div>
+              <div class="console-pipeline-list">
+                <button type="button" data-command-workspace="case" data-console-stage="request">
+                  <i>01</i>
+                  <span><strong id="consoleStageRequestTitle">?瘙?/strong><small id="consoleStageRequestCopy">撠頛詨摰Ｘ?瘙?/small></span>
+                </button>
+                <button type="button" data-command-workspace="data" data-console-stage="data">
+                  <i>02</i>
+                  <span><strong id="consoleStageDataTitle">鞈?</strong><small id="consoleStageDataCopy">撠?臬鞈?</small></span>
+                </button>
+                <button type="button" data-command-workspace="ai" data-console-stage="ai">
+                  <i>03</i>
+                  <span><strong id="consoleStageAiTitle">AI</strong><small id="consoleStageAiCopy">蝑??Ｙ?撱箄降</small></span>
+                </button>
+                <button type="button" data-command-workspace="delivery" data-console-stage="delivery">
+                  <i>04</i>
+                  <span><strong id="consoleStageDeliveryTitle">鈭支?</strong><small id="consoleStageDeliveryCopy">撠撱箇?鈭支?蝝??/small></span>
+                </button>
+              </div>
+            </article>
+            <article class="console-ai-card">
+              <div class="console-card-head">
+                <span id="consoleAiKicker">AI Copilot</span>
+                <strong id="consoleAiBoardTitle">銝?甇亙遣霅?/strong>
+              </div>
+              <p id="consoleAiBrief">??亥???AI 撠梯?Ｙ????◢?芾?銝?銵???/p>
+              <div class="console-ai-metrics">
+                <div><span id="consoleAiDataLabel">Data</span><strong id="consoleAiDataValue">Pending</strong></div>
+                <div><span id="consoleAiReportLabel">Report</span><strong id="consoleAiReportValue">Draft</strong></div>
+                <div><span id="consoleAiDeliveryLabel">Delivery</span><strong id="consoleAiDeliveryValue">Open</strong></div>
+              </div>
+              <button class="primary" id="consoleAiAction" type="button" data-command-workspace="data">????</button>
+            </article>
+            <article class="console-activity-card">
+              <div class="console-card-head">
+                <span id="consoleActivityKicker">Activity</span>
+                <strong id="consoleActivityTitle">?餈???/strong>
+              </div>
+              <div class="console-activity-list" id="consoleActivityList"></div>
+              <div class="console-activity-foot">
+                <span id="consoleActivityCount">0 items</span>
+                <strong id="consoleActivityState">蝑?蝚砌?蝑???/strong>
+              </div>
+            </article>
+          </div>
+          <div class="console-command-grid" aria-label="隞隞餃?">
+            <article data-task-card="data">
+              <div class="task-card-top">
+                <span id="consoleTaskDataKicker">Today</span>
+                <i id="consoleTaskDataStatus">敺???/i>
+              </div>
+              <strong id="consoleTaskDataTitle">???????/strong>
+              <p id="consoleTaskDataCopy">鞎潔? CSV ??Google Sheets ???敺??喳?Ｙ? KPI??銵刻? AI ????/p>
+              <button class="ghost" type="button" data-command-workspace="data" id="consoleTaskDataAction">?臬鞈?</button>
+            </article>
+            <article data-task-card="ai">
+              <div class="task-card-top">
+                <span id="consoleTaskAiKicker">AI</span>
+                <i id="consoleTaskAiStatus">敺???/i>
+              </div>
+              <strong id="consoleTaskAiTitle">瑼Ｘ???◢??/strong>
+              <p id="consoleTaskAiCopy">蝟餌絞???雿??撘望??恥?園?瘙?????AI ?Ｙ??臭漱隞?摮?/p>
+              <button class="ghost" type="button" data-command-workspace="ai" id="consoleTaskAiAction">?瑁? AI</button>
+            </article>
+            <article data-task-card="delivery">
+              <div class="task-card-top">
+                <span id="consoleTaskDeliveryKicker">Delivery</span>
+                <i id="consoleTaskDeliveryStatus">敺???/i>
+              </div>
+              <strong id="consoleTaskDeliveryTitle">蝣箄?敺漱隞恥??/strong>
+              <p id="consoleTaskDeliveryCopy">?臬 HTML/PDF嚗?撱箇? Email ?阮??甈曄???靽?摰鈭支?頠楚??/p>
+              <button class="ghost" type="button" data-command-workspace="delivery" id="consoleTaskDeliveryAction">??鈭支?</button>
+            </article>
+          </div>
+          <div class="console-flow" id="consoleFlow">
+            <div class="console-flow-head">
+              <div>
+                <span>Guided workflow</span>
+                <strong>鈭郊摰??臭漱隞???/strong>
+              </div>
+              <div class="console-flow-progress" aria-label="Workflow progress">
+                <span id="consoleFlowProgressText">0 / 5</span>
+                <i><b id="consoleFlowProgressBar"></b></i>
+              </div>
+              <button class="ghost" type="button" data-command-workspace="overview">?亦?蝮質汗</button>
+            </div>
+            <div class="console-flow-steps">
+              <button type="button" data-command-workspace="case" data-flow-step="request" data-flow-index="01">
+                <i>01</i><strong>頛詨?瘙?/strong><span>摰Ｘ?格????嗚?暺?璅?/span>
+              </button>
+              <button type="button" data-command-workspace="data" data-flow-step="data" data-flow-index="02">
+                <i>02</i><strong>?臬鞈?</strong><span>CSV ??Google Sheets</span>
+              </button>
+              <button type="button" data-command-workspace="ai" data-flow-step="ai" data-flow-index="03">
+                <i>03</i><strong>AI ??</strong><span>???◢?芥??遣霅?/span>
+              </button>
+              <button type="button" data-command-workspace="overview" data-flow-step="report" data-flow-index="04">
+                <i>04</i><strong>?Ｙ??</strong><span>KPI??銵具?鈭??/span>
+              </button>
+              <button type="button" data-command-workspace="delivery" data-flow-step="delivery" data-flow-index="05">
+                <i>05</i><strong>鈭支?摰Ｘ</strong><span>Email??鈭恍??????/span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="report-command-bar" aria-label="?勗?鈭支?撌亙??>
+          <div class="report-command-score">
+            <span id="reportCommandScoreLabel">?勗??亙熒??/span>
+            <strong id="reportCommandScore">82</strong>
+          </div>
+          <div class="report-command-metrics">
+            <div><span id="reportCommandQualityLabel">鞈??釭</span><strong id="reportCommandQuality">鞈?摰</strong></div>
+            <div><span id="reportCommandAiLabel">AI ???/span><strong id="reportCommandAi">敺??/strong></div>
+            <div><span id="reportCommandGeneratedLabel">?餈??/span><strong id="reportCommandGenerated">撠?Ｙ?</strong></div>
+          </div>
+          <div class="report-command-actions">
+            <button class="ghost" type="button" data-report-action="save">靽?</button>
+            <button class="ghost" type="button" data-report-action="export">HTML</button>
+            <button class="ghost" type="button" data-report-action="print">PDF</button>
+            <button class="primary" type="button" data-report-action="deliver">鈭支?</button>
+          </div>
+        </section>
+        <section class="report-preview-strip" aria-label="?勗?鈭支????>
+          <div class="report-preview-main">
+            <span id="reportPreviewKicker">Report Canvas</span>
+            <strong id="reportPreviewTitle">?撠摰?</strong>
+            <p id="reportPreviewCopy">?臬鞈?銝衣???勗?嚗ㄐ?＊蝷箏鈭支????/p>
+          </div>
+          <div class="report-preview-meta">
+            <div><span id="reportPreviewClientLabel">Client</span><strong id="reportPreviewClient">?典??閮箸?</strong></div>
+            <div><span id="reportPreviewMonthLabel">Month</span><strong id="reportPreviewMonth">2026-06</strong></div>
+            <div><span id="reportPreviewStatusLabel">Status</span><strong id="reportPreviewStatus">Draft</strong></div>
+          </div>
+          <div class="report-preview-checks">
+            <span id="reportPreviewCheckData">鞈?</span>
+            <span id="reportPreviewCheckAi">AI</span>
+            <span id="reportPreviewCheckDelivery">鈭支?</span>
+          </div>
+        </section>
+        <nav class="report-section-nav" aria-label="?勗?蝡?撠汗">
+          <button class="active" type="button" data-report-jump="#report" id="reportNavCover">撠</button>
+          <button type="button" data-report-jump="#summaryCards" id="reportNavSummary">??</button>
+          <button type="button" data-report-jump="#kpiGrid" id="reportNavKpi">KPI</button>
+          <button type="button" data-report-jump="#trendChart" id="reportNavCharts">?”</button>
+          <button type="button" data-report-jump="#aiWorkOrder" id="reportNavAi">AI 撌乩???/button>
+          <button type="button" data-report-jump="#deliveryCenter" id="reportNavDelivery">鈭支?</button>
+        </nav>
+        <article class="report" id="report">
+          <section class="cover">
+            <div>
+          <p class="report-kicker" id="coverAgency">Northstar Marketing</p>
+              <h2 id="coverTitle">?典??閮箸?撱?????</h2>
+              <p id="coverMonth">2026 撟?06 ??/p>
+            </div>
+            <div class="score-card">
+              <span data-i18n="healthScoreLabel">?祆??亙熒??/span>
+              <strong id="healthScore">82</strong>
+              <small id="scoreLabel">蝛拙??</small>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="executiveSummary">擃惜??</h3>
+                <p data-i18n="executiveSummaryCopy">蝯血恥?嗆捱蝑???60 蝘?暺?/p>
+              </div>
+            </div>
+            <div class="summary-grid" id="summaryCards"></div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading split">
+              <div>
+                <h3 data-i18n="coreKpi">?詨? KPI</h3>
+                <p data-i18n="coreKpiCopy">蝮賡?????銝?瘥???/p>
+              </div>
+              <div class="quality-pill" id="qualityPill">鞈?摰</div>
+            </div>
+            <div class="kpi-grid" id="kpiGrid"></div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="automationTitle">?芸????交瑽?/h3>
+                <p data-i18n="automationCopy">銝?隞?Looker Studio嚗鋆?????漱隞惜??/p>
+              </div>
+            </div>
+            <div class="automation-grid">
+              <div class="automation-card"><span>01</span><h4 data-i18n="autoDataTitle">鞈?銝脫</h4><p data-i18n="autoDataCopy">Supermetrics????API ??Sheets ?臬 CSV嚗?銝?Google Ads?eta?A4?earch Console 蝑???/p><strong>Sheets / Supermetrics</strong></div>
+              <div class="automation-card"><span>02</span><h4 data-i18n="autoDashboardTitle">?單??</h4><p data-i18n="autoDashboardCopy">Looker Studio 鞎痊瘥????祟?貉?????銵冽??/p><strong>Looker Studio</strong></div>
+              <div class="automation-card"><span>03</span><h4 data-i18n="autoNarrativeTitle">AI ?閫??</h4><p data-i18n="autoNarrativeCopy">AgencyReport AI 撠摮???閬◢?芥?撖?銝?銵???/p><strong>AI Narrative</strong></div>
+              <div class="automation-card"><span>04</span><h4 data-i18n="autoDeliveryTitle">鈭支??芸???/h4><p data-i18n="autoDeliveryCopy">Zapier / Make 瘥?閫貊????啗?????蝔輻策 PM??/p><strong>Zapier / Make</strong></div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="interactiveAnalytics">鈭?閬死??</h3>
+                <p data-i18n="interactiveAnalyticsCopy">??璅∪????豢???敹恍?唳??瑁?瘚芾祥靘???/p>
+              </div>
+            </div>
+            <div class="dashboard-toolbar">
+              <div class="segmented" aria-label="?”璅∪?">
+                <button class="active" data-chart-mode="overview" type="button" data-i18n="overview">蝮質汗</button>
+                <button data-chart-mode="efficiency" type="button" data-i18n="efficiency">??</button>
+                <button data-chart-mode="growth" type="button" data-i18n="growth">?</button>
+              </div>
+              <div class="selected-channel" id="selectedChannel">?桀?瑼Ｚ?嚗?冽???/div>
+            </div>
+            <div class="chart-grid">
+              <div class="chart-card wide-chart"><div class="chart-title"><h4 data-i18n="trendChartTitle">?祆? vs 銝?霈?</h4><span>Spend / Clicks / Conversions / Revenue</span></div><canvas id="trendChart" width="720" height="360"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="revenueChartTitle">皜????</h4><span>Revenue share</span></div><canvas id="revenueChart" width="420" height="320"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="roasChartTitle">皜? ROAS ??</h4><span>Higher is better</span></div><canvas id="roasChart" width="520" height="330"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="funnelChartTitle">頧?瞍?</h4><span>Impressions to conversions</span></div><canvas id="funnelChart" width="520" height="330"></canvas></div>
+              <div class="chart-card"><div class="chart-title"><h4 data-i18n="quadrantChartTitle">??鞊⊿?</h4><span>CPA x ROAS</span></div><canvas id="quadrantChart" width="520" height="330"></canvas></div>
+            </div>
+          </section>
+
+          <section class="report-section two-column">
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="channelPerformance">皜?銵函</h3><p data-i18n="channelPerformanceCopy">靘?ROAS ????摨?/p></div></div>
+              <div class="channel-list" id="channelList"></div>
+            </div>
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="efficiencyDiagnosis">??閮箸</h3><p data-i18n="efficiencyDiagnosisCopy">?摮蕃??瑁??斗??/p></div></div>
+              <div class="diagnostic-grid" id="diagnostics"></div>
+            </div>
+          </section>
+
+          <section class="report-section two-column insight-layout">
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="aiInsight">AI ??閫??</h3><p data-i18n="aiInsightCopy">?舐?亥票?脣恥?嗆??梁?隤芣?????/p></div></div>
+              <div class="insight-box" id="insights"></div>
+            </div>
+            <div>
+              <div class="section-heading"><div><h3 data-i18n="riskAlerts">憸券??</h3><p data-i18n="riskAlertsCopy">?閬?PM ?芸????撣貉???/p></div></div>
+              <div class="risk-list" id="riskList"></div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading"><div><h3 data-i18n="nextActions">銝?銵?撱箄降</h3><p data-i18n="nextActionsCopy">?琿??餈質馱?鈭方齒??/p></div></div>
+            <ol class="recommendations" id="recommendations"></ol>
+          </section>
+
+          <section class="report-section">
+            <div class="section-heading"><div><h3 data-i18n="detailData">皜??敦鞈?</h3><p data-i18n="detailDataCopy">蝯?PM ???撠?摰?詨???/p></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th data-i18n="channel">皜?</th><th data-i18n="spend">?梯祥</th><th data-i18n="clicks">暺?</th><th data-i18n="conversions">頧?</th><th data-i18n="revenue">?</th><th>CTR</th><th>CVR</th><th>CPA</th><th>ROAS</th></tr></thead>
+                <tbody id="detailTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="report-section ai-workorder-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="aiWorkOrderTitle">AI 撌乩???/h3>
+                <p data-i18n="aiWorkOrderCopy">?恥?園?瘙???瑁????遙?????阮??/p>
+              </div>
+            </div>
+            <div class="workorder-grid" id="aiWorkOrder"></div>
+          </section>
+
+          <section class="report-section automation-operating-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="automationOpsTitle">?刻?????批??/h3>
+                <p data-i18n="automationOpsCopy">??瘙??I ???祟?貉?鈭支?銝脫??舐??拇?蝔?/p>
+              </div>
+            </div>
+            <div class="automation-plan" id="automationPlan"></div>
+          </section>
+
+          <section class="report-section delivery-section">
+            <div class="section-heading split">
+              <div>
+                <h3 data-i18n="deliveryCenterTitle">PM 撖拇?漱隞葉敹?/h3>
+                <p data-i18n="deliveryCenterCopy">撖拇?勗??遣蝡漱隞???銋??臭葡??Email / PDF??/p>
+              </div>
+              <div class="actions-row">
+                <button class="ghost" id="approveDraftBtn" type="button" data-i18n="approveDraft">璅?撌脣祟??/button>
+                <button class="ghost" id="createShareLinkBtn" type="button" data-i18n="createShareLink">撱箇??澈???</button>
+                <button class="ghost" id="queueEmailBtn" type="button" data-i18n="queueEmail">? Email</button>
+                <button class="primary" id="deliverReportBtn" type="button" data-i18n="deliverReport">撱箇?鈭支?蝝??/button>
+              </div>
+            </div>
+            <div class="delivery-assistant" aria-label="鈭支??拇?">
+              <div>
+                <span id="deliveryAssistantKicker">Delivery Assistant</span>
+                <strong id="deliveryAssistantTitle">撖拇敺?銝?萎漱隞策摰Ｘ</strong>
+                <p id="deliveryAssistantCopy">??閮祟?賂??遣蝡?鈭恍???mail 雿??漱隞???/p>
+              </div>
+              <div class="delivery-assistant-actions">
+                <button class="ghost" type="button" data-delivery-action="review">撖拇</button>
+                <button class="ghost" type="button" data-delivery-action="share">?澈</button>
+                <button class="ghost" type="button" data-delivery-action="email">Email</button>
+                <button class="primary" type="button" data-delivery-action="record">蝝??/button>
+              </div>
+            </div>
+            <div class="delivery-grid" id="deliveryCenter"></div>
+            <div class="share-link-panel" id="shareLinkPanel"></div>
+            <div class="email-job-panel" id="emailJobPanel"></div>
+          </section>
+
+          <section class="report-section progress-section internal-only">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="progressTitle">撠?摰??脣漲</h3>
+                <p data-i18n="progressCopy">?桀??臬?蝷箝皜祈岫?嗉祥嚗迤撘??拙?隞?敺垢?洵銝銝脫??/p>
+              </div>
+            </div>
+            <div class="progress-grid" id="progressGrid"></div>
+            <div class="completion-panel">
+              <div class="section-heading">
+                <div>
+                  <h3 data-i18n="completionTitle">?祇?畾萎漱隞???/h3>
+                  <p data-i18n="completionCopy">?芸?銝剔??脣漲?撌脫???舫?霅??Ｗ????/p>
+                </div>
+              </div>
+              <div class="completion-list" id="completionList"></div>
+            </div>
+          </section>
+
+          <section class="report-section commercial-section">
+            <div class="section-heading">
+              <div>
+                <h3 data-i18n="pricingTitle">?Ｗ????獢?/h3>
+                <p data-i18n="pricingCopy">?其?皜祈岫蝚砌??嫣誨??隞祥????/p>
+              </div>
+            </div>
+            <div class="pricing-grid">
+              <div class="price-card"><h4 data-i18n="starterPlanName">?仿???/h4><strong data-i18n="starterPrice">NT$790/??/strong><p data-i18n="starterCopy">瘥? 10 隞賣??晞SV/Sheets ?臬?I 撱箄降?DF/HTML ?臬??/p></div>
+              <div class="price-card featured"><h4 data-i18n="agencyPlanName">隞????</h4><strong data-i18n="agencyPrice">NT$2,490/??/strong><p data-i18n="agencyCopy">瘥? 50 隞賣??晞?摰Ｘ?????勗??I 銝?撱箄降??甈?鈭支?蝝??/p></div>
+              <div class="price-card"><h4 data-i18n="professionalPlanName">撠平??/h4><strong data-i18n="whiteLabelPrice">NT$5,990/??/strong><p data-i18n="whiteLabelCopy">?湧???恥?嗅???蝔mail ?阮?璅??脤? AI ????/p></div>
+            </div>
+
+            <form class="lead-form" id="leadForm">
+              <div>
+                <h4 data-i18n="leadTitle">??閰衣 / ???瘙?/h4>
+                <p data-i18n="leadCopy">????閎?誨???嚗?敹?摰 SaaS ??憪都??/p>
+              </div>
+            <input id="leadName" type="text" placeholder="憪? / ?砍" data-i18n-placeholder="leadNamePlaceholder" required />
+            <input id="leadEmail" type="email" placeholder="Email" data-i18n-placeholder="leadEmailPlaceholder" required />
+              <button class="primary" type="submit" data-i18n="saveLead">?脣??</button>
+              <label class="legal-consent inline-consent">
+                <input id="leadLegalConsent" type="checkbox" required />
+                <span data-legal-copy="leadConsent">I agree to be contacted and to the privacy terms.</span>
+              </label>
+              <a class="ghost legal-link" id="leadLegalBtn" href="/legal" target="_blank" rel="noreferrer" data-legal-copy="viewLegal">View Terms & Privacy</a>
+            </form>
+            <div class="status-panel" id="leadStatus"></div>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <section class="upgrade-modal" id="upgradeModal" hidden>
+      <div class="upgrade-dialog" role="dialog" aria-modal="true" aria-labelledby="upgradeModalTitle">
+        <div class="upgrade-head">
+          <div>
+            <p class="eyebrow">AgencyReport AI</p>
+            <h2 id="upgradeModalTitle">???寞?</h2>
+          </div>
+          <button class="ghost upgrade-close" id="upgradeCloseBtn" type="button" aria-label="Close">?</button>
+        </div>
+        <div class="upgrade-tabs" role="tablist" aria-label="Billing cycle">
+          <button class="active" type="button" data-upgrade-cycle="monthly">?像</button>
+          <button type="button" data-upgrade-cycle="annual">撟渡像</button>
+        </div>
+        <div class="upgrade-plans" id="upgradePlans"></div>
+        <div class="upgrade-status" id="upgradeStatus"></div>
+      </div>
+    </section>
+
+    <div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>
+    <div class="account-dock" id="accountDock">
+      <button class="account-dock-toggle" id="accountDockToggle" type="button" aria-expanded="false" aria-controls="accountDockMenu">
+        <span>??/span>
+        <strong id="accountDockLabel">閮剖?</strong>
+      </button>
+      <section class="account-dock-menu" id="accountDockMenu" hidden>
+        <div class="account-dock-header">
+          <span>AR</span>
+          <div>
+            <strong id="accountDockName">?犖撣單</strong>
+            <small id="accountDockEmail">Not signed in</small>
+          </div>
+        </div>
+        <button type="button" data-dock-action="profile"><span>??/span><strong id="dockProfileLabel">?犖瑼?</strong></button>
+        <button type="button" data-dock-action="settings"><span>??/span><strong id="dockSettingsLabel">閮剖?</strong><small>Ctrl+,</small></button>
+        <div class="dock-divider"></div>
+        <button type="button" data-dock-action="usage" class="dock-usage-button"><span>??/span><strong id="dockUsageLabel">?拚??券?</strong><small id="dockUsagePercent">0%</small></button>
+        <div class="dock-usage-grid">
+          <div><strong id="dockReportUsage">0 / 5</strong><span id="dockReportUsageLabel">?勗?</span></div>
+          <div><strong id="dockClientUsage">0 / 3</strong><span id="dockClientUsageLabel">摰Ｘ</span></div>
+        </div>
+        <button type="button" data-dock-action="billing"><span>??/span><strong id="dockUpgradeLabel">????Pro</strong></button>
+        <button type="button" data-dock-action="reset"><span>??/span><strong id="dockResetLabel">?舐?身</strong><small id="dockResetValue">1 甈?/small></button>
+        <div class="dock-divider"></div>
+        <button type="button" data-dock-action="invite"><span>??/span><strong id="dockInviteLabel">?隢末??/strong></button>
+        <button type="button" data-dock-action="logout"><span>??/span><strong id="dockLogoutLabel">?餃</strong></button>
+      </section>
+    </div>
+    <script src="/app.js?v=20260614-layout-cleanup"></script>
+  </body>
+</html>

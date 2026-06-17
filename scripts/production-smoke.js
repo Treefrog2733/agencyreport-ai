@@ -81,6 +81,9 @@ async function run() {
   results.push(check(health.body.ai?.mode === "live-ready", "AI provider is live-ready", JSON.stringify(health.body.ai || {})));
   results.push(check(health.body.email?.mode === "live-ready", "email provider is live-ready", JSON.stringify(health.body.email || {})));
   results.push(check(health.body.payment?.mode === "live-ready", "payment provider is live-ready", JSON.stringify(health.body.payment || {})));
+  if (health.body.payment?.mode !== "live-ready") {
+    results.push(check(Array.isArray(health.body.payment?.missing) && health.body.payment.missing.length > 0, "payment diagnostics list missing settings", JSON.stringify(health.body.payment || {})));
+  }
 
   const readiness = await fetchJson(`${baseUrl}/api/readiness`);
   const item = readiness.body.item || readiness.body;
