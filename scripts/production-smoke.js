@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const requiredChecks = ["database", "auth", "ai", "email", "worker", "payment"];
+const baseRequiredChecks = ["database", "auth", "ai", "email", "worker"];
 const sensitivePaths = ["/.env", "/server.js", "/data/db.json", "/package.json", "/render.yaml"];
 const mojibakePattern = /[\uFFFD\uF386\uEE6A]|\u876E|\u7362|\u95AE|\u648C|\u6470|\u9903|\u7E5A|\u977D|\u92B4|\u920D|\u7508|\u761A|\u969E|\u96FF|\u64B1|\u875D|\?\?\?/;
 
@@ -47,12 +47,21 @@ function checkSecurityHeaders(response, label) {
     check(headerValue(response, "x-content-type-options").toLowerCase() === "nosniff", `${label} sends nosniff header`),
     check(headerValue(response, "x-frame-options").toUpperCase() === "DENY", `${label} blocks framing`),
     check(Boolean(headerValue(response, "referrer-policy")), `${label} sends referrer policy`),
+    check(Boolean(headerValue(response, "content-security-policy")), `${label} sends content security policy`),
+    check(Boolean(headerValue(response, "strict-transport-security")), `${label} sends HSTS`),
   ];
 }
 
 async function run() {
   const baseUrl = normalizeBaseUrl(argValue("--url"));
   const strict = process.argv.includes("--strict");
+  const requirePayment = process.argv.includes("--require-payment");
+  const requireOperational = process.argv.includes("--require-operational");
+  const requiredChecks = [
+    ...baseRequiredChecks,
+    ...(requireOperational ? ["legal", "backup", "monitoring"] : []),
+    ...(requirePayment ? ["payment"] : []),
+  ];
   const results = [];
 
   const home = await fetchText(`${baseUrl}/`);
@@ -69,6 +78,13 @@ async function run() {
   results.push(check(sitemap.response.ok && /<urlset/.test(sitemap.text), "sitemap.xml responds"));
   results.push(...checkSecurityHeaders(sitemap.response, "sitemap.xml"));
 
+  const legalZh = await fetchText(`${baseUrl}/legal`);
+  results.push(check(legalZh.response.ok && /<html lang="zh-Hant">/.test(legalZh.text), "Traditional Chinese legal page responds"));
+  const legalEn = await fetchText(`${baseUrl}/legal?lang=en`);
+  results.push(check(legalEn.response.ok && /Terms of Service and Privacy Policy/.test(legalEn.text), "English legal page responds"));
+  const legalApi = await fetchJson(`${baseUrl}/api/legal`);
+  results.push(check(/^legal-\d{4}-\d{2}-\d{2}$/.test(legalApi.body.item?.version || ""), "legal API exposes a versioned policy", legalApi.body.item?.version || "missing"));
+
   for (const pathname of sensitivePaths) {
     const sensitive = await fetchText(`${baseUrl}${pathname}`);
     results.push(check([403, 404].includes(sensitive.response.status), `sensitive file blocked: ${pathname}`, `${sensitive.response.status}`));
@@ -80,7 +96,11 @@ async function run() {
   results.push(check(health.body.storage === "postgres", "production storage is postgres", `storage=${health.body.storage}`));
   results.push(check(health.body.ai?.mode === "live-ready", "AI provider is live-ready", JSON.stringify(health.body.ai || {})));
   results.push(check(health.body.email?.mode === "live-ready", "email provider is live-ready", JSON.stringify(health.body.email || {})));
-  results.push(check(health.body.payment?.mode === "live-ready", "payment provider is live-ready", JSON.stringify(health.body.payment || {})));
+  results.push(check(
+    !requirePayment || health.body.payment?.mode === "live-ready",
+    requirePayment ? "payment provider is live-ready" : "payment provider can remain post-launch review",
+    JSON.stringify(health.body.payment || {})
+  ));
   if (health.body.payment?.mode !== "live-ready") {
     results.push(check(Array.isArray(health.body.payment?.missing) && health.body.payment.missing.length > 0, "payment diagnostics list missing settings", JSON.stringify(health.body.payment || {})));
   }

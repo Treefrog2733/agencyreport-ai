@@ -20,6 +20,8 @@ const emailApiUrl = process.env.EMAIL_API_URL || (emailProvider === "resend" ? "
 const emailApiKey = process.env.EMAIL_API_KEY || process.env.RESEND_API_KEY || "";
 const emailFrom = process.env.EMAIL_FROM || "AgencyReport AI <reports@example.com>";
 const workerSecret = process.env.WORKER_SECRET || "";
+const legalVersion = process.env.LEGAL_VERSION || "legal-2026-06-18";
+const legalReviewed = process.env.LEGAL_REVIEWED === "true";
 const paymentProvider = (process.env.PAYMENT_PROVIDER || (process.env.STRIPE_SECRET_KEY ? "stripe" : "mock")).toLowerCase();
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeSuccessUrl = process.env.STRIPE_SUCCESS_URL || "";
@@ -46,6 +48,7 @@ const connectorEnv = {
 let writeQueue = Promise.resolve();
 let pgPool = null;
 let pgStoreReady = false;
+const postgresSchemaVersion = 2;
 
 function loadLocalEnv() {
   const envPath = path.join(root, ".env");
@@ -164,8 +167,17 @@ function securityHeaders(extra = {}) {
     "referrer-policy": "strict-origin-when-cross-origin",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "cross-origin-resource-policy": "same-origin",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'sha256-gd3ETQp5xbW48zuUjQhuf83+5fNZSKFUhUVGEdImfuo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw",
     ...extra,
   };
+}
+
+function interactivePageHeaders(extra = {}) {
+  return securityHeaders({
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw",
+    ...extra,
+  });
 }
 
 function clientIp(req) {
@@ -217,12 +229,15 @@ const planUsageLimits = {
 };
 
 function emailStatus() {
-  const hasLiveCredentials = Boolean(emailApiUrl && emailApiKey && emailFrom);
+  const senderIsProduction = Boolean(emailFrom)
+    && !/onboarding@resend\.dev|example\.(com|test)/i.test(emailFrom);
+  const hasLiveCredentials = Boolean(emailApiUrl && emailApiKey && senderIsProduction);
   const liveProvider = emailProvider === "api" || emailProvider === "resend";
   return {
     provider: emailProvider,
     mode: liveProvider && hasLiveCredentials ? "live-ready" : emailProvider,
     ready: liveProvider && hasLiveCredentials,
+    senderIsProduction,
   };
 }
 
@@ -247,22 +262,115 @@ async function postgresPool() {
         key text primary key,
         value jsonb not null,
         updated_at timestamptz not null default now()
-      )
+      );
+      create table if not exists agencyreport_records (
+        collection text not null,
+        record_id text not null,
+        owner_id text,
+        payload jsonb not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (collection, record_id)
+      );
+      create index if not exists agencyreport_records_owner_idx
+        on agencyreport_records (owner_id, collection);
+      create index if not exists agencyreport_records_updated_idx
+        on agencyreport_records (updated_at desc);
+      create table if not exists agencyreport_metadata (
+        key text primary key,
+        value jsonb not null,
+        updated_at timestamptz not null default now()
+      );
     `);
     pgStoreReady = true;
   }
   return pgPool;
 }
 
+function freshDb() {
+  return Object.fromEntries(Object.keys(emptyDb).map((collection) => [collection, []]));
+}
+
+function normalizedRecords(db) {
+  return Object.keys(emptyDb).flatMap((collection) => (Array.isArray(db[collection]) ? db[collection] : []).map((item) => ({
+    collection,
+    record_id: String(item.id || crypto.randomUUID()),
+    owner_id: item.ownerId ? String(item.ownerId) : null,
+    payload: item,
+  })));
+}
+
+async function replaceNormalizedRecords(client, db) {
+  const records = normalizedRecords(db);
+  await client.query("delete from agencyreport_records");
+  if (records.length) {
+    await client.query(
+      `insert into agencyreport_records (collection, record_id, owner_id, payload, created_at, updated_at)
+       select item.collection, item.record_id, item.owner_id, item.payload, now(), now()
+       from jsonb_to_recordset($1::jsonb)
+         as item(collection text, record_id text, owner_id text, payload jsonb)`,
+      [JSON.stringify(records)]
+    );
+  }
+  await client.query(
+    `insert into agencyreport_metadata (key, value, updated_at)
+     values ('schema_version', $1::jsonb, now()),
+            ('normalized_updated_at', to_jsonb(now()), now())
+     on conflict (key) do update set value = excluded.value, updated_at = now()`,
+    [JSON.stringify(postgresSchemaVersion)]
+  );
+}
+
+async function migrateLegacyStore(pool) {
+  const [count, legacy, normalized] = await Promise.all([
+    pool.query("select count(*)::int as count from agencyreport_records"),
+    pool.query("select value, updated_at from agencyreport_store where key = $1", ["main"]),
+    pool.query("select updated_at from agencyreport_metadata where key = 'normalized_updated_at'"),
+  ]);
+  if (!legacy.rowCount) return;
+  const legacyIsNewer = !normalized.rowCount || new Date(legacy.rows[0].updated_at) > new Date(normalized.rows[0].updated_at);
+  if (count.rows[0].count > 0 && !legacyIsNewer) return;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext('agencyreport-schema-migration'))");
+    const latestLegacy = await client.query("select value, updated_at from agencyreport_store where key = $1", ["main"]);
+    const latestNormalized = await client.query("select updated_at from agencyreport_metadata where key = 'normalized_updated_at'");
+    const shouldMigrate = !latestNormalized.rowCount
+      || new Date(latestLegacy.rows[0].updated_at) > new Date(latestNormalized.rows[0].updated_at);
+    if (shouldMigrate) await replaceNormalizedRecords(client, { ...emptyDb, ...latestLegacy.rows[0].value });
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function readDb() {
   const pool = await postgresPool();
   if (pool) {
-    const result = await pool.query("select value from agencyreport_store where key = $1", ["main"]);
+    await migrateLegacyStore(pool);
+    const result = await pool.query("select collection, payload from agencyreport_records order by created_at, record_id");
+    const db = freshDb();
+    result.rows.forEach(({ collection, payload }) => {
+      if (Object.prototype.hasOwnProperty.call(db, collection)) db[collection].push(payload);
+    });
     if (!result.rowCount) {
-      await writeDb(emptyDb);
-      return { ...emptyDb };
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await replaceNormalizedRecords(client, db);
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
     }
-    return { ...emptyDb, ...result.rows[0].value };
+    return db;
   }
   await mkdir(dataDir, { recursive: true });
   try {
@@ -278,29 +386,57 @@ async function readDb() {
 async function writeDb(db) {
   const pool = await postgresPool();
   if (pool) {
-    await pool.query(
-      `insert into agencyreport_store (key, value, updated_at)
-       values ($1, $2::jsonb, now())
-       on conflict (key) do update set value = excluded.value, updated_at = now()`,
-      ["main", JSON.stringify({ ...emptyDb, ...db })]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtext('agencyreport-write'))");
+      await replaceNormalizedRecords(client, { ...emptyDb, ...db });
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
     return;
   }
   await mkdir(dataDir, { recursive: true });
   await writeFile(dbPath, `${JSON.stringify(db, null, 2)}\n`, "utf8");
 }
 
-function json(res, status, body) {
+function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, securityHeaders({
     "content-type": "application/json;charset=utf-8",
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
-    "access-control-allow-headers": "content-type, authorization, x-worker-secret, x-agency-webhook-secret, stripe-signature",
+    ...extraHeaders,
   }));
   res.end(JSON.stringify(body));
 }
 
-function legalHtml() {
+function sessionCookie(token, expiresAt) {
+  const maxAge = Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  return [
+    `agencyreport_session=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    process.env.NODE_ENV === "production" ? "Secure" : "",
+    `Max-Age=${maxAge}`,
+  ].filter(Boolean).join("; ");
+}
+
+function clearSessionCookie() {
+  return [
+    "agencyreport_session=",
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    process.env.NODE_ENV === "production" ? "Secure" : "",
+    "Max-Age=0",
+  ].filter(Boolean).join("; ");
+}
+
+function legalHtml(language = "zh") {
+  if (language === "en") return legalEnglishHtml();
   return `<!doctype html>
 <html lang="zh-Hant">
 <head>
@@ -317,7 +453,7 @@ function legalHtml() {
 <body>
   <main>
     <article>
-      <p class="eyebrow">AgencyReport AI &middot; legal-2026-06-16</p>
+      <p class="eyebrow">AgencyReport AI &middot; ${escapeHtml(legalVersion)}</p>
       <h1>&#26381;&#21209;&#26781;&#27454;&#33287;&#36039;&#26009;&#20351;&#29992;&#32882;&#26126;</h1>
       <p>&#26412;&#38913;&#26159;&#20844;&#38283;&#28204;&#35430;&#33287; MVP &#38542;&#27573;&#30340;&#27861;&#24459;&#36039;&#35338;&#25688;&#35201;&#12290;&#27491;&#24335;&#25910;&#36027;&#19978;&#32218;&#21069;&#65292;&#20173;&#24314;&#35696;&#30001;&#29087;&#24713;&#21488;&#28771; SaaS&#12289;&#20491;&#36039;&#33287;&#38651;&#23376;&#21830;&#21209;&#35215;&#31684;&#30340;&#27861;&#24459;&#39015;&#21839;&#23529;&#38321;&#12290;</p>
       <h2>&#26381;&#21209;&#29992;&#36884;</h2>
@@ -340,6 +476,79 @@ function legalHtml() {
         <li>&#20351;&#29992;&#32773;&#36865;&#20986;&#35430;&#29992;&#12289;&#38656;&#27714;&#20837;&#21475;&#25110;&#22577;&#21578;&#36039;&#26009;&#24460;&#65292;&#21516;&#24847;&#25105;&#20497;&#21487;&#23601;&#35430;&#29992;&#12289;&#38656;&#27714;&#12289;&#22577;&#21578;&#12289;&#20184;&#27454;&#33287;&#26381;&#21209;&#20132;&#20184;&#36914;&#34892;&#32879;&#32363;&#12290;</li>
         <li>&#33509;&#38656;&#20572;&#27490;&#32879;&#32363;&#25110;&#35519;&#25972;&#36039;&#26009;&#65292;&#35531;&#36879;&#36942;&#32178;&#31449;&#25110; Email &#32879;&#32097;&#26381;&#21209;&#22296;&#38538;&#12290;</li>
       </ul>
+      <h2>訂閱、退款與終止</h2>
+      <ul>
+        <li>方案價格、週期與用量以結帳頁顯示為準；除法律另有規定或服務無法提供外，已使用的當期費用不按比例退還。</li>
+        <li>使用者可停止續訂；終止後仍可於已付款期間使用服務。付款爭議請先透過網站聯絡服務團隊。</li>
+      </ul>
+      <h2>保存期間與第三方處理</h2>
+      <ul>
+        <li>帳號及月報資料於提供服務所需期間保存；刪除請求完成後，備份副本會依備份輪替週期清除。</li>
+        <li>為提供服務，資料可能由託管、資料庫、AI、Email 與金流供應商處理；供應商僅依其服務目的處理必要資料。</li>
+      </ul>
+      <h2>責任限制與準據法</h2>
+      <ul>
+        <li>本服務不保證 AI 建議、第三方平台數據或預測結果完全正確；使用者應在對客戶交付前進行專業審核。</li>
+        <li>本服務以中華民國法律為準據法；消費者保護及強制規定不因本條款而排除。</li>
+      </ul>
+      <p>聯絡窗口：support@virtualtrendworks.com</p>
+    </article>
+  </main>
+</body>
+</html>`;
+}
+
+function legalEnglishHtml() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgencyReport AI Terms and Privacy Policy</title>
+  <style>
+    body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#10201f;background:#f6f8f7}
+    main{max-width:860px;margin:0 auto;padding:40px 20px}
+    article{background:#fff;border:1px solid #d9e3df;border-radius:8px;padding:28px;box-shadow:0 18px 50px rgba(15,23,42,.08)}
+    h1{margin:0 0 8px;font-size:30px}h2{margin-top:24px;font-size:18px}p,li{color:#60706d;line-height:1.7}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#117c72}
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <p class="eyebrow">AgencyReport AI &middot; ${escapeHtml(legalVersion)}</p>
+      <h1>Terms of Service and Privacy Policy</h1>
+      <p>This document is the publication draft for the public beta. Before paid public traffic, it should be reviewed by counsel familiar with Taiwan SaaS, privacy, consumer, and e-commerce law.</p>
+      <h2>Service purpose</h2>
+      <ul>
+        <li>AgencyReport AI imports marketing data and produces KPI charts, AI summaries, risk analysis, next-month actions, and client-facing drafts.</li>
+        <li>AI output is operational guidance only. Users must verify source data, advertising-platform definitions, and client-facing statements.</li>
+      </ul>
+      <h2>Data processing and user rights</h2>
+      <ul>
+        <li>We process account, client, report, payment, email, and audit data to provide authentication, reporting, delivery, usage control, billing, and support.</li>
+        <li>Users may request access, correction, export, or deletion. Records required by law, fraud prevention, or payment reconciliation may be retained for the necessary period.</li>
+      </ul>
+      <h2>AI transparency</h2>
+      <ul>
+        <li>Report summaries, risks, recommendations, and client messages may be generated by AI.</li>
+        <li>If the AI service fails, rules-based recommendations may be used as a fallback and should still be reviewed before delivery.</li>
+      </ul>
+      <h2>Subscriptions, refunds, and termination</h2>
+      <ul>
+        <li>Price, billing cycle, and usage limits are shown at checkout. Except where required by law or when the service cannot be provided, used subscription periods are not refunded pro rata.</li>
+        <li>Users may stop renewal and retain access through the paid period. Contact support first for payment disputes.</li>
+      </ul>
+      <h2>Retention and service providers</h2>
+      <ul>
+        <li>Account and report data is retained while needed to provide the service. Backup copies are removed through the backup rotation after a deletion request is completed.</li>
+        <li>Hosting, database, AI, email, and payment providers may process the minimum data needed for their service purpose.</li>
+      </ul>
+      <h2>Liability and governing law</h2>
+      <ul>
+        <li>We do not warrant that AI recommendations, third-party data, or forecasts are error-free. Professional review remains the user's responsibility.</li>
+        <li>The laws of the Republic of China (Taiwan) govern, without excluding mandatory consumer protections.</li>
+      </ul>
+      <p>Contact: support@virtualtrendworks.com</p>
     </article>
   </main>
 </body>
@@ -371,21 +580,21 @@ async function quoteHtml(token) {
 <body>
   <main>
     <article>
-      <p class="eyebrow">AgencyReport AI Quote · ${quote.id}</p>
-      <h1>${quote.accountName || "Agency"} 服務報價確認</h1>
+      <p class="eyebrow">AgencyReport AI Quote · ${escapeHtml(quote.id)}</p>
+      <h1>${escapeHtml(quote.accountName || "Agency")} 服務報價確認</h1>
       <p>這是一份付款前確認頁，可替換為 Stripe、綠界、藍新或正式金流連結。</p>
-      <div class="amount">${quote.currency || "TWD"} ${amount}</div>
+      <div class="amount">${escapeHtml(quote.currency || "TWD")} ${amount}</div>
       <div class="grid">
-        <div class="card"><span>方案</span><strong>${quote.plan || "starter"}</strong></div>
-        <div class="card"><span>狀態</span><strong>${quote.status || "draft"}</strong></div>
-        <div class="card"><span>帳號 Email</span><strong>${quote.accountEmail || "-"}</strong></div>
-        <div class="card"><span>建立時間</span><strong>${quote.createdAt || "-"}</strong></div>
+        <div class="card"><span>方案</span><strong>${escapeHtml(quote.plan || "starter")}</strong></div>
+        <div class="card"><span>狀態</span><strong>${escapeHtml(quote.status || "draft")}</strong></div>
+        <div class="card"><span>帳號 Email</span><strong>${escapeHtml(quote.accountEmail || "-")}</strong></div>
+        <div class="card"><span>建立時間</span><strong>${escapeHtml(quote.createdAt || "-")}</strong></div>
       </div>
       <h2>下一步</h2>
       <ul><li>確認方案、金額與服務範圍。</li><li>正式上線前請替換為真實金流付款頁。</li><li>付款後代理商可啟用自動報告、客戶入口與交付流程。</li></ul>
       <a class="button" href="/legal" target="_blank" rel="noreferrer">查看條款與隱私</a>
       <button class="button" id="acceptQuoteBtn" type="button" ${quote.status === "accepted" ? "disabled" : ""}>${quote.status === "accepted" ? "已接受報價" : "接受報價"}</button>
-      <div class="status ${quote.status === "accepted" ? "ok" : ""}" id="quoteStatus">${quote.status === "accepted" ? `已於 ${quote.acceptedAt || "-"} 接受。` : "接受後，代理商會收到可追蹤的 quote accepted 紀錄。"}</div>
+      <div class="status ${quote.status === "accepted" ? "ok" : ""}" id="quoteStatus">${quote.status === "accepted" ? `已於 ${escapeHtml(quote.acceptedAt || "-")} 接受。` : "接受後，代理商會收到可追蹤的 quote accepted 紀錄。"}</div>
     </article>
   </main>
   <script>
@@ -399,7 +608,7 @@ async function quoteHtml(token) {
         const response = await fetch("/api/billing/quote/accept", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token, legalVersion: "legal-2026-06-06" })
+          body: JSON.stringify({ token, legalVersion: ${JSON.stringify(legalVersion)} })
         });
         if (!response.ok) throw new Error("Accept failed");
         const data = await response.json();
@@ -447,23 +656,23 @@ async function invoiceHtml(token) {
 <body>
   <main>
     <article>
-      <p class="eyebrow">AgencyReport AI Invoice · ${invoice.invoiceNumber || invoice.id}</p>
-      <h1>${invoice.accountName || "Agency"} 發票草稿</h1>
+      <p class="eyebrow">AgencyReport AI Invoice · ${escapeHtml(invoice.invoiceNumber || invoice.id)}</p>
+      <h1>${escapeHtml(invoice.accountName || "Agency")} 發票草稿</h1>
       <p>此頁為 MVP 發票確認頁，可在正式上線時替換為會計系統、金流或電子發票服務。</p>
-      <div class="amount">${invoice.currency || "TWD"} ${amount}</div>
+      <div class="amount">${escapeHtml(invoice.currency || "TWD")} ${amount}</div>
       <div class="grid">
         <div class="card"><span>Invoice</span><strong>${invoiceLabel}</strong></div>
-        <div class="card"><span>狀態</span><strong>${invoice.status || "draft"}</strong></div>
-        <div class="card"><span>方案</span><strong>${invoice.plan || "-"}</strong></div>
-        <div class="card"><span>到期日</span><strong>${invoice.dueAt || "-"}</strong></div>
-        <div class="card"><span>帳號 Email</span><strong>${invoice.accountEmail || "-"}</strong></div>
-        <div class="card"><span>Quote</span><strong>${invoice.quoteToken || invoice.quoteId || "-"}</strong></div>
+        <div class="card"><span>狀態</span><strong>${escapeHtml(invoice.status || "draft")}</strong></div>
+        <div class="card"><span>方案</span><strong>${escapeHtml(invoice.plan || "-")}</strong></div>
+        <div class="card"><span>到期日</span><strong>${escapeHtml(invoice.dueAt || "-")}</strong></div>
+        <div class="card"><span>帳號 Email</span><strong>${escapeHtml(invoice.accountEmail || "-")}</strong></div>
+        <div class="card"><span>Quote</span><strong>${escapeHtml(invoice.quoteToken || invoice.quoteId || "-")}</strong></div>
       </div>
       <h2>付款前確認</h2>
       <ul><li>請確認方案、金額、到期日與服務範圍。</li><li>正式上線前請串接真實付款、發票與會計流程。</li><li>付款完成後即可啟用客戶入口、自動報告與交付流程。</li></ul>
       <a class="button" href="/legal" target="_blank" rel="noreferrer">查看條款與隱私</a>
       <button class="button" id="payInvoiceBtn" type="button" ${invoice.status === "paid" ? "disabled" : ""}>${invoice.status === "paid" ? "已確認付款" : "確認付款"}</button>
-      <div class="status ${invoice.status === "paid" ? "ok" : ""}" id="invoicePayStatus">${invoice.status === "paid" ? `已於 ${invoice.paidAt || "-"} 確認付款。` : "此 MVP 按鈕代表手動付款確認；正式上線時請改接金流 callback。"}</div>
+      <div class="status ${invoice.status === "paid" ? "ok" : ""}" id="invoicePayStatus">${invoice.status === "paid" ? `已於 ${escapeHtml(invoice.paidAt || "-")} 確認付款。` : "此 MVP 按鈕代表手動付款確認；正式上線時請改接金流 callback。"}</div>
     </article>
   </main>
   <script>
@@ -477,7 +686,7 @@ async function invoiceHtml(token) {
         const response = await fetch("/api/billing/invoice/pay", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token, legalVersion: "legal-2026-06-06" })
+          body: JSON.stringify({ token, legalVersion: ${JSON.stringify(legalVersion)} })
         });
         if (!response.ok) throw new Error("Pay failed");
         const data = await response.json();
@@ -690,6 +899,7 @@ function paymentStatus() {
   return {
     provider: paymentProvider,
     mode: liveReady ? "live-ready" : paymentProvider === "mock" ? "mock" : "needs_credentials",
+    launchGate: liveReady ? "ready" : "post-launch-review",
     webhookReady: paymentProvider === "stripe" ? Boolean(stripeWebhookSecret) : paymentProvider === "ecpay" ? ecpayReady : false,
     checkoutUrl: paymentProvider === "ecpay" ? ecpayCheckoutUrl : undefined,
     missing,
@@ -726,6 +936,17 @@ function ecpayCheckMacValue(payload) {
 function verifyEcpayCheckMacValue(payload) {
   if (!payload?.CheckMacValue || !ecpayHashKey || !ecpayHashIv) return false;
   return safeSecretEquals(String(payload.CheckMacValue).toUpperCase(), ecpayCheckMacValue(payload));
+}
+
+async function validateEcpayCallback(payload) {
+  if (String(payload.MerchantID || "") !== ecpayMerchantId) return false;
+  const db = await readDb();
+  const intent = db.billing_intents.find((item) =>
+    item.token === payload.CustomField1
+    && item.ecpayMerchantTradeNo === payload.MerchantTradeNo
+  );
+  if (!intent) return false;
+  return Math.round(Number(intent.amount || 0)) === Math.round(Number(payload.TradeAmt || 0));
 }
 
 function ecpayTradeNo(token) {
@@ -811,23 +1032,43 @@ function hasTrustedPaymentSignal(req, payload = {}) {
   return paymentProvider === "mock" && isLocalRequest(req);
 }
 
-function readinessReport() {
+async function databaseReadiness() {
+  if (!databaseUrl) return { ok: false, detail: "Set DATABASE_URL to PostgreSQL before paid launch." };
+  try {
+    const pool = await postgresPool();
+    await migrateLegacyStore(pool);
+    const result = await pool.query("select value from agencyreport_metadata where key = 'schema_version'");
+    const version = Number(result.rows[0]?.value || 0);
+    const count = await pool.query("select count(*)::int as count from agencyreport_records");
+    return {
+      ok: version >= postgresSchemaVersion,
+      detail: version >= postgresSchemaVersion
+        ? `PostgreSQL reachable; normalized schema v${version}; ${count.rows[0].count} records.`
+        : "PostgreSQL is reachable but normalized schema migration is incomplete.",
+    };
+  } catch (error) {
+    return { ok: false, detail: `PostgreSQL check failed: ${error.message}` };
+  }
+}
+
+async function readinessReport() {
   const payment = paymentStatus();
   const paymentOk = payment.mode === "live-ready" && payment.webhookReady;
+  const database = await databaseReadiness();
   const checks = [
     {
       id: "database",
       label: "Production database",
-      ok: Boolean(databaseUrl),
+      ok: database.ok,
       required: true,
-      detail: databaseUrl ? "DATABASE_URL configured." : "Set DATABASE_URL to PostgreSQL before paid launch.",
+      detail: database.detail,
     },
     {
       id: "auth",
       label: "Auth sessions",
       ok: true,
       required: true,
-      detail: "Password auth and bearer sessions are enabled.",
+      detail: "Password auth, HttpOnly browser sessions, and hashed server tokens are enabled.",
     },
     {
       id: "ai",
@@ -841,7 +1082,9 @@ function readinessReport() {
       label: "Email provider",
       ok: emailStatus().ready,
       required: true,
-      detail: emailStatus().ready ? `${emailProvider} email configured.` : "Set EMAIL_PROVIDER=resend, RESEND_API_KEY, and EMAIL_FROM, or use EMAIL_PROVIDER=api with EMAIL_API_URL and EMAIL_API_KEY.",
+      detail: emailStatus().ready
+        ? `${emailProvider} email configured with a production sender.`
+        : "Set Resend credentials and EMAIL_FROM on a verified custom domain; onboarding@resend.dev and example domains are not production-ready.",
     },
     {
       id: "worker",
@@ -854,10 +1097,10 @@ function readinessReport() {
       id: "payment",
       label: "Payment provider",
       ok: paymentOk,
-      required: true,
+      required: false,
       detail: paymentOk
         ? `${paymentProvider} checkout and verified return flow configured.`
-        : `Missing payment setup: ${payment.missing.join(", ")}.`,
+        : "Payment is tracked as a post-launch review item because ECPay production review requires a public live URL.",
     },
     {
       id: "connectors",
@@ -868,10 +1111,12 @@ function readinessReport() {
     },
     {
       id: "legal",
-      label: "Legal template",
-      ok: true,
-      required: false,
-      detail: "MVP legal route exists; replace with counsel-reviewed terms before paid public traffic.",
+      label: "Legal review",
+      ok: legalReviewed,
+      required: process.env.NODE_ENV === "production",
+      detail: legalReviewed
+        ? `${legalVersion} marked as reviewed.`
+        : "Review the published terms with Taiwan counsel, then set LEGAL_REVIEWED=true.",
     },
     {
       id: "backup",
@@ -992,6 +1237,10 @@ function verifyPassword(password, stored) {
   if (!salt || !hash) return false;
   const candidate = crypto.scryptSync(String(password || ""), salt, 64);
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), candidate);
+}
+
+function hashSessionToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
 }
 
 function compactPayload(payload) {
@@ -1322,12 +1571,44 @@ async function processDueSchedules() {
   return operation;
 }
 
-async function createRecord(collection, payload) {
+async function createRecord(collection, payload, ownerId = null) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
-    const record = withId(payload);
+    const record = withId({ ...payload, ownerId: ownerId || payload.ownerId || null });
     db[collection].push(record);
     db.audit_logs.push(withId({ action: `create:${collection}`, recordId: record.id }));
+    await writeDb(db);
+    return record;
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function upsertOwnedRecord(collection, payload, ownerId) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const index = payload.id ? db[collection].findIndex((item) => item.id === payload.id && item.ownerId === ownerId) : -1;
+    const now = new Date().toISOString();
+    const record = index >= 0
+      ? { ...db[collection][index], ...payload, ownerId, updatedAt: now }
+      : withId({ ...payload, ownerId, updatedAt: now });
+    if (index >= 0) db[collection][index] = record;
+    else db[collection].push(record);
+    db.audit_logs.push(withId({ action: `${index >= 0 ? "update" : "create"}:${collection}`, recordId: record.id, ownerId }));
+    await writeDb(db);
+    return record;
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function deleteOwnedRecord(collection, id, ownerId) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const index = db[collection].findIndex((item) => item.id === id && item.ownerId === ownerId);
+    if (index === -1) return null;
+    const [record] = db[collection].splice(index, 1);
+    db.audit_logs.push(withId({ action: `delete:${collection}`, recordId: id, ownerId }));
     await writeDb(db);
     return record;
   });
@@ -1410,7 +1691,7 @@ function syncSubscriptionFromPayment(db, record, source) {
 async function recordPaymentEvent(payload) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
-    const event = withId({
+    const eventPayload = {
       provider: payload.provider || paymentProvider,
       type: payload.type || payload.eventType || "payment.event",
       paymentStatus: payload.paymentStatus || payload.status || "received",
@@ -1418,7 +1699,15 @@ async function recordPaymentEvent(payload) {
       checkoutSessionId: payload.checkoutSessionId || payload.MerchantTradeNo || payload.data?.object?.id || null,
       raw: payload.raw || payload,
       receivedAt: new Date().toISOString(),
-    });
+    };
+    const duplicate = db.payment_events.find((item) =>
+      item.provider === eventPayload.provider
+      && item.type === eventPayload.type
+      && item.checkoutSessionId === eventPayload.checkoutSessionId
+      && item.paymentStatus === eventPayload.paymentStatus
+    );
+    if (duplicate) return duplicate;
+    const event = withId(eventPayload);
     db.payment_events.push(event);
     const token = event.token;
     if (token && ["checkout.session.completed", "payment_intent.succeeded", "mock.payment_succeeded", "ecpay.payment_succeeded"].includes(event.type)) {
@@ -1549,8 +1838,8 @@ async function createShareLinkRecord(payload) {
     const db = await readDb();
     const latestReport =
       payload.reportId
-        ? db.reports.find((item) => item.id === payload.reportId)
-        : [...db.reports].reverse().find((item) => !payload.clientName || item.clientName === payload.clientName);
+        ? db.reports.find((item) => item.id === payload.reportId && item.ownerId === payload.ownerId)
+        : [...db.reports].reverse().find((item) => item.ownerId === payload.ownerId && (!payload.clientName || item.clientName === payload.clientName));
     const token = payload.token || crypto.randomBytes(10).toString("hex");
     const record = withId({
       ...payload,
@@ -1572,7 +1861,10 @@ async function createShareLinkRecord(payload) {
 
 function authHeaderToken(req) {
   const header = req.headers.authorization || "";
-  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (header.startsWith("Bearer ")) return header.slice(7).trim();
+  const cookies = String(req.headers.cookie || "").split(";").map((value) => value.trim());
+  const session = cookies.find((value) => value.startsWith("agencyreport_session="));
+  return session ? decodeURIComponent(session.slice("agencyreport_session=".length)) : "";
 }
 
 function currentUsagePeriod(date = new Date()) {
@@ -1694,10 +1986,34 @@ async function currentSession(req) {
   const token = authHeaderToken(req);
   if (!token) return null;
   const db = await readDb();
-  const session = db.auth_sessions.find((item) => item.token === token && item.status !== "revoked");
+  const tokenHash = hashSessionToken(token);
+  const session = db.auth_sessions.find((item) => (item.tokenHash === tokenHash || item.token === token) && item.status !== "revoked");
   if (!session || (session.expiresAt && new Date(session.expiresAt) < new Date())) return null;
   const user = db.auth_users.find((item) => item.id === session.userId);
   return user ? { session, user } : null;
+}
+
+function oneTimeToken(hours = 1) {
+  const token = crypto.randomBytes(32).toString("hex");
+  return {
+    token,
+    tokenHash: hashSessionToken(token),
+    expiresAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+function authActionUrl(req, action, token) {
+  const origin = appBaseUrl || `http://${req.headers.host || `127.0.0.1:${port}`}`;
+  return `${origin}/?${action}=${encodeURIComponent(token)}`;
+}
+
+async function sendAuthEmail({ to, subject, body }) {
+  try {
+    const result = await sendEmailJob({ to, subject, body, html: `<p>${escapeHtml(body)}</p>` });
+    return result.status === "sent";
+  } catch {
+    return false;
+  }
 }
 
 async function createAuthUser(payload) {
@@ -1705,17 +2021,40 @@ async function createAuthUser(payload) {
     const db = await readDb();
     const email = String(payload.email || "").trim().toLowerCase();
     if (!email || !payload.password) throw new Error("Email and password are required");
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("A valid email is required");
+    if (String(payload.password).length < 10) throw new Error("Password must be at least 10 characters");
+    if (payload.legalAccepted !== true || payload.legalVersion !== legalVersion) {
+      throw new Error("You must accept the current Terms and Privacy Policy");
+    }
     if (db.auth_users.some((user) => user.email === email)) throw new Error("User already exists");
+    const verification = oneTimeToken(24);
     const user = withId({
       email,
       name: payload.name || payload.agencyName || email,
       role: "owner",
       passwordHash: hashPassword(payload.password),
+      emailVerifiedAt: null,
+      emailVerificationTokenHash: verification.tokenHash,
+      emailVerificationExpiresAt: verification.expiresAt,
+      legalVersion,
+      legalAcceptedAt: new Date().toISOString(),
+      legalAcceptedIpHash: payload.legalAcceptedIpHash || null,
+      legalAcceptedUserAgent: payload.legalAcceptedUserAgent || null,
     });
     db.auth_users.push(user);
+    db.consents.push(withId({
+      ownerId: user.id,
+      userId: user.id,
+      type: "account_terms",
+      legalVersion,
+      status: "accepted",
+      acceptedAt: user.legalAcceptedAt,
+      acceptedIpHash: user.legalAcceptedIpHash,
+      acceptedUserAgent: user.legalAcceptedUserAgent,
+    }));
     db.audit_logs.push(withId({ action: "create:auth_users", recordId: user.id }));
     await writeDb(db);
-    return user;
+    return { user, verificationToken: verification.token };
   });
   writeQueue = operation.catch(() => {});
   return operation;
@@ -1726,16 +2065,93 @@ async function createAuthSession(email, password) {
     const db = await readDb();
     const user = db.auth_users.find((item) => item.email === String(email || "").trim().toLowerCase());
     if (!user || !verifyPassword(password, user.passwordHash)) throw new Error("Invalid email or password");
+    if (user.emailVerifiedAt === null) throw new Error("EMAIL_NOT_VERIFIED");
+    const token = crypto.randomBytes(32).toString("hex");
+    db.auth_sessions = db.auth_sessions.filter((item) => !item.expiresAt || new Date(item.expiresAt) >= new Date());
     const session = withId({
       userId: user.id,
-      token: crypto.randomBytes(32).toString("hex"),
+      tokenHash: hashSessionToken(token),
       status: "active",
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
     db.auth_sessions.push(session);
     db.audit_logs.push(withId({ action: "create:auth_sessions", recordId: session.id }));
     await writeDb(db);
-    return { session, user };
+    return { session: { ...session, token }, user };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function issueEmailVerification(email) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const user = db.auth_users.find((item) => item.email === String(email || "").trim().toLowerCase());
+    if (!user || user.emailVerifiedAt) return null;
+    const verification = oneTimeToken(24);
+    user.emailVerificationTokenHash = verification.tokenHash;
+    user.emailVerificationExpiresAt = verification.expiresAt;
+    user.updatedAt = new Date().toISOString();
+    db.audit_logs.push(withId({ action: "auth:verification_requested", userId: user.id }));
+    await writeDb(db);
+    return { user, token: verification.token };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function verifyEmailAddress(token) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const tokenHash = hashSessionToken(token);
+    const user = db.auth_users.find((item) => item.emailVerificationTokenHash === tokenHash);
+    if (!user || !user.emailVerificationExpiresAt || new Date(user.emailVerificationExpiresAt) < new Date()) throw new Error("Invalid or expired verification link");
+    user.emailVerifiedAt = new Date().toISOString();
+    user.emailVerificationTokenHash = null;
+    user.emailVerificationExpiresAt = null;
+    user.updatedAt = new Date().toISOString();
+    db.audit_logs.push(withId({ action: "auth:email_verified", userId: user.id }));
+    await writeDb(db);
+    return user;
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function issuePasswordReset(email) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const user = db.auth_users.find((item) => item.email === String(email || "").trim().toLowerCase());
+    if (!user) return null;
+    const reset = oneTimeToken(1);
+    user.passwordResetTokenHash = reset.tokenHash;
+    user.passwordResetExpiresAt = reset.expiresAt;
+    user.updatedAt = new Date().toISOString();
+    db.audit_logs.push(withId({ action: "auth:password_reset_requested", userId: user.id }));
+    await writeDb(db);
+    return { user, token: reset.token };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function resetPasswordWithToken(token, password) {
+  if (String(password || "").length < 10) throw new Error("Password must be at least 10 characters");
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const tokenHash = hashSessionToken(token);
+    const user = db.auth_users.find((item) => item.passwordResetTokenHash === tokenHash);
+    if (!user || !user.passwordResetExpiresAt || new Date(user.passwordResetExpiresAt) < new Date()) throw new Error("Invalid or expired password reset link");
+    user.passwordHash = hashPassword(password);
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    user.updatedAt = new Date().toISOString();
+    db.auth_sessions.forEach((session) => {
+      if (session.userId === user.id) session.status = "revoked";
+    });
+    db.audit_logs.push(withId({ action: "auth:password_reset_completed", userId: user.id }));
+    await writeDb(db);
+    return user;
   });
   writeQueue = operation.catch(() => {});
   return operation;
@@ -1744,7 +2160,8 @@ async function createAuthSession(email, password) {
 async function revokeAuthSession(token) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
-    const index = db.auth_sessions.findIndex((item) => item.token === token);
+    const tokenHash = hashSessionToken(token);
+    const index = db.auth_sessions.findIndex((item) => item.tokenHash === tokenHash || item.token === token);
     if (index >= 0) {
       db.auth_sessions[index] = { ...db.auth_sessions[index], status: "revoked", revokedAt: new Date().toISOString() };
       db.audit_logs.push(withId({ action: "update:auth_sessions", recordId: db.auth_sessions[index].id }));
@@ -1769,7 +2186,7 @@ async function handleApi(req, res, url) {
     });
   }
   if (url.pathname === "/api/health") {
-    const readiness = readinessReport();
+    const readiness = await readinessReport();
     return json(res, 200, {
       ok: true,
       service: "AgencyReport AI API",
@@ -1805,17 +2222,18 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/readiness" && req.method === "GET") {
-    return json(res, 200, { item: readinessReport() });
+    return json(res, 200, { item: await readinessReport() });
   }
 
   if (url.pathname === "/api/legal" && req.method === "GET") {
     return json(res, 200, {
       item: {
-        version: "legal-2026-06-06",
+        version: legalVersion,
         privacyRequired: true,
         dataProcessingRequired: true,
         aiDisclosureRequired: true,
-        note: "MVP legal template. Replace with counsel-reviewed terms before paid public launch.",
+        reviewed: legalReviewed,
+        note: legalReviewed ? "Published legal version." : "Draft pending counsel review.",
       },
     });
   }
@@ -1823,9 +2241,21 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/auth/register" && req.method === "POST") {
     try {
       const payload = await readBody(req);
-      const user = await createAuthUser(payload);
-      const { session } = await createAuthSession(user.email, payload.password);
-      return json(res, 201, { item: { token: session.token, expiresAt: session.expiresAt, user: { id: user.id, email: user.email, name: user.name, role: user.role } } });
+      payload.legalAcceptedIpHash = crypto.createHash("sha256").update(clientIp(req)).digest("hex");
+      payload.legalAcceptedUserAgent = String(req.headers["user-agent"] || "").slice(0, 500);
+      const { user, verificationToken } = await createAuthUser(payload);
+      const verificationUrl = authActionUrl(req, "verify_email", verificationToken);
+      const emailSent = await sendAuthEmail({
+        to: user.email,
+        subject: "Verify your AgencyReport AI account",
+        body: `Open this link within 24 hours to verify your account: ${verificationUrl}`,
+      });
+      return json(res, 201, { item: {
+        requiresEmailVerification: true,
+        emailSent,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+        ...(process.env.NODE_ENV === "test" ? { verificationToken } : {}),
+      } });
     } catch (error) {
       const message = error.message || "Registration failed";
       const status = message === "User already exists" ? 409 : 400;
@@ -1837,9 +2267,62 @@ async function handleApi(req, res, url) {
     try {
       const payload = await readBody(req);
       const { session, user } = await createAuthSession(payload.email, payload.password);
-      return json(res, 200, { item: { token: session.token, expiresAt: session.expiresAt, user: { id: user.id, email: user.email, name: user.name, role: user.role } } });
+      return json(res, 200, { item: {
+        ...(process.env.NODE_ENV === "test" ? { token: session.token } : {}),
+        expiresAt: session.expiresAt,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      } }, { "set-cookie": sessionCookie(session.token, session.expiresAt) });
     } catch (error) {
-      return json(res, 401, { error: error.message || "Invalid email or password" });
+      const notVerified = error.message === "EMAIL_NOT_VERIFIED";
+      return json(res, notVerified ? 403 : 401, { error: notVerified ? "Email verification required" : (error.message || "Invalid email or password"), code: notVerified ? "EMAIL_NOT_VERIFIED" : "INVALID_CREDENTIALS" });
+    }
+  }
+
+  if (url.pathname === "/api/auth/verify-email" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const user = await verifyEmailAddress(payload.token);
+      return json(res, 200, { item: { verified: true, email: user.email } });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "Email verification failed", code: "VERIFY_EMAIL_FAILED" });
+    }
+  }
+
+  if (url.pathname === "/api/auth/resend-verification" && req.method === "POST") {
+    const payload = await readBody(req);
+    const issued = await issueEmailVerification(payload.email);
+    let emailSent = false;
+    if (issued) {
+      emailSent = await sendAuthEmail({
+        to: issued.user.email,
+        subject: "Verify your AgencyReport AI account",
+        body: `Open this link within 24 hours to verify your account: ${authActionUrl(req, "verify_email", issued.token)}`,
+      });
+    }
+    return json(res, 200, { item: { accepted: true, emailSent, ...(process.env.NODE_ENV === "test" && issued ? { verificationToken: issued.token } : {}) } });
+  }
+
+  if (url.pathname === "/api/auth/request-password-reset" && req.method === "POST") {
+    const payload = await readBody(req);
+    const issued = await issuePasswordReset(payload.email);
+    let emailSent = false;
+    if (issued) {
+      emailSent = await sendAuthEmail({
+        to: issued.user.email,
+        subject: "Reset your AgencyReport AI password",
+        body: `Open this link within 1 hour to reset your password: ${authActionUrl(req, "reset_password", issued.token)}`,
+      });
+    }
+    return json(res, 200, { item: { accepted: true, emailSent, ...(process.env.NODE_ENV === "test" && issued ? { resetToken: issued.token } : {}) } });
+  }
+
+  if (url.pathname === "/api/auth/reset-password" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      await resetPasswordWithToken(payload.token, payload.password);
+      return json(res, 200, { item: { reset: true } });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "Password reset failed", code: "PASSWORD_RESET_FAILED" });
     }
   }
 
@@ -1852,7 +2335,7 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {
     await revokeAuthSession(authHeaderToken(req));
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true }, { "set-cookie": clearSessionCookie() });
   }
 
   if (url.pathname === "/api/worker/run" && req.method === "POST") {
@@ -1876,7 +2359,7 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/billing/ecpay/return" && req.method === "POST") {
     const payload = await readAnyBody(req);
-    if (!verifyEcpayCheckMacValue(payload)) {
+    if (!verifyEcpayCheckMacValue(payload) || !(await validateEcpayCallback(payload))) {
       return json(res, 403, { error: "Forbidden", code: "ECPAY_CHECK_MAC_INVALID" });
     }
     const paid = String(payload.RtnCode || "") === "1";
@@ -1925,7 +2408,7 @@ async function handleApi(req, res, url) {
       checkoutUrl: payment.checkoutUrl,
       ecpayMerchantTradeNo: payment.ecpayMerchantTradeNo,
       ecpayMerchantTradeDate: payment.ecpayMerchantTradeDate,
-    });
+    }, req.auth.user.id);
     return json(res, 201, { item: intent });
   }
 
@@ -1953,7 +2436,7 @@ async function handleApi(req, res, url) {
       id: payload.id,
       acceptedBy: payload.acceptedBy || payload.email || null,
       acceptanceNote: payload.acceptanceNote || "",
-      legalVersion: payload.legalVersion || "legal-2026-06-06",
+      legalVersion: payload.legalVersion || legalVersion,
       status: "accepted",
     });
     return json(res, 200, { item: quote });
@@ -1975,7 +2458,7 @@ async function handleApi(req, res, url) {
       id: payload.id,
       invoiceNumber: payload.invoiceNumber,
       paymentMethod: payload.paymentMethod || "manual_confirmation",
-      legalVersion: payload.legalVersion || "legal-2026-06-06",
+      legalVersion: payload.legalVersion || legalVersion,
       trustedPayment: true,
       status: "paid",
     });
@@ -1988,13 +2471,13 @@ async function handleApi(req, res, url) {
       ...payload,
       status: payload.status || "delivered",
       deliveredAt: new Date().toISOString(),
-    });
+    }, req.auth.user.id);
     return json(res, 201, { item: delivery });
   }
 
   if (url.pathname === "/api/share-links" && req.method === "POST") {
     const payload = await readBody(req);
-    const link = await createShareLinkRecord(payload);
+    const link = await createShareLinkRecord({ ...payload, ownerId: req.auth.user.id });
     return json(res, 201, { item: link });
   }
 
@@ -2008,7 +2491,7 @@ async function handleApi(req, res, url) {
         payload.body ||
         `Your ${payload.reportMonth || ""} ${payload.reportType || "report"} is ready for review: ${payload.shareUrl || payload.url || ""}`.trim(),
       queuedAt: new Date().toISOString(),
-    });
+    }, req.auth.user.id);
     return json(res, 201, { item: job });
   }
 
@@ -2041,7 +2524,7 @@ async function handleApi(req, res, url) {
       ...draft,
       usageEventId: usage.eventId,
       usage,
-    });
+    }, req.auth.user.id);
     return json(res, 201, { item: run });
   }
 
@@ -2051,7 +2534,7 @@ async function handleApi(req, res, url) {
       ...payload,
       status: "active",
       nextRunAt: payload.nextRunAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    });
+    }, req.auth.user.id);
     return json(res, 201, { item: schedule });
   }
 
@@ -2093,7 +2576,8 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET") {
     const db = await readDb();
-    return json(res, 200, { items: db[collection] });
+    const items = db[collection].filter((item) => item.ownerId === req.auth.user.id);
+    return json(res, 200, { items });
   }
 
   if (req.method === "POST") {
@@ -2106,8 +2590,19 @@ async function handleApi(req, res, url) {
       });
     }
     const payload = await readBody(req);
-    const record = await createRecord(collection, payload);
+    if (collection === "reports") {
+      const record = await upsertOwnedRecord(collection, payload, req.auth.user.id);
+      return json(res, 201, { item: record });
+    }
+    const record = await createRecord(collection, payload, req.auth?.user?.id || null);
     return json(res, 201, { item: record });
+  }
+
+  if (req.method === "DELETE") {
+    const id = url.searchParams.get("id") || "";
+    if (!id) return json(res, 400, { error: "Record id is required" });
+    const record = await deleteOwnedRecord(collection, id, req.auth.user.id);
+    return record ? json(res, 200, { item: record }) : json(res, 404, { error: "Record not found" });
   }
 
   return json(res, 405, { error: "Method not allowed" });
@@ -2124,13 +2619,13 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname === "/legal") {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
-    return res.end(legalHtml());
+    return res.end(legalHtml(url.searchParams.get("lang") === "en" ? "en" : "zh"));
   }
   if (url.pathname.startsWith("/billing/quote/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await quoteHtml(token);
     if (html) {
-      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
@@ -2140,7 +2635,7 @@ async function serveStatic(req, res, url) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await ecpayCheckoutHtml(token);
     if (html) {
-      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
@@ -2148,14 +2643,14 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname === "/billing/ecpay/result") {
     const html = await ecpayResultHtml(url);
-    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+    res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
     return res.end(html);
   }
   if (url.pathname.startsWith("/billing/invoice/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await invoiceHtml(token);
     if (html) {
-      res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));

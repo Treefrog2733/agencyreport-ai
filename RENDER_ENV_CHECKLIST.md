@@ -19,6 +19,11 @@ Use this checklist before switching real traffic to `https://app.virtualtrendwor
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Optional API abuse protection window. |
 | `RATE_LIMIT_MAX` | `120` | Optional max API requests per IP per window. |
 | `AUTH_RATE_LIMIT_MAX` | `20` | Optional tighter login/register request limit. |
+| `LEGAL_VERSION` | `legal-2026-06-18` | Must match the published policy version. |
+| `LEGAL_REVIEWED` | `true` | Set only after legal review of the published version. |
+| `BACKUP_ENABLED` | `true` | Signals that the scheduled encrypted backup is active. |
+| `BACKUP_POLICY_URL` | GitHub backup workflow URL | Operational evidence for the readiness page. |
+| `MONITORING_URL` | GitHub production smoke workflow URL | Operational evidence for the readiness page. |
 | `APP_BASE_URL` | `https://app.virtualtrendworks.com` | Used for payment callback URLs. |
 | `PAYMENT_PROVIDER` | `ecpay` | Use `mock` only for local testing. |
 | `ECPAY_MODE` | `production` | Use `stage` only for ECPay test mode. |
@@ -35,6 +40,8 @@ Use this checklist before switching real traffic to `https://app.virtualtrendwor
 | --- | --- |
 | `APP_URL` | `https://app.virtualtrendworks.com` |
 | `WORKER_SECRET` | Same value as Render `WORKER_SECRET` |
+| `DATABASE_URL` | Same Supabase PostgreSQL connection string |
+| `BACKUP_ENCRYPTION_KEY` | Long random secret stored outside the repository |
 
 ## Final Verification
 
@@ -42,6 +49,7 @@ Run locally:
 
 ```bash
 npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict
+npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational --require-payment
 ```
 
 Run in GitHub Actions:

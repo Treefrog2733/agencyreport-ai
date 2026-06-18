@@ -54,14 +54,36 @@ async function main() {
         key text primary key,
         value jsonb not null,
         updated_at timestamptz not null default now()
+      );
+      create table if not exists agencyreport_records (
+        collection text not null,
+        record_id text not null,
+        owner_id text,
+        payload jsonb not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (collection, record_id)
+      );
+      create index if not exists agencyreport_records_owner_idx
+        on agencyreport_records (owner_id, collection);
+      create table if not exists agencyreport_metadata (
+        key text primary key,
+        value jsonb not null,
+        updated_at timestamptz not null default now()
       )
     `);
     const version = await pool.query("select version()");
     const store = await pool.query("select key, updated_at from agencyreport_store order by key");
+    const records = await pool.query("select collection, count(*)::int as count from agencyreport_records group by collection order by collection");
+    const schema = await pool.query("select value from agencyreport_metadata where key = 'schema_version'");
     console.log(JSON.stringify({
       ok: true,
       ssl: !isLocal && sslEnabled,
       postgres: version.rows[0].version,
+      normalized: true,
+      schemaVersion: schema.rows[0]?.value || null,
+      recordRows: records.rows.reduce((total, row) => total + row.count, 0),
+      collections: records.rows,
       storeRows: store.rowCount,
       keys: store.rows.map((row) => ({ key: row.key, updatedAt: row.updated_at })),
     }, null, 2));

@@ -1,0 +1,119 @@
+#!/usr/bin/env node
+
+const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const port = Number(process.env.SECURITY_SMOKE_PORT || 4392);
+const root = path.resolve(__dirname, "..");
+const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agencyreport-security-"));
+fs.copyFileSync(path.join(root, "server.js"), path.join(testRoot, "server.js"));
+
+const child = spawn(process.execPath, ["server.js"], {
+  cwd: testRoot,
+  windowsHide: true,
+  env: {
+    ...process.env,
+    PORT: String(port),
+    DATABASE_URL: "",
+    OPENAI_API_KEY: "",
+    AI_API_KEY: "",
+    RESEND_API_KEY: "",
+    WORKER_SECRET: "security-smoke-worker-secret",
+    NODE_ENV: "test",
+  },
+});
+
+async function waitForServer() {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+      if (response.ok) return;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error("Security test server did not start");
+}
+
+async function request(pathname, options = {}) {
+  const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`${pathname}: ${body.error || response.status}`);
+  return body.item ?? body.items ?? body;
+}
+
+async function run() {
+  await waitForServer();
+  const suffix = Date.now();
+  const password = "SecurityTest123!";
+  const emailA = `tenant-a-${suffix}@example.test`;
+  const emailB = `tenant-b-${suffix}@example.test`;
+  const noConsentResponse = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "https://attacker.example" },
+    body: JSON.stringify({ name: "No consent", email: `no-consent-${suffix}@example.test`, password }),
+  });
+  const legal = { legalAccepted: true, legalVersion: "legal-2026-06-18" };
+  const registeredA = await request("/api/auth/register", { method: "POST", body: JSON.stringify({ name: "Tenant A", email: emailA, password, ...legal }) });
+  const registeredB = await request("/api/auth/register", { method: "POST", body: JSON.stringify({ name: "Tenant B", email: emailB, password, ...legal }) });
+  await request("/api/auth/verify-email", { method: "POST", body: JSON.stringify({ token: registeredA.verificationToken }) });
+  await request("/api/auth/verify-email", { method: "POST", body: JSON.stringify({ token: registeredB.verificationToken }) });
+  const tenantA = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email: emailA, password }) });
+  const tenantB = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email: emailB, password }) });
+  const cookieLoginResponse = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: emailB, password }),
+  });
+  const sessionCookie = cookieLoginResponse.headers.get("set-cookie") || "";
+  const cookieMeResponse = await fetch(`http://127.0.0.1:${port}/api/auth/me`, {
+    headers: { cookie: sessionCookie.split(";")[0] },
+  });
+  const authA = { authorization: `Bearer ${tenantA.token}` };
+  const authB = { authorization: `Bearer ${tenantB.token}` };
+  const created = await request("/api/reports", {
+    method: "POST",
+    headers: authA,
+    body: JSON.stringify({ id: "tenant-a-report", client: "Private Client A", month: "2026-06", snapshot: { csv: "channel,spend", metrics: { roas: 3 } } }),
+  });
+  const reportsA = await request("/api/reports", { headers: authA });
+  const reportsB = await request("/api/reports", { headers: authB });
+  const resetRequest = await request("/api/auth/request-password-reset", { method: "POST", body: JSON.stringify({ email: emailA }) });
+  await request("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ token: resetRequest.resetToken, password: "NewSecurityPassword123!" }) });
+  const revokedResponse = await fetch(`http://127.0.0.1:${port}/api/reports`, { headers: authA });
+  const newLogin = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email: emailA, password: "NewSecurityPassword123!" }) });
+  const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
+  const checks = {
+    tenantASeesOwnReport: reportsA.length === 1,
+    tenantBCannotSeeTenantA: reportsB.length === 0,
+    registrationRequiresLegalConsent: noConsentResponse.status === 400,
+    apiDoesNotExposeWildcardCors: noConsentResponse.headers.get("access-control-allow-origin") !== "*",
+    reportHasOwner: created.ownerId === tenantA.user.id,
+    sessionTokensAreHashed: db.auth_sessions.every((session) => session.tokenHash && !session.token),
+    sessionCookieIsHttpOnly: /HttpOnly/i.test(sessionCookie) && /SameSite=Lax/i.test(sessionCookie),
+    sessionCookieAuthenticates: cookieMeResponse.status === 200,
+    legalConsentIsVersioned: db.consents.length === 2 && db.consents.every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),
+    passwordResetRevokesSessions: revokedResponse.status === 401,
+    passwordResetAllowsNewLogin: Boolean(newLogin.token),
+  };
+  Object.entries(checks).forEach(([name, ok]) => console.log(`${ok ? "OK" : "FAIL"} ${name}`));
+  if (Object.values(checks).some((ok) => !ok)) process.exitCode = 1;
+}
+
+run()
+  .catch((error) => {
+    console.error(`Security smoke failed: ${error.message}`);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    if (child.exitCode == null) {
+      child.kill();
+      await new Promise((resolve) => child.once("exit", resolve));
+    }
+    fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });

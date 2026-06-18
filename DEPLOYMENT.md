@@ -64,6 +64,8 @@ WORKER_SECRET=your-long-random-worker-secret
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=120
 AUTH_RATE_LIMIT_MAX=20
+LEGAL_VERSION=legal-2026-06-18
+LEGAL_REVIEWED=true
 APP_BASE_URL=https://app.virtualtrendworks.com
 PAYMENT_PROVIDER=ecpay
 ECPAY_MODE=production
@@ -164,6 +166,7 @@ The repository includes:
 ```text
 .github/workflows/worker-cron.yml
 .github/workflows/production-smoke.yml
+.github/workflows/database-backup.yml
 ```
 
 Add these GitHub repository secrets:
@@ -171,6 +174,8 @@ Add these GitHub repository secrets:
 ```text
 APP_URL=https://app.virtualtrendworks.com
 WORKER_SECRET=the-same-worker-secret-used-in-render
+DATABASE_URL=the-same-supabase-connection-string
+BACKUP_ENCRYPTION_KEY=a-long-random-secret-kept-outside-the-repository
 ```
 
 The workflow calls:
@@ -246,6 +251,7 @@ Run the same checks from your local machine:
 
 ```bash
 npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict
+npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational --require-payment
 ```
 
 The smoke test verifies:

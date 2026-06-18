@@ -125,6 +125,8 @@ WORKER_SECRET=long-random-secret
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=120
 AUTH_RATE_LIMIT_MAX=20
+LEGAL_VERSION=legal-2026-06-18
+LEGAL_REVIEWED=true
 
 APP_BASE_URL=https://app.virtualtrendworks.com
 PAYMENT_PROVIDER=ecpay
@@ -144,6 +146,7 @@ SENTRY_DSN=
 MONITORING_URL=
 BACKUP_ENABLED=true
 BACKUP_POLICY_URL=
+BACKUP_ENCRYPTION_KEY=long-random-secret
 GOOGLE_SHEETS_API_KEY=
 GOOGLE_SERVICE_ACCOUNT_JSON=
 GOOGLE_ADS_DEVELOPER_TOKEN=
@@ -293,8 +296,10 @@ The smoke test verifies:
 - sensitive files such as `.env`, `server.js`, `data/db.json`, `package.json`, and `render.yaml` are blocked
 - `/api/health` is OK
 - production storage is PostgreSQL
-- OpenAI, Resend, Worker secret, and ECPay are live-ready
+- OpenAI, Resend, and Worker secret are live-ready
+- Payment diagnostics are visible; ECPay can remain a post-launch review item until the public URL is live
 - `/api/readiness` reports all required checks as passing
+- both Traditional Chinese and English legal pages respond with a versioned policy
 
 ## Security And Launch Notes
 
@@ -313,9 +318,9 @@ Still recommended before real paid traffic:
 
 - Review privacy policy, terms, AI disclosure, refund policy, and data processing terms with counsel.
 - Verify Resend sender domain.
-- Run one ECPay production or test checkout end to end.
-- Run a backup/export procedure for Supabase data.
-- Add uptime monitoring.
+- Submit the live public URL for ECPay review, then run one ECPay production or test checkout end to end.
+- Add GitHub secrets for the encrypted backup workflow and run one restore drill.
+- Confirm the scheduled production monitor can open and close an outage issue.
 - Add error reporting such as Sentry.
 - Confirm DNS and TLS for `virtualtrendworks.com` and `app.virtualtrendworks.com`.
 
@@ -327,10 +332,13 @@ Still recommended before real paid traffic:
 - [ ] Confirm `GET /api/health` returns `storage: "postgres"`.
 - [ ] Confirm `GET /api/readiness` returns `ready: true`.
 - [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict`.
+- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational --require-payment`.
 - [ ] Register and log in through the public site.
 - [ ] Generate a report with sample CSV data.
 - [ ] Confirm free quota blocks after the limit.
 - [ ] Confirm upgrade modal opens.
+- [ ] Submit the public URL for ECPay review.
+- [ ] After ECPay approval, run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-payment`.
 - [ ] Complete one ECPay checkout test.
 - [ ] Verify email delivery.
 - [ ] Bind the custom domain and confirm TLS.
@@ -347,5 +355,9 @@ Still recommended before real paid traffic:
 - `DEPLOYMENT.md` - Render, DNS, ECPay, smoke test deployment guide.
 - `RENDER_ENV_CHECKLIST.md` - copy-paste checklist for Render env vars.
 - `scripts/db-check.js` - database connectivity check.
+- `scripts/db-migrate.js` - dry-run/apply migration from the legacy JSONB row to normalized records.
+- `scripts/db-backup.js` - encrypted PostgreSQL backup and verification.
 - `scripts/email-check.js` - email provider check.
 - `scripts/production-smoke.js` - production readiness smoke test.
+- `scripts/security-smoke.js` - tenant, session, legal-consent, and password lifecycle regression test.
+- `scripts/payment-smoke.js` - ECPay stage signature and callback regression test.

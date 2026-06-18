@@ -1,86 +1,81 @@
 # AgencyReport AI Launch Status
 
-Last updated: 2026-06-16
+Last updated: 2026-06-18
 
-## Implemented In Repository
+## Verified In Current Worktree
 
-- Public SaaS homepage and gated agency workspace.
-- Login/register/session API.
-- CSV and Google Sheets CSV import workflow.
-- AI monthly report generation with OpenAI-compatible live mode and rule fallback.
-- Free usage quota and paid-plan quota model.
-- Upgrade modal and checkout flow.
-- Starter, Agency, and Professional pricing.
-- ECPay checkout and callback signature verification.
-- Supabase/PostgreSQL support through `DATABASE_URL`.
-- Render deployment baseline through `render.yaml`.
-- Production readiness API and production smoke test.
-- Security headers, static file allowlist, sensitive file blocking, API rate limit.
-- `robots.txt`, `sitemap.xml`, deployment docs, and Render env checklist.
+- Multi-tenant ownership isolation for clients, reports, billing, usage, and audit records.
+- PostgreSQL normalized record storage (schema v2) with owner and collection indexes.
+- Legacy JSONB migration with timestamp-based cutover protection; the legacy row is preserved.
+- Supabase migration completed: 377 records migrated and schema v2 verified.
+- Encrypted AES-256-GCM + gzip database backup and restore verification tool.
+- Pre- and post-migration encrypted backups created locally.
+- Password hashing, hashed server sessions, email verification, password reset, and session revocation.
+- Production browser sessions use HttpOnly, SameSite=Lax, Secure cookies; Bearer tokens remain test/API compatible.
+- CSP, HSTS, frame blocking, sensitive-file blocking, rate limiting, and no wildcard API CORS.
+- Versioned Terms/Privacy acceptance captured with time, policy version, IP hash, and user agent.
+- Traditional Chinese and English legal pages.
+- Complete English workspace smoke gate: visible CJK text fails the test.
+- Desktop English, mobile English, and mobile Traditional Chinese workspace tests pass with no horizontal overflow.
+- ECPay stage smoke passes signed checkout, forged callback rejection, signed wrong-amount rejection, valid callback, and trusted paid-state update.
+- Security smoke passes tenant isolation, session, legal-consent, and password-reset checks.
+- Local production smoke correctly fails the email readiness gate while the sender is still the temporary Resend domain.
+- Dependency audit reports 0 known production vulnerabilities.
 
-## Needs External Verification
+## Automated Operations Added
 
-- Latest changes pushed to GitHub. Latest deploy-ready commit: `bede8b9`.
-- Render redeploy completed from the latest commit.
-- Render environment variables match `RENDER_ENV_CHECKLIST.md`.
-- `GET /api/health` on production returns `storage: "postgres"`. Verified on `https://agencyreport-ai.onrender.com/api/health`.
-- `GET /api/readiness` on production returns `ready: true`.
-- `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict` passes.
-- Resend sender domain is verified.
-- ECPay test or production checkout succeeds end to end.
-- `virtualtrendworks.com` and `app.virtualtrendworks.com` DNS records point to Render.
-- TLS certificate is active on the custom domain.
+- Daily production smoke workflow with an outage issue opened on failure and closed on recovery.
+- Daily encrypted PostgreSQL backup workflow with 30-day artifact retention.
+- Database commands:
 
-## Latest Production Smoke
+  ```bash
+  npm run db:check
+  npm run db:migrate
+  npm run db:migrate -- --apply
+  npm run db:backup
+  node scripts/db-backup.js --verify <backup-file>
+  ```
 
-Target tested: `https://agencyreport-ai.onrender.com`
+- Verification commands:
 
-Result: 32/35 passed.
+  ```bash
+  npm run smoke:security
+  npm run smoke:payment
+  npm run smoke:workspace -- --lang en
+  npm run smoke:prod -- --url <url> --strict
+  npm run smoke:prod -- --url <url> --strict --require-operational --require-payment
+  ```
 
-Passing:
+## External Launch Blockers
 
-- Homepage responds and has no known mojibake.
-- Security headers are present on homepage, robots, sitemap, and health endpoint.
-- `robots.txt` and `sitemap.xml` respond.
-- Sensitive files are blocked.
-- PostgreSQL storage is active.
-- OpenAI is live-ready.
-- Resend is live-ready.
-- Worker secret is configured.
+1. Push this worktree and allow Render to deploy the new commit.
+2. Add `app.virtualtrendworks.com` as a Render custom domain.
+3. In Cloudflare, add `CNAME app -> agencyreport-ai.onrender.com` as DNS-only until Render provisions TLS.
+4. Add and verify `reports.virtualtrendworks.com` in Resend, then set:
 
-Failing:
+   ```env
+   EMAIL_FROM=AgencyReport AI <hello@reports.virtualtrendworks.com>
+   ```
 
-- Payment provider is still `mock`.
-- `/api/readiness` reports `ready: false`.
-- Required readiness check `payment` fails.
-- Newer backend builds return `payment.missing` and a detailed readiness message showing the exact missing payment environment variables.
+   The current sender is `onboarding@resend.dev` and is intentionally rejected by the new production readiness gate.
+5. Have the published `legal-2026-06-18` draft reviewed for Taiwan paid SaaS use, then set `LEGAL_REVIEWED=true`.
+6. Add GitHub secrets `APP_URL`, `WORKER_SECRET`, `DATABASE_URL`, and `BACKUP_ENCRYPTION_KEY`.
+7. After the public URL is reachable, submit it to ECPay and add the production merchant credentials in Render.
 
-Required next Render environment variables:
+## Current DNS And Provider Evidence
 
-```env
-PAYMENT_PROVIDER=ecpay
-ECPAY_MODE=production
-ECPAY_MERCHANT_ID=...
-ECPAY_HASH_KEY=...
-ECPAY_HASH_IV=...
-ECPAY_RETURN_URL=https://app.virtualtrendworks.com/api/billing/ecpay/return
-ECPAY_ORDER_RESULT_URL=https://app.virtualtrendworks.com/billing/ecpay/result
-ECPAY_CLIENT_BACK_URL=https://app.virtualtrendworks.com
-```
+- `virtualtrendworks.com` nameservers: Cloudflare (`june.ns.cloudflare.com`, `louis.ns.cloudflare.com`).
+- `app.virtualtrendworks.com`: not resolved as of 2026-06-18.
+- Resend API key: send-only; it cannot create or inspect domains.
+- Local runtime sender: `AgencyReport AI <onboarding@resend.dev>`.
+- Local payment provider: `mock`; production ECPay credentials are not present locally.
 
-Current custom domain status:
+## Final Go-Live Gate
 
-- `https://app.virtualtrendworks.com/api/health` does not resolve yet.
-- Add the Render custom domain and DNS record before running the custom-domain smoke test.
-
-## Current Known Limitation
-
-The local HTTP regression check could not be completed in an earlier Codex tool session because the command runner reported a usage-limit rejection. Static checks passed:
+Do not call the system fully production-ready until this passes:
 
 ```bash
-node --check server.js
-node --check app.js
-node --check scripts/production-smoke.js
+npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational --require-payment
 ```
 
-Run the production smoke test after pushing and redeploying to verify the runtime behavior.
+Also complete one real low-value ECPay transaction, receive one verification/reset email from the verified domain, and restore one encrypted backup into a disposable PostgreSQL database.

@@ -34,7 +34,7 @@ const state = {
   rows: [],
   metrics: null,
   ai: null,
-  reports: JSON.parse(localStorage.getItem("agencyReportReports") || "[]"),
+  reports: [],
   clients: JSON.parse(localStorage.getItem("agencyReportClients") || "[]"),
   deliveries: JSON.parse(localStorage.getItem("agencyReportDeliveries") || "[]"),
   invoices: JSON.parse(localStorage.getItem("agencyReportInvoices") || "[]"),
@@ -124,7 +124,12 @@ const copy = {
     aiWorkOrderCopy: "把客戶需求、CSV 指標與最佳/最弱渠道送給後端 AI。",
     businessType: "產業",
     automationLevel: "自動化程度",
-    deliveryEmail: "交付 Email",
+    deliveryCenterTitle: "交付中心",
+    deliveryCenterCopy: "匯出客戶報告，並在完成交付後留下紀錄。",
+    deliveryEmail: "客戶 Email（選填）",
+    exportHtml: "下載 HTML",
+    exportPdf: "匯出 PDF",
+    markDelivered: "記錄已交付",
     savedReports: "已存報告",
     latestReport: "最新月份",
     saveReport: "儲存目前報告",
@@ -133,13 +138,11 @@ const copy = {
     accountName: "帳戶名稱",
     selectedPlan: "選擇方案",
     checkoutStatus: "付款狀態",
-    createInvoice: "建立發票",
     clientCount: "客戶數",
     reportUsage: "報告用量",
     consentData: "客戶同意資料用於月報分析",
     consentAi: "客戶同意使用 AI 產生建議",
     consentDelivery: "客戶同意 Email / PDF / HTML 交付",
-    saveConsent: "儲存同意",
     healthScoreLabel: "健康分數",
     executiveSummary: "執行摘要",
     executiveSummaryCopy: "AI 會將本月成效濃縮成客戶看得懂的重點。",
@@ -232,7 +235,12 @@ const copy = {
     aiWorkOrderCopy: "Send client needs, CSV metrics, and best/worst channels to backend AI.",
     businessType: "Industry",
     automationLevel: "Automation level",
-    deliveryEmail: "Delivery Email",
+    deliveryCenterTitle: "Delivery",
+    deliveryCenterCopy: "Export the client report and record it after delivery.",
+    deliveryEmail: "Client email (optional)",
+    exportHtml: "Download HTML",
+    exportPdf: "Export PDF",
+    markDelivered: "Mark delivered",
     savedReports: "Saved reports",
     latestReport: "Latest month",
     saveReport: "Save current report",
@@ -241,13 +249,11 @@ const copy = {
     accountName: "Account name",
     selectedPlan: "Selected plan",
     checkoutStatus: "Checkout status",
-    createInvoice: "Create invoice",
     clientCount: "Clients",
     reportUsage: "Report usage",
     consentData: "Client approved data processing for report analysis",
     consentAi: "Client approved AI-generated recommendations",
     consentDelivery: "Client approved Email / PDF / HTML delivery",
-    saveConsent: "Save consent",
     healthScoreLabel: "Health score",
     executiveSummary: "Executive summary",
     executiveSummaryCopy: "AI condenses the month into client-readable points.",
@@ -292,33 +298,201 @@ async function api(path, options = {}) {
     error.details = body.item;
     throw error;
   }
-  return body.item ?? body;
+  return body.item ?? body.items ?? body;
 }
 
 function applyLanguage(lang = state.lang) {
   state.lang = lang === "en" ? "en" : "zh";
   localStorage.setItem("agencyReportLang", state.lang);
   document.documentElement.lang = state.lang === "en" ? "en" : "zh-Hant";
+  if ($("#authStatus")) $("#authStatus").innerHTML = "";
   $$("[data-lang]").forEach((button) => button.classList.toggle("active", button.dataset.lang === state.lang));
   $$("[data-i18n]").forEach((node) => {
     const key = node.dataset.i18n;
     if (copy[state.lang][key]) node.textContent = copy[state.lang][key];
   });
+  const clientName = $("#clientName");
+  if (clientName) {
+    if (state.lang === "en" && clientName.value === "晨光牙醫診所") clientName.value = "Morning Light Dental Clinic";
+    if (state.lang !== "en" && clientName.value === "Morning Light Dental Clinic") clientName.value = "晨光牙醫診所";
+  }
   const heroTitle = $("#heroTitle");
   if (heroTitle) {
     heroTitle.innerHTML = state.lang === "en"
       ? "Stop writing reports.<br />Send them instead."
       : '<span class="title-line"><span class="title-word title-word-a">別再</span><span class="title-word title-word-b">寫報告了，</span></span><span class="title-line"><span class="title-word title-word-c">直接</span><span class="title-word title-word-d">發送報告吧。</span></span>';
   }
-  const labels = state.lang === "en"
-    ? ["Overview", "Case setup", "Data import", "Report preview", "AI advice", "Delivery & payment", "Usage plan", "Settings"]
-    : ["總覽首頁", "案件設定", "資料匯入", "報告預覽", "AI 建議", "交付付款", "用量方案", "設定"];
-  $$("[data-workspace-view]").forEach((button, index) => {
-    if (labels[index]) button.textContent = labels[index];
+  const workspaceLabels = state.lang === "en" ? {
+    overview: ["AI assistant", "Add data and analyze automatically"],
+    case: ["Case details", "Client and report month"],
+    data: ["Data review", "Sources and data quality"],
+    report: ["Report results", "KPI, charts, and summary"],
+    ai: ["AI advice", "Risks and next actions"],
+    delivery: ["Deliver report", "Email and delivery records"],
+    settings: ["Privacy settings", "Consent and audit records"],
+  } : {
+    overview: ["AI 助手", "加入資料並自動分析"],
+    case: ["案件資料", "客戶與報告月份"],
+    data: ["資料檢查", "來源與數據品質"],
+    report: ["報告結果", "KPI、圖表與摘要"],
+    ai: ["AI 建議", "風險與下月行動"],
+    delivery: ["交付報告", "Email 與交付紀錄"],
+    settings: ["隱私設定", "同意與稽核紀錄"],
+  };
+  $$("[data-workspace-view]").forEach((button) => {
+    const label = workspaceLabels[button.dataset.workspaceView];
+    if (!label) return;
+    const title = button.querySelector("span");
+    const description = button.querySelector("small");
+    if (title) title.textContent = label[0];
+    else button.textContent = label[0];
+    if (description) description.textContent = label[1];
   });
   syncDockLanguageLabels();
+  translateStaticWorkspace();
   renderUpgradePlans();
   if (state.metrics) renderReport();
+}
+
+function translateStaticWorkspace() {
+  const zh = state.lang !== "en";
+  const apply = (selector, zhText, enText) => setText(selector, zh ? zhText : enText);
+  const optionText = (selector, values) => {
+    const select = $(selector);
+    if (!select) return;
+    [...select.options].forEach((option, index) => { if (values[index]) option.textContent = values[index]; });
+  };
+
+  apply(".workspace-sidebar-head strong", "月報工作區", "Monthly report workspace");
+  apply(".workspace-sidebar-head p", "三個步驟，從資料到客戶交付。", "Three steps from data to client delivery.");
+  apply(".ai-intake-panel .panel-head h2", "AI 匯入助手", "AI import assistant");
+  apply(".ai-intake-panel .panel-head p", "直接描述需求或加入資料，AI 會整理案件、辨識數據並產生月報。", "Describe the request or add data. AI will structure the case, identify metrics, and generate the report.");
+  apply(".assistant-badge", "AI 線上", "AI online");
+  apply(".ai-chat-message:first-child .ai-chat-bubble strong", "您好，我可以幫您建立月報", "Hello, I can build your monthly report");
+  apply(".ai-chat-message:first-child .ai-chat-bubble p", "請貼上客戶需求、CSV、Google Sheets 或資料網址。我會自動辨識客戶、月份、KPI 與渠道資料。", "Paste client requirements, CSV, Google Sheets, or a data URL. I will identify the client, month, KPIs, and channel data.");
+  apply('[data-ai-prompt*="ROAS"]', "分析廣告成效", "Analyze ad performance");
+  apply('[data-ai-prompt*="客戶可以直接閱讀"]', "產生客戶月報", "Generate client report");
+  apply("#aiIntakeAnalysisTitle", "資料已分析完成", "Analysis complete");
+  apply("#aiIntakeAnalysisCopy", "我已辨識並套用以下內容：", "I identified and applied the following:");
+  apply("#aiIntakeNextBtn", "查看報告結果", "View report results");
+  apply("#aiAttachLabel", "加入檔案", "Add file");
+  apply("#aiIntakeFileName", "尚未選擇檔案", "No file selected");
+  apply("#aiUseDemoBriefBtn", "使用範例", "Use example");
+  apply("#aiAnalyzeApplyBtn span", "送出並分析", "Send and analyze");
+  apply(".ai-advanced-tools summary", "進階手動調整", "Advanced manual adjustments");
+  apply('label[for="aiIntakePrompt"]', "輸入需求、資料或網址", "Enter requirements, data, or a URL");
+
+  apply(".overview-status-card h2", "案件狀態", "Case status");
+  apply(".overview-status-card .panel-head p", "用代理商能理解的方式，看目前卡在哪裡。", "See exactly what is ready and what still needs attention.");
+  const overviewStatusLabels = zh ? ["案件", "資料", "AI", "交付"] : ["Case", "Data", "AI", "Delivery"];
+  $$(".overview-status-grid > div > span").forEach((node, index) => {
+    if (overviewStatusLabels[index]) node.textContent = overviewStatusLabels[index];
+  });
+  apply('[data-workspace-group="overview"] > .panel:last-child h2', "最近報告與用量", "Recent reports and usage");
+  apply('[data-workspace-group="overview"] > .panel:last-child .panel-head p', "查看最近產出的報告、AI 用量與付款狀態。", "Review recent reports, AI usage, and payment status.");
+
+  const manualButtons = $$('[data-manual-view]');
+  const manualCopy = zh
+    ? [["案件資料", "修正客戶、月份與報告條件"], ["資料來源", "檢查 CSV、Sheets 與原始數據"], ["隱私設定", "管理同意與稽核紀錄"]]
+    : [["Case details", "Adjust client, month, and report settings"], ["Data sources", "Review CSV, Sheets, and source data"], ["Privacy", "Manage consent and audit records"]];
+  manualButtons.forEach((button, index) => {
+    if (!manualCopy[index]) return;
+    const [title, copyText] = manualCopy[index];
+    if (button.querySelector("span")) button.querySelector("span").textContent = title;
+    if (button.querySelector("small")) button.querySelector("small").textContent = copyText;
+  });
+
+  apply('[data-workspace-group="case"] .panel:first-child h2', "案件設定", "Case settings");
+  apply('[data-workspace-group="case"] .panel:first-child .panel-head p', "輸入一份月報所需的最少資料。", "Enter only the information required for a monthly report.");
+  apply("#saveClientBtn", "建立案件", "Create case");
+  apply('[data-workspace-group="case"] .panel:nth-child(2) h2', "客戶檔案", "Client records");
+  apply('[data-workspace-group="case"] .panel:nth-child(2) .panel-head p', "目前案件與報告用量。", "Current cases and report usage.");
+  optionText("#reportType", zh ? ["廣告月報", "SEO 月報", "社群月報"] : ["Advertising report", "SEO report", "Social report"]);
+  optionText("#tone", zh ? ["高層摘要", "顧問式", "直接明確"] : ["Executive", "Consultative", "Direct"]);
+
+  apply('[data-workspace-group="data"] .panel:nth-child(2) h2', "資料來源狀態", "Data source status");
+  apply("#saveSourceBtn", "儲存資料來源", "Save data source");
+  apply("#testSourceBtn", "測試來源", "Test source");
+  apply("#insertCsvTemplateBtn", "貼上 CSV 範本", "Insert CSV template");
+  apply("#downloadSampleBtn", "下載範例 CSV", "Download sample CSV");
+  apply("#quickAdsBtn", "廣告範例", "Ads example");
+  apply("#quickSeoBtn", "SEO 範例", "SEO example");
+  apply("#quickSocialBtn", "社群範例", "Social example");
+
+  apply('[data-workspace-group="report"] > .panel:first-child h2', "報告預覽", "Report preview");
+  apply('[data-workspace-group="report"] > .panel:first-child .panel-head p', "把產出的月報獨立閱讀，確認摘要、圖表、KPI 與客戶說明稿。", "Review the report, summary, charts, KPIs, and client wording in one place.");
+  const reportMetricLabels = zh ? ["報告月份", "報告狀態"] : ["Report month", "Report status"];
+  $$(".report-preview-hub .metric-row > div > span").forEach((node, index) => {
+    if (reportMetricLabels[index]) node.textContent = reportMetricLabels[index];
+  });
+  apply("#reportPreviewGenerateBtn", "產生 / 更新月報", "Generate / update report");
+  apply("#reportPreviewJumpBtn", "查看完整報告", "View full report");
+  apply('[data-workspace-group="report"] > .panel:nth-child(2) h2', "客戶可讀摘要", "Client-ready summary");
+  apply('[data-workspace-group="report"] > .panel:nth-child(2) .panel-head p', "用簡短文字先講結論，再讓圖表與表格補充細節。", "Lead with the conclusion, then support it with charts and tables.");
+  apply('[data-workspace-group="report"] > .panel:nth-child(3) h2', "交付檢查", "Delivery checklist");
+  apply('[data-workspace-group="report"] > .panel:nth-child(3) .panel-head p', "每份月報都要回答客戶最常問的四件事。", "Answer the four questions clients ask most often.");
+
+  apply('[data-workspace-group="ai"] > .panel:nth-child(2) h2', "AI 建議輸出", "AI recommendations");
+  apply('[data-workspace-group="ai"] > .panel:nth-child(2) .panel-head p', "摘要、風險、行動與客戶說明稿分開檢查，方便直接交付。", "Review the summary, risks, actions, and client message before delivery.");
+  const aiOutputLabels = zh ? ["摘要", "主要風險", "下月行動", "客戶說明稿"] : ["Summary", "Main risks", "Next actions", "Client message"];
+  $$(".ai-output-block > span").forEach((node, index) => {
+    if (aiOutputLabels[index]) node.textContent = aiOutputLabels[index];
+  });
+  apply('[data-workspace-group="ai"] > .panel:last-child .panel-head p', "用 AI 產出下一步與客戶回覆草稿。", "Use AI to draft next steps and a client response.");
+  apply("#runBackendAiBtn", "執行 AI 分析", "Run AI analysis");
+  apply("#runAutopilotBtn", "AI 解析需求", "Analyze requirements");
+  optionText("#businessType", zh ? ["在地服務", "電商", "B2B"] : ["Local service", "E-commerce", "B2B"]);
+
+  apply('[data-workspace-group="delivery"] > .panel:nth-child(2) h2', "報告資料庫", "Report library");
+  apply('[data-workspace-group="delivery"] > .panel:nth-child(2) .panel-head p', "保存可重複交付的月報。", "Save reports for future review and delivery.");
+  apply("#saveAccountBtn", "儲存帳戶", "Save account");
+  apply("#createCheckoutBtn", "建立付款連結", "Create checkout link");
+  optionText("#planSelect", zh ? ["入門版", "代理商版", "專業版"] : ["Starter", "Agency", "Professional"]);
+
+  apply('[data-workspace-group="settings"] h2', "信任與設定", "Trust and settings");
+  apply('[data-workspace-group="settings"] .panel-head p', "管理同意、稽核紀錄與本機資料。", "Manage consent, audit records, and local data.");
+  const auditLabels = zh ? ["稽核紀錄", "狀態"] : ["Audit records", "Status"];
+  $$('[data-workspace-group="settings"] .metric-row > div > span').forEach((node, index) => {
+    if (auditLabels[index]) node.textContent = auditLabels[index];
+  });
+  apply("#refreshAuditBtn", "更新稽核", "Refresh audit");
+
+  apply("#reportCommandScoreLabel", "報告健康度", "Report health");
+  apply("#reportCommandQualityLabel", "資料品質", "Data quality");
+  apply("#reportCommandAiLabel", "AI 狀態", "AI status");
+  apply("#reportCommandGeneratedLabel", "最後產生", "Last generated");
+  apply(".executive-section h3", "執行摘要", "Executive summary");
+  apply(".kpi-section h3", "關鍵績效指標總覽", "KPI overview");
+  apply(".report-chart-heading h4", "數據趨勢與渠道表現", "Performance trends and channels");
+  apply(".findings-section h3", "數據洞察與原因分析", "Findings and insights");
+  apply(".action-section h3", "下月優化與行動計畫", "Next-month action plan");
+  apply(".finding-card.positive > span", "表現亮點", "Highlights");
+  apply(".finding-card.positive > h4", "為何表現良好", "Why performance improved");
+  apply(".finding-card.warning > span", "關注項目", "Risks");
+  apply(".finding-card.warning > h4", "為何需要改善", "Why performance needs work");
+  const actionCards = $$(".action-plan-grid > article");
+  const actionCopy = zh
+    ? [["預算分配", "把資源放到有效渠道"], ["素材測試", "建立可驗證的創意假設"], ["執行清單", "下月具體行動"]]
+    : [["Budget allocation", "Move resources to effective channels"], ["Creative testing", "Build testable creative hypotheses"], ["Execution checklist", "Concrete actions for next month"]];
+  actionCards.forEach((card, index) => {
+    if (!actionCopy[index]) return;
+    card.querySelector("span").textContent = actionCopy[index][0];
+    card.querySelector("h4").textContent = actionCopy[index][1];
+  });
+
+  $("#clientRequest")?.setAttribute("placeholder", zh ? "例如：想知道本月 CPA、ROAS、Google Ads 與 Meta 表現，並需要下月預算建議。" : "Example: Review CPA, ROAS, Google Ads, and Meta performance, then recommend next month's budget.");
+  $("#aiIntakePrompt")?.setAttribute("placeholder", zh ? "貼上需求、CSV、Google Sheets 或資料網址..." : "Paste requirements, CSV, Google Sheets, or a data URL...");
+  $("#authPassword")?.setAttribute("placeholder", zh ? "至少 10 個字元" : "At least 10 characters");
+  $("#authResetPassword")?.setAttribute("placeholder", zh ? "至少 10 個字元" : "At least 10 characters");
+  apply("#forgotPasswordBtn", "忘記密碼？", "Forgot password?");
+  apply("#resendVerificationBtn", "重新寄送驗證信", "Resend verification email");
+  apply("#authLegalConsentCopy", "建立帳號即表示我同意", "By creating an account, I agree to the");
+  apply("#authLegalLink", "服務條款與隱私政策", "Terms and Privacy Policy");
+  $("#authLegalLink")?.setAttribute("href", state.lang === "en" ? "/legal?lang=en" : "/legal");
+  $("#closeAuthBtn")?.setAttribute("aria-label", zh ? "關閉" : "Close");
+  $("#upgradeCloseBtn")?.setAttribute("aria-label", zh ? "關閉" : "Close");
+  apply("#closeLegalBtn", "關閉", "Close");
+  apply("#resetPasswordBtn", "更新密碼", "Update password");
 }
 
 function applyTheme(theme = state.theme) {
@@ -332,10 +506,9 @@ function applyTheme(theme = state.theme) {
 
 function syncDockLanguageLabels() {
   const zh = state.lang !== "en";
-  setText("#dockProfileLabel", zh ? "個人檔案" : "Profile");
+  setText("#dockProfileLabel", zh ? "帳戶與隱私" : "Account & privacy");
   setText("#dockUsageLabel", zh ? "剩餘用量" : "Remaining usage");
-  setText("#dockUpgradeLabel", zh ? "升級 Pro" : "Upgrade Pro");
-  setText("#dockResetLabel", zh ? "可用重設" : "Available reset");
+  setText("#dockUpgradeLabel", zh ? "目前方案" : "Current plan");
   setText("#dockInviteLabel", zh ? "邀請好友" : "Invite");
   setText("#dockLogoutLabel", zh ? "登出" : "Sign out");
   setText("#billingPlanLabel", zh ? "目前方案" : "Current plan");
@@ -348,6 +521,7 @@ function syncDockLanguageLabels() {
 function setAuthState(auth) {
   state.auth = auth;
   if (auth?.token) localStorage.setItem("agencyReportAuthToken", auth.token);
+  else if (auth) localStorage.removeItem("agencyReportAuthToken");
   const isAuthed = Boolean(state.auth);
   document.documentElement.classList.toggle("public-landing", !isAuthed);
   $("#overviewHome").hidden = isAuthed;
@@ -358,8 +532,29 @@ function setAuthState(auth) {
   if (isAuthed) {
     openWorkspace("overview");
     refreshUsage();
+    syncReportsFromServer();
     renderWorkspace();
   }
+}
+
+function reportCacheKey() {
+  return state.auth?.user?.id ? `agencyReportReports:${state.auth.user.id}` : "agencyReportReports:guest";
+}
+
+function cacheReports() {
+  localStorage.setItem(reportCacheKey(), JSON.stringify(state.reports));
+}
+
+async function syncReportsFromServer() {
+  if (!authToken()) return;
+  try {
+    const items = await api("/api/reports");
+    state.reports = Array.isArray(items) ? items : [];
+    cacheReports();
+  } catch {
+    state.reports = JSON.parse(localStorage.getItem(reportCacheKey()) || "[]");
+  }
+  renderWorkspace();
 }
 
 function showAuthGate() {
@@ -383,22 +578,93 @@ async function submitAuth(event) {
     setStatus("#authStatus", "ok", state.lang === "en" ? "Signed in" : "已登入", auth.user?.email || payload.email);
     setAuthState(auth);
   } catch (error) {
+    $("#resendVerificationBtn").hidden = error.code !== "EMAIL_NOT_VERIFIED";
     setStatus("#authStatus", "error", state.lang === "en" ? "Sign in failed" : "登入失敗", error.message);
   }
 }
 
 async function registerAuth() {
-  const payload = {
-    name: $("#authName").value.trim() || "AgencyReport AI",
-    email: $("#authEmail").value.trim(),
-    password: $("#authPassword").value,
-  };
+  if (!$("#authLegalConsent")?.checked) {
+    return setStatus(
+      "#authStatus",
+      "warning",
+      state.lang === "en" ? "Terms acceptance required" : "請先同意服務條款",
+      state.lang === "en" ? "Read and accept the Terms and Privacy Policy before creating an account." : "建立帳號前請閱讀並勾選服務條款與隱私政策。"
+    );
+  }
   try {
+    const legal = await api("/api/legal", { method: "GET" });
+    const payload = {
+      name: $("#authName").value.trim() || "AgencyReport AI",
+      email: $("#authEmail").value.trim(),
+      password: $("#authPassword").value,
+      legalAccepted: true,
+      legalVersion: legal.version,
+    };
     const auth = await api("/api/auth/register", { method: "POST", body: JSON.stringify(payload) });
-    setStatus("#authStatus", "ok", state.lang === "en" ? "Account created" : "帳號已建立", auth.user?.email || payload.email);
-    setAuthState(auth);
+    $("#resendVerificationBtn").hidden = false;
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Check your email" : "請前往信箱完成驗證", auth.emailSent ? (state.lang === "en" ? "The verification link is valid for 24 hours." : "驗證連結將於 24 小時後失效。") : (state.lang === "en" ? "The account was created, but email delivery is not ready. Try resend after email setup." : "帳號已建立，但驗證信尚未成功寄出；完成寄件設定後可重新寄送。"));
   } catch (error) {
     setStatus("#authStatus", "error", state.lang === "en" ? "Registration failed" : "建立帳號失敗", error.message);
+  }
+}
+
+async function resendVerificationEmail() {
+  const email = $("#authEmail").value.trim();
+  if (!email) return setStatus("#authStatus", "warning", state.lang === "en" ? "Enter your email" : "請先輸入 Email");
+  try {
+    await api("/api/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) });
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Verification email requested" : "已重新申請驗證信", state.lang === "en" ? "Check your inbox and spam folder." : "請檢查收件匣與垃圾郵件匣。" );
+  } catch (error) {
+    setStatus("#authStatus", "error", state.lang === "en" ? "Unable to resend" : "無法重新寄送", error.message);
+  }
+}
+
+async function requestPasswordReset() {
+  const email = $("#authEmail").value.trim();
+  if (!email) return setStatus("#authStatus", "warning", state.lang === "en" ? "Enter your email" : "請先輸入 Email");
+  try {
+    await api("/api/auth/request-password-reset", { method: "POST", body: JSON.stringify({ email }) });
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Reset email requested" : "已申請密碼重設信", state.lang === "en" ? "If the account exists, a reset link will arrive shortly." : "若帳號存在，重設連結將寄至該信箱。" );
+  } catch (error) {
+    setStatus("#authStatus", "error", state.lang === "en" ? "Reset request failed" : "申請重設失敗", error.message);
+  }
+}
+
+async function completePasswordReset() {
+  const token = $("#authResetPanel").dataset.token || "";
+  const password = $("#authResetPassword").value;
+  try {
+    await api("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) });
+    $("#authResetPanel").hidden = true;
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Password updated" : "密碼已更新", state.lang === "en" ? "Sign in with your new password." : "請使用新密碼登入。" );
+    history.replaceState({}, "", location.pathname);
+  } catch (error) {
+    setStatus("#authStatus", "error", state.lang === "en" ? "Password reset failed" : "密碼更新失敗", error.message);
+  }
+}
+
+async function processAuthActionLinks() {
+  const params = new URLSearchParams(location.search);
+  const verificationToken = params.get("verify_email");
+  const resetToken = params.get("reset_password");
+  if (verificationToken) {
+    showAuthGate();
+    try {
+      await api("/api/auth/verify-email", { method: "POST", body: JSON.stringify({ token: verificationToken }) });
+      setStatus("#authStatus", "ok", state.lang === "en" ? "Email verified" : "Email 驗證完成", state.lang === "en" ? "You can now sign in." : "現在可以登入工作台。" );
+      $("#resendVerificationBtn").hidden = true;
+    } catch (error) {
+      setStatus("#authStatus", "error", state.lang === "en" ? "Verification failed" : "驗證失敗", error.message);
+    }
+    history.replaceState({}, "", location.pathname);
+  }
+  if (resetToken) {
+    showAuthGate();
+    $("#authResetPanel").hidden = false;
+    $("#authResetPanel").dataset.token = resetToken;
+    $("#authResetPassword").focus();
+    setStatus("#authStatus", "ok", state.lang === "en" ? "Choose a new password" : "請設定新密碼", state.lang === "en" ? "Use at least 10 characters." : "密碼至少需要 10 個字元。" );
   }
 }
 
@@ -406,9 +672,12 @@ async function logoutAuth() {
   try { await api("/api/auth/logout", { method: "POST", body: "{}" }); } catch {}
   localStorage.removeItem("agencyReportAuthToken");
   state.auth = null;
+  state.reports = [];
   $("#overviewHome").hidden = false;
   $("#caseWorkspace").hidden = true;
   $("#report").hidden = true;
+  $("#landingLoginBtn").hidden = false;
+  $("#landingStartBtn").hidden = false;
   $("#logoutBtn").hidden = true;
   document.documentElement.classList.add("public-landing");
 }
@@ -417,7 +686,30 @@ function setStatus(selector, type, title, body = "") {
   const node = $(selector);
   if (!node) return;
   node.className = `status-panel ${type || ""}`.trim();
-  node.innerHTML = body ? `<strong>${title}</strong><span>${body}</span>` : `<strong>${title}</strong>`;
+  node.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  node.appendChild(heading);
+  if (body) {
+    const detail = document.createElement("span");
+    detail.textContent = body;
+    node.appendChild(detail);
+  }
+}
+
+function renderSafePointList(selector, items, label) {
+  const node = $(selector);
+  if (!node) return;
+  node.replaceChildren();
+  (Array.isArray(items) ? items : []).forEach((item, index) => {
+    const row = document.createElement("div");
+    const badge = document.createElement("span");
+    badge.textContent = label || String(index + 1).padStart(2, "0");
+    const content = document.createElement("strong");
+    content.textContent = String(item || "");
+    row.append(badge, content);
+    node.appendChild(row);
+  });
 }
 
 function openWorkspace(view) {
@@ -425,21 +717,19 @@ function openWorkspace(view) {
   const current = allowed.has(view) ? view : "overview";
   $$("[data-workspace-view]").forEach((button) => button.classList.toggle("active", button.dataset.workspaceView === current));
   $$("[data-workspace-group]").forEach((section) => { section.hidden = section.dataset.workspaceGroup !== current; });
+  if ($("#report")) $("#report").hidden = current !== "report";
   const info = {
-    overview: ["01 / 08", state.lang === "en" ? "Overview command center" : "總覽首頁", state.lang === "en" ? "See the next step, case status, recent reports, AI, and usage." : "查看下一步、案件狀態、最近報告、AI 與用量。"],
-    case: ["02 / 08", state.lang === "en" ? "Case setup" : "案件設定", state.lang === "en" ? "Only keep the fields needed to generate a monthly report." : "只保留產生月報必要欄位。"],
-    data: ["03 / 08", state.lang === "en" ? "Data import" : "資料匯入", state.lang === "en" ? "Paste CSV, connect Sheets, or load demo data and check quality." : "匯入 CSV / Sheets / Demo，並檢查資料品質。"],
-    report: ["04 / 08", state.lang === "en" ? "Report preview" : "報告預覽", state.lang === "en" ? "Read the monthly report as a client-facing deliverable." : "把月報產物獨立成可閱讀的客戶報告。"],
-    ai: ["05 / 08", state.lang === "en" ? "AI advice" : "AI 建議", state.lang === "en" ? "Review summary, risks, next actions, and client wording." : "查看摘要、風險、下月行動與客戶說明稿。"],
-    delivery: ["06 / 08", state.lang === "en" ? "Delivery & payment" : "交付付款", state.lang === "en" ? "Prepare email drafts, export files, and track payment." : "準備 Email 草稿、匯出檔案並追蹤付款。"],
+    overview: ["01 / 07", state.lang === "en" ? "AI import assistant" : "AI 匯入助手", state.lang === "en" ? "Drop in files, CSV data, or a URL and let AI prepare the project." : "放入檔案、CSV 或網址，讓 AI 自動整理並帶入專案。"],
+    case: ["02 / 07", state.lang === "en" ? "Case details" : "案件資料", state.lang === "en" ? "Only keep the fields needed to generate a monthly report." : "只保留產生月報必要欄位。"],
+    data: ["03 / 07", state.lang === "en" ? "Data review" : "資料檢查", state.lang === "en" ? "Paste CSV, connect Sheets, or load demo data and check quality." : "匯入 CSV / Sheets / Demo，並檢查資料品質。"],
+    report: ["04 / 07", state.lang === "en" ? "Report results" : "報告結果", state.lang === "en" ? "Read the monthly report as a client-facing deliverable." : "把月報產物獨立成可閱讀的客戶報告。"],
+    ai: ["05 / 07", state.lang === "en" ? "AI advice" : "AI 建議", state.lang === "en" ? "Review summary, risks, next actions, and client wording." : "查看摘要、風險、下月行動與客戶說明稿。"],
+    delivery: ["06 / 07", state.lang === "en" ? "Deliver report" : "交付報告", state.lang === "en" ? "Prepare email drafts, export files, and track payment." : "準備 Email 草稿、匯出檔案並追蹤付款。"],
     billing: ["07 / 08", state.lang === "en" ? "Usage plan" : "用量方案", state.lang === "en" ? "Manage plan, checkout drafts, invoices, and AI usage." : "管理方案、付款草稿、發票與 AI 用量。"],
-    settings: ["08 / 08", state.lang === "en" ? "Trust settings" : "設定", state.lang === "en" ? "Manage consent and audit notes." : "管理同意與稽核紀錄。"],
+    settings: ["07 / 07", state.lang === "en" ? "Privacy settings" : "隱私設定", state.lang === "en" ? "Manage consent and audit notes." : "管理同意與稽核紀錄。"],
   }[current];
-  setText("#workspaceFocusStep", info[0]);
   setText("#viewMastheadStep", info[0]);
-  setText("#workspaceFocusTitle", info[1]);
   setText("#viewMastheadTitle", info[1]);
-  setText("#workspaceFocusCopy", info[2]);
   setText("#viewMastheadCopy", info[2]);
 }
 
@@ -601,13 +891,20 @@ function renderReport() {
   setText("#qualityPill", `${Math.round(Math.min(m.roas / 5, 1) * 100)}%`);
   setText("#scoreLabel", `${Math.round(Math.min(m.roas / 5, 1) * 100)}%`);
   setText("#reportCommandQuality", state.lang === "en" ? "Ready" : "已就緒");
+  const cpc = m.totals.spend / Math.max(m.totals.clicks, 1);
   const cards = [
-    ["ROAS", `${m.roas.toFixed(2)}x`],
-    ["CPA", formatMoney(m.cpa)],
-    [state.lang === "en" ? "Revenue" : "營收", formatMoney(m.totals.revenue)],
-    [state.lang === "en" ? "Growth" : "成長", formatPercent(m.revenueGrowth)],
+    [state.lang === "en" ? "Revenue" : "總營收", formatMoney(m.totals.revenue), state.lang === "en" ? "Business result" : "整體成果"],
+    [state.lang === "en" ? "Ad spend" : "廣告花費", formatMoney(m.totals.spend), state.lang === "en" ? "Media investment" : "媒體投入"],
+    ["ROAS", `${m.roas.toFixed(2)}x`, state.lang === "en" ? "Return on ad spend" : "廣告投資報酬"],
+    ["CPA", formatMoney(m.cpa), state.lang === "en" ? "Cost per conversion" : "單次轉換成本"],
+    [state.lang === "en" ? "Impressions" : "總曝光", new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW").format(m.totals.impressions), state.lang === "en" ? "Traffic scale" : "流量規模"],
+    [state.lang === "en" ? "Clicks" : "總點擊", new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW").format(m.totals.clicks), state.lang === "en" ? "Traffic response" : "流量反應"],
+    ["CTR", formatPercent(m.ctr), state.lang === "en" ? "Click-through rate" : "點擊率"],
+    [state.lang === "en" ? "Conversions" : "轉換數", new Intl.NumberFormat(state.lang === "en" ? "en-US" : "zh-TW").format(m.totals.conversions), state.lang === "en" ? "Completed outcomes" : "完成目標"],
+    ["CVR", formatPercent(m.conversionRate), state.lang === "en" ? "Conversion rate" : "轉換率"],
+    ["CPC", formatMoney(cpc), state.lang === "en" ? "Cost per click" : "單次點擊成本"],
   ];
-  $("#insights").innerHTML = cards.map(([label, value]) => `<article><span>${label}</span><strong>${value}</strong></article>`).join("");
+  $("#insights").innerHTML = cards.map(([label, value, note]) => `<article><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join("");
   const topRevenue = [...m.channels].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))[0];
   const lowestCpa = [...m.channels].sort((a, b) => Number(a.cpa || 0) - Number(b.cpa || 0))[0];
   $("#detailTable").innerHTML = `
@@ -623,7 +920,7 @@ function renderReport() {
           ? (state.lang === "en" ? "Fix" : "修正")
           : (state.lang === "en" ? "Monitor" : "觀察");
       return `<tr class="${isWeakRoas ? "is-weak" : ""}">
-        <td><strong>${row.channel}</strong>${isBestRoas ? `<span class="table-badge good">${state.lang === "en" ? "Best ROAS" : "最佳 ROAS"}</span>` : ""}</td>
+        <td><strong>${escapeLibraryText(row.channel)}</strong>${isBestRoas ? `<span class="table-badge good">${state.lang === "en" ? "Best ROAS" : "最佳 ROAS"}</span>` : ""}</td>
         <td class="num">${formatMoney(row.spend)}</td>
         <td class="num ${isTopRevenue ? "is-best" : ""}">${formatMoney(row.revenue)}</td>
         <td class="num">${row.conversions}</td>
@@ -633,7 +930,82 @@ function renderReport() {
       </tr>`;
     }).join("")}</tbody>`;
   renderChartInsights(m);
+  renderProfessionalNarrative(m);
   drawCharts();
+}
+
+function renderProfessionalNarrative(m) {
+  if (!m) return;
+  const zh = state.lang !== "en";
+  const draft = state.ai || buildRuleDraft(m);
+  const cpc = m.totals.spend / Math.max(m.totals.clicks, 1);
+  const executive = $("#executiveSummaryText");
+  if (executive) {
+    executive.innerHTML = "";
+    [
+      draft.summary,
+      zh
+        ? `本月共帶來 ${new Intl.NumberFormat("zh-TW").format(m.totals.conversions)} 次轉換，CTR 為 ${formatPercent(m.ctr)}、CVR 為 ${formatPercent(m.conversionRate)}。最大亮點為 ${m.best?.channel || "-"}，主要挑戰則集中在 ${m.worst?.channel || "-"} 的投放效率。`
+        : `The campaign generated ${new Intl.NumberFormat("en-US").format(m.totals.conversions)} conversions with ${formatPercent(m.ctr)} CTR and ${formatPercent(m.conversionRate)} CVR. The strongest result came from ${m.best?.channel || "-"}, while ${m.worst?.channel || "-"} needs the most attention.`,
+    ].forEach((text) => {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = text;
+      executive.appendChild(paragraph);
+    });
+  }
+
+  const highlights = $("#executiveHighlights");
+  if (highlights) {
+    highlights.innerHTML = "";
+    [
+      [zh ? "核心成果" : "Core result", `${formatMoney(m.totals.revenue)} / ROAS ${m.roas.toFixed(2)}x`, "good"],
+      [zh ? "最大亮點" : "Top highlight", `${m.best?.channel || "-"} ROAS ${m.best ? m.best.roas.toFixed(2) : "0.00"}x`, "good"],
+      [zh ? "關注挑戰" : "Key challenge", `${m.worst?.channel || "-"} ROAS ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x`, "warn"],
+    ].forEach(([label, value, tone]) => {
+      const card = document.createElement("div");
+      card.className = tone;
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      const strong = document.createElement("strong");
+      strong.textContent = value;
+      card.append(caption, strong);
+      highlights.appendChild(card);
+    });
+  }
+
+  const renderPoints = (selector, items) => {
+    const node = $(selector);
+    if (!node) return;
+    node.innerHTML = "";
+    items.filter(Boolean).forEach((item, index) => {
+      const row = document.createElement("div");
+      const number = document.createElement("span");
+      number.textContent = String(index + 1).padStart(2, "0");
+      const copy = document.createElement("p");
+      copy.textContent = item;
+      row.append(number, copy);
+      node.appendChild(row);
+    });
+  };
+
+  renderPoints("#positiveFindings", [
+    zh
+      ? `${m.best?.channel || "-"} 以 ${m.best ? m.best.roas.toFixed(2) : "0.00"}x ROAS 領先，代表目前預算與受眾組合具放大價值。`
+      : `${m.best?.channel || "-"} leads at ${m.best ? m.best.roas.toFixed(2) : "0.00"}x ROAS, indicating room to scale the current budget and audience mix.`,
+    m.revenueGrowth >= 0
+      ? (zh ? `營收較前期成長 ${formatPercent(m.revenueGrowth)}，主要成效可能來自高效率渠道貢獻，建議以活動與素材紀錄進一步驗證。` : `Revenue grew ${formatPercent(m.revenueGrowth)}. High-efficiency channels are the likely driver; validate this against campaign and creative logs.`)
+      : (zh ? `目前 CTR 為 ${formatPercent(m.ctr)}、CPC 為 ${formatMoney(cpc)}，可作為下月素材吸引力與流量成本基準。` : `CTR is ${formatPercent(m.ctr)} with ${formatMoney(cpc)} CPC, providing a baseline for next month's creative and traffic efficiency.`),
+  ]);
+  renderPoints("#riskList", draft.risks);
+  renderPoints("#budgetPlan", [
+    zh ? `將 10-15% 預算由 ${m.worst?.channel || "低效渠道"} 移往 ${m.best?.channel || "高效渠道"}，並以一週為觀察週期。` : `Move 10-15% of budget from ${m.worst?.channel || "the weakest channel"} to ${m.best?.channel || "the strongest channel"} and review weekly.`,
+    zh ? `設定 ROAS ${Math.max(2, m.roas * 0.8).toFixed(2)}x 與 CPA ${formatMoney(m.cpa)} 為調整警戒線，避免只追求量體。` : `Use ${Math.max(2, m.roas * 0.8).toFixed(2)}x ROAS and ${formatMoney(m.cpa)} CPA as guardrails to protect efficiency.`,
+  ]);
+  renderPoints("#creativePlan", [
+    zh ? "針對最佳渠道延伸 2-3 組同概念素材，分別測試利益點、信任證明與明確 CTA。" : "Extend the winning channel with 2-3 creative variants testing benefit, proof, and a clear CTA.",
+    zh ? `為 ${m.worst?.channel || "低效渠道"} 建立新受眾或關鍵字組合，避免只更換圖片而未修正流量品質。` : `Build a new audience or keyword set for ${m.worst?.channel || "the weakest channel"} instead of changing visuals alone.`,
+  ]);
+  renderPoints("#recommendations", draft.actions);
 }
 
 function renderChartInsights(m) {
@@ -652,7 +1024,7 @@ function renderChartInsights(m) {
     : m.ctr >= 0.02
       ? (zh ? "優先查落地頁" : "Check landing page")
       : (zh ? "優先查素材" : "Check creatives");
-  const stat = (label, value, tone = "", hint = "") => `<div class="${tone}"><span>${label}</span><strong>${value}</strong>${hint ? `<em>${hint}</em>` : ""}</div>`;
+  const stat = (label, value, tone = "", hint = "") => `<div class="${tone}"><span>${escapeLibraryText(label)}</span><strong>${escapeLibraryText(value)}</strong>${hint ? `<em>${escapeLibraryText(hint)}</em>` : ""}</div>`;
   const setStats = (selector, items) => {
     const node = $(selector);
     if (node) node.innerHTML = items.join("");
@@ -701,20 +1073,33 @@ function renderAi() {
   const draft = state.ai || buildRuleDraft();
   if (!draft) return;
   const zh = state.lang !== "en";
-  $("#riskList").innerHTML = draft.risks.map((item) => `<div><span>${zh ? "風險" : "Risk"}</span><strong>${item}</strong></div>`).join("");
-  $("#recommendations").innerHTML = draft.actions.map((item) => `<div><span>${zh ? "行動" : "Action"}</span><strong>${item}</strong></div>`).join("");
-  $("#aiWorkOrder").innerHTML = `
-    <article><span>${zh ? "輸入資料" : "Input data"}</span><p>${$("#clientRequest").value || (zh ? "尚未填寫客戶需求，會先使用 KPI 與渠道資料產生建議。" : "No client request yet. KPI and channel data will be used first.")}</p></article>
-    <article><span>${zh ? "AI 任務" : "AI task"}</span><p>${zh ? "根據需求、KPI、最佳/最弱渠道，產生摘要、風險、下月行動與客戶說明稿。" : "Use goals, KPI, best/worst channels to produce summary, risks, next actions, and client wording."}</p></article>
-  `;
+  renderSafePointList("#riskList", draft.risks, zh ? "風險" : "Risk");
+  renderSafePointList("#recommendations", draft.actions, zh ? "行動" : "Action");
+  const workOrder = $("#aiWorkOrder");
+  if (workOrder) {
+    workOrder.replaceChildren();
+    [
+      [zh ? "輸入資料" : "Input data", $("#clientRequest").value || (zh ? "尚未填寫客戶需求，會先使用 KPI 與渠道資料產生建議。" : "No client request yet. KPI and channel data will be used first.")],
+      [zh ? "AI 任務" : "AI task", zh ? "根據需求、KPI、最佳/最弱渠道，產生摘要、風險、下月行動與客戶說明稿。" : "Use goals, KPI, best/worst channels to produce summary, risks, next actions, and client wording."],
+    ].forEach(([label, content]) => {
+      const article = document.createElement("article");
+      const caption = document.createElement("span");
+      const paragraph = document.createElement("p");
+      caption.textContent = label;
+      paragraph.textContent = content;
+      article.append(caption, paragraph);
+      workOrder.appendChild(article);
+    });
+  }
   setText("#aiSummaryOutput", draft.summary);
   const riskOutput = $("#aiRiskOutput");
-  if (riskOutput) riskOutput.innerHTML = draft.risks.map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><strong>${item}</strong></div>`).join("");
+  if (riskOutput) renderSafePointList("#aiRiskOutput", draft.risks);
   const actionOutput = $("#aiActionOutput");
-  if (actionOutput) actionOutput.innerHTML = draft.actions.map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><strong>${item}</strong></div>`).join("");
+  if (actionOutput) renderSafePointList("#aiActionOutput", draft.actions);
   setText("#aiClientMessageOutput", draft.clientMessage);
   $("#clientReplyDraft").value = draft.clientMessage;
   setText("#reportCommandAi", state.lang === "en" ? "Ready" : "已完成");
+  renderProfessionalNarrative(state.metrics);
   renderWorkspace();
 }
 
@@ -799,8 +1184,8 @@ function renderWorkspace() {
   ];
   const next = nextSteps.find((item) => !item.done) || { view: "report", label: "Ready", title: zh ? "可以交付月報" : "Ready to deliver", copy: zh ? "案件、資料、AI、交付與付款都已有紀錄。" : "Case, data, AI, delivery, and payment are recorded.", action: zh ? "查看報告預覽" : "View report preview" };
   setText("#launchScore", `${score}%`);
-  $("#consoleReadinessBar").style.width = `${score}%`;
-  $("#launchChecklist").innerHTML = [
+  if ($("#consoleReadinessBar")) $("#consoleReadinessBar").style.width = `${score}%`;
+  if ($("#launchChecklist")) $("#launchChecklist").innerHTML = [
     [steps[0], state.lang === "en" ? "Case setup" : "案件設定"],
     [steps[1], state.lang === "en" ? "Data imported" : "資料匯入"],
     [steps[2], state.lang === "en" ? "Report preview" : "報告預覽"],
@@ -812,9 +1197,8 @@ function renderWorkspace() {
   setText("#overviewNextTitle", next.title);
   setText("#overviewNextCopy", next.copy);
   setText("#overviewPrimaryAction", next.action);
-  $("#overviewPrimaryAction").dataset.workspaceTarget = next.view;
+  if ($("#overviewPrimaryAction")) $("#overviewPrimaryAction").dataset.workspaceTarget = next.view;
   $("#viewMastheadAction").dataset.workspaceTarget = next.view;
-  $("#workspaceFocusAction").dataset.workspaceTarget = next.view;
   setText("#viewMastheadPrimary", score >= 100 ? (zh ? "可交付" : "Ready") : (zh ? "準備中" : "In progress"));
   setText("#viewMastheadPrimaryLabel", zh ? "目前狀態" : "Status");
   setText("#viewMastheadNextLabel", zh ? "下一步" : "Next step");
@@ -843,7 +1227,7 @@ function renderWorkspace() {
       [zh ? "本月結論" : "Monthly conclusion", zh ? `${$("#clientName").value || "Demo Client"} 本月 ROAS ${m.roas.toFixed(2)}x` : `${$("#clientName").value || "Demo Client"} reached ${m.roas.toFixed(2)}x ROAS`, zh ? `營收 ${formatMoney(m.totals.revenue)}，CPA ${formatMoney(m.cpa)}，整體狀態${m.roas >= 3 ? "適合放大有效渠道" : "需要先優化效率"}。` : `Revenue ${formatMoney(m.totals.revenue)}, CPA ${formatMoney(m.cpa)}. ${m.roas >= 3 ? "Ready to scale efficient channels." : "Optimize efficiency before scaling."}`],
       [zh ? "最佳渠道" : "Best channel", m.best?.channel || "-", zh ? `目前 ROAS ${m.best ? m.best.roas.toFixed(2) : "0.00"}x，建議保留並測試加碼。` : `ROAS ${m.best ? m.best.roas.toFixed(2) : "0.00"}x. Keep and test scaling.`],
       [zh ? "需修正渠道" : "Weakest channel", m.worst?.channel || "-", zh ? `目前 ROAS ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x，下月優先檢查素材、受眾或關鍵字。` : `ROAS ${m.worst ? m.worst.roas.toFixed(2) : "0.00"}x. Review creative, audience, or keywords next.`],
-    ].map(([label, title, copy]) => `<div><span>${label}</span><strong>${title}</strong><p>${copy}</p></div>`).join("") : `<div><span>${zh ? "目前狀態" : "Status"}</span><strong>${zh ? "尚未產生月報" : "Report not generated"}</strong><p>${zh ? "完成資料匯入後，這裡會自動整理客戶可以閱讀的摘要。" : "After importing data, this area will become a client-readable brief."}</p></div>`;
+    ].map(([label, title, copy]) => `<div><span>${escapeLibraryText(label)}</span><strong>${escapeLibraryText(title)}</strong><p>${escapeLibraryText(copy)}</p></div>`).join("") : `<div><span>${zh ? "目前狀態" : "Status"}</span><strong>${zh ? "尚未產生月報" : "Report not generated"}</strong><p>${zh ? "完成資料匯入後，這裡會自動整理客戶可以閱讀的摘要。" : "After importing data, this area will become a client-readable brief."}</p></div>`;
   }
   if (reportChecks) {
     const draft = state.ai || buildRuleDraft();
@@ -853,12 +1237,53 @@ function renderWorkspace() {
       [Boolean(draft?.risks?.length), "03", zh ? "主要風險" : "Main risk", draft?.risks?.[0] || (zh ? "等待 AI 建議" : "Waiting for AI advice")],
       [Boolean(draft?.actions?.length), "04", zh ? "下月行動" : "Next action", draft?.actions?.[0] || (zh ? "等待 AI 建議" : "Waiting for AI advice")],
     ];
-    reportChecks.innerHTML = checkItems.map(([done, no, title, copy]) => `<div class="${done ? "done" : ""}"><span>${done ? "OK" : no}</span><strong>${title}</strong><p>${copy}</p></div>`).join("");
+    reportChecks.innerHTML = checkItems.map(([done, no, title, copy]) => `<div class="${done ? "done" : ""}"><span>${done ? "OK" : escapeLibraryText(no)}</span><strong>${escapeLibraryText(title)}</strong><p>${escapeLibraryText(copy)}</p></div>`).join("");
   }
-  $("#clientList").innerHTML = state.clients.map((c) => `<div><strong>${c.name}</strong><span>${c.month}</span></div>`).join("") || `<div><strong>${$("#clientName").value}</strong><span>${$("#reportMonth").value}</span></div>`;
+  $("#clientList").innerHTML = state.clients.map((c) => `<div><strong>${escapeLibraryText(c.name)}</strong><span>${escapeLibraryText(c.month)}</span></div>`).join("") || `<div><strong>${escapeLibraryText($("#clientName").value)}</strong><span>${escapeLibraryText($("#reportMonth").value)}</span></div>`;
   $("#clientCount").textContent = String(Math.max(state.clients.length, 1));
   $("#libraryCount").textContent = String(state.reports.length);
   $("#latestReportMonth").textContent = state.reports[0]?.month || "-";
+  renderReportLibrary();
+}
+
+function escapeLibraryText(value = "") {
+  return String(value).replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  }[character]));
+}
+
+function renderReportLibrary() {
+  const list = $("#reportList");
+  if (!list) return;
+  const zh = state.lang !== "en";
+  if (!state.reports.length) {
+    list.innerHTML = `<div class="report-library-empty"><strong>${zh ? "尚未儲存月報" : "No saved reports"}</strong><span>${zh ? "產生月報後按下「儲存目前報告」，即可在這裡再次開啟。" : "Generate a report and save it to reopen it here."}</span></div>`;
+    return;
+  }
+  list.innerHTML = state.reports.map((report, index) => {
+    const restorable = Boolean(report.snapshot?.metrics || report.snapshot?.csv);
+    const client = escapeLibraryText(report.client || (zh ? "未命名客戶" : "Untitled client"));
+    const month = escapeLibraryText(report.month || "-");
+    const updatedAt = report.updatedAt || report.createdAt;
+    const savedTime = updatedAt ? new Date(updatedAt).toLocaleString(zh ? "zh-TW" : "en-US", { dateStyle: "medium", timeStyle: "short" }) : "-";
+    return `<article class="report-library-item" data-report-id="${escapeLibraryText(report.id || String(index))}">
+      <div class="report-library-file-icon" aria-hidden="true">R</div>
+      <div class="report-library-info">
+        <div class="report-library-title"><strong>${client} ${month}</strong><span class="${restorable ? "is-ready" : "is-legacy"}">${restorable ? (zh ? "可開啟" : "Ready") : (zh ? "舊版索引" : "Legacy index")}</span></div>
+        <p>${escapeLibraryText(report.reportTypeLabel || (zh ? "代理商月報" : "Agency monthly report"))}</p>
+        <small>${zh ? "最後儲存" : "Last saved"} ${escapeLibraryText(savedTime)}</small>
+      </div>
+      <div class="report-library-actions">
+        <button class="ghost" type="button" data-report-action="open" data-report-index="${index}" ${restorable ? "" : "disabled"}>${zh ? "開啟" : "Open"}</button>
+        <button class="ghost report-library-pdf" type="button" data-report-action="pdf" data-report-index="${index}" ${restorable ? "" : "disabled"}>PDF</button>
+        <button class="ghost icon-only" type="button" data-report-action="delete" data-report-index="${index}" aria-label="${zh ? "刪除月報" : "Delete report"}" title="${zh ? "刪除月報" : "Delete report"}">×</button>
+      </div>
+    </article>`;
+  }).join("");
 }
 
 function planDisplayName(plan) {
@@ -897,7 +1322,7 @@ function updateUsageUi() {
   setText("#billingPlan", planName);
   setText("#reportUsage", `${used} / ${limit}`);
   setText("#dockUsagePercent", `${percent}%`);
-  setText("#dockResetValue", state.lang === "en" ? `${remaining} left` : `剩 ${remaining} 次`);
+  setText("#dockCurrentPlanValue", planName);
   if ($("#usageBar")) $("#usageBar").style.width = `${percent}%`;
   setStatus("#usageStatus", percent >= 100 ? "error" : percent >= 80 ? "warn" : "ok", percent >= 100 ? (state.lang === "en" ? "AI quota reached" : "AI 用量已達上限") : (state.lang === "en" ? "AI usage available" : "AI 用量可用"), state.lang === "en" ? `${remaining} reports remaining.` : `本月剩餘 ${remaining} 份月報。`);
 }
@@ -973,26 +1398,121 @@ async function chooseUpgradePlan(plan) {
   }
 }
 
-function saveClient() {
+function saveCaseProfile() {
   const client = { name: $("#clientName").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
   state.clients.unshift(client);
   localStorage.setItem("agencyReportClients", JSON.stringify(state.clients));
-  setStatus("#clientHubStatus", "ok", state.lang === "en" ? "Client saved" : "客戶已儲存", client.name);
+  setStatus("#clientHubStatus", "ok", state.lang === "en" ? "Case created" : "案件已建立", client.name);
   renderWorkspace();
 }
 
-function saveCurrentReport() {
-  const report = { client: $("#clientName").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
+async function saveCurrentReport() {
+  if (!state.metrics) {
+    setStatus("#shareLinkPanel", "warning", state.lang === "en" ? "Generate a report first" : "請先產生月報", state.lang === "en" ? "Only complete reports can be saved." : "完成產報後才能儲存可再次開啟的月報。");
+    return;
+  }
+  const now = new Date().toISOString();
+  const client = $("#clientName").value.trim() || (state.lang === "en" ? "Untitled client" : "未命名客戶");
+  const month = $("#reportMonth").value;
+  const existingIndex = state.reports.findIndex((item) => item.client === client && item.month === month);
+  const existing = existingIndex >= 0 ? state.reports[existingIndex] : null;
+  const report = {
+    id: existing?.id || (globalThis.crypto?.randomUUID?.() || `report-${Date.now()}`),
+    client,
+    month,
+    reportTypeLabel: $("#reportType").selectedOptions[0]?.textContent || "",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    snapshot: {
+      agencyName: $("#agencyName").value,
+      clientName: client,
+      reportMonth: month,
+      reportType: $("#reportType").value,
+      currency: $("#currency").value,
+      tone: $("#tone").value,
+      clientRequest: $("#clientRequest").value,
+      csv: $("#csvInput").value,
+      rows: state.rows,
+      metrics: state.metrics,
+      ai: state.ai,
+    },
+  };
+  if (existingIndex >= 0) state.reports.splice(existingIndex, 1);
   state.reports.unshift(report);
-  localStorage.setItem("agencyReportReports", JSON.stringify(state.reports));
+  cacheReports();
   renderWorkspace();
+  try {
+    const saved = await api("/api/reports", { method: "POST", body: JSON.stringify(report) });
+    state.reports[0] = saved;
+    cacheReports();
+    renderWorkspace();
+    setStatus("#shareLinkPanel", "ok", state.lang === "en" ? "Report saved" : "月報已儲存", `${client} / ${month}`);
+  } catch (error) {
+    setStatus("#shareLinkPanel", "warning", state.lang === "en" ? "Saved on this device only" : "目前僅儲存在此裝置", error.message);
+  }
+}
+
+function restoreSavedReport(report, navigate = true) {
+  const snapshot = report?.snapshot;
+  if (!snapshot) return false;
+  const fieldValues = {
+    agencyName: snapshot.agencyName,
+    clientName: snapshot.clientName || report.client,
+    reportMonth: snapshot.reportMonth || report.month,
+    reportType: snapshot.reportType,
+    currency: snapshot.currency,
+    tone: snapshot.tone,
+    clientRequest: snapshot.clientRequest,
+    csvInput: snapshot.csv,
+  };
+  Object.entries(fieldValues).forEach(([id, value]) => {
+    const field = $(`#${id}`);
+    if (field && value != null) field.value = value;
+  });
+  state.rows = snapshot.rows?.length ? snapshot.rows : parseCsv(snapshot.csv || "");
+  state.metrics = snapshot.metrics || (state.rows.length ? calculateMetrics(state.rows) : null);
+  state.ai = snapshot.ai || (state.metrics ? buildRuleDraft(state.metrics) : null);
+  if (!state.metrics) return false;
+  renderReport();
+  renderAi();
+  renderWorkspace();
+  $("#report").hidden = false;
+  if (navigate) {
+    openWorkspace("report");
+    requestAnimationFrame(() => $("#report")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+  return true;
+}
+
+async function handleReportLibraryAction(event) {
+  const button = event.target.closest("[data-report-action]");
+  if (!button) return;
+  const index = Number(button.dataset.reportIndex);
+  const report = state.reports[index];
+  if (!report) return;
+  if (button.dataset.reportAction === "delete") {
+    const confirmed = globalThis.confirm(state.lang === "en" ? `Delete ${report.client} ${report.month}?` : `確定刪除「${report.client} ${report.month}」嗎？`);
+    if (!confirmed) return;
+    try {
+      await api(`/api/reports?id=${encodeURIComponent(report.id)}`, { method: "DELETE" });
+    } catch (error) {
+      setStatus("#shareLinkPanel", "error", state.lang === "en" ? "Delete failed" : "刪除失敗", error.message);
+      return;
+    }
+    state.reports.splice(index, 1);
+    cacheReports();
+    renderWorkspace();
+    return;
+  }
+  if (!restoreSavedReport(report, button.dataset.reportAction === "open")) return;
+  if (button.dataset.reportAction === "pdf") setTimeout(printReportPdf, 120);
 }
 
 function deliverReport() {
   const delivery = { email: $("#deliveryEmail").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
   state.deliveries.unshift(delivery);
   localStorage.setItem("agencyReportDeliveries", JSON.stringify(state.deliveries));
-  $("#deliveryCenter").innerHTML = state.deliveries.map((item) => `<div><strong>${item.email || "client@example.com"}</strong><span>${item.month}</span></div>`).join("");
+  $("#deliveryCenter").innerHTML = state.deliveries.map((item) => `<div><strong>${escapeLibraryText(item.email || "client@example.com")}</strong><span>${escapeLibraryText(item.month)}</span></div>`).join("");
   renderWorkspace();
 }
 
@@ -1012,16 +1532,286 @@ function downloadSampleCsv() {
   URL.revokeObjectURL(url);
 }
 
-function clearLocalData() {
-  ["agencyReportReports", "agencyReportClients", "agencyReportDeliveries", "agencyReportInvoices"].forEach((key) => localStorage.removeItem(key));
-  state.reports = [];
-  state.clients = [];
-  state.deliveries = [];
-  state.invoices = [];
-  renderWorkspace();
+function reportExportName(extension) {
+  const client = ($("#clientName")?.value || "client").trim();
+  const month = $("#reportMonth")?.value || new Date().toISOString().slice(0, 7);
+  const safeClient = client.replace(/[<>:"/\\|?*]+/g, "-").replace(/\s+/g, "-");
+  return safeClient + "-" + month + "-report." + extension;
+}
+
+function collectExportStyles() {
+  return Array.from(document.styleSheets).map((sheet) => {
+    try {
+      return Array.from(sheet.cssRules || []).map((rule) => rule.cssText).join("\n");
+    } catch {
+      return "";
+    }
+  }).join("\n");
+}
+
+function exportReportHtml() {
+  if (!state.metrics) {
+    setStatus("#shareLinkPanel", "warning", state.lang === "en" ? "Generate a report first" : "請先產生月報", state.lang === "en" ? "The HTML export needs report data." : "HTML 匯出需要先有報告資料。");
+    return;
+  }
+  const source = $("#report");
+  if (!source) return;
+  const report = source.cloneNode(true);
+  report.hidden = false;
+  report.removeAttribute("hidden");
+  const titleText = ($("#clientName")?.value || "AgencyReport AI").replace(/[<>&]/g, "");
+  const html = "<!doctype html><html lang=\"" + document.documentElement.lang + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + titleText + " 月報</title><style>" + collectExportStyles() + "body{padding:24px}.report-shell{display:block!important;margin:0 auto!important}</style></head><body class=\"theme-light\">" + report.outerHTML + "</body></html>";
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = reportExportName("html");
+  link.click();
+  URL.revokeObjectURL(url);
+  setStatus("#shareLinkPanel", "ok", state.lang === "en" ? "HTML downloaded" : "HTML 已下載", link.download);
+}
+
+function printReportPdf() {
+  if (!state.metrics) {
+    setStatus("#shareLinkPanel", "warning", state.lang === "en" ? "Generate a report first" : "請先產生月報", state.lang === "en" ? "The PDF export needs report data." : "PDF 匯出需要先有報告資料。");
+    return;
+  }
+  const report = $("#report");
+  if (!report) return;
+  const wasHidden = report.hidden;
+  report.hidden = false;
+  document.body.classList.add("printing-report");
+  const cleanup = () => {
+    document.body.classList.remove("printing-report");
+    report.hidden = wasHidden;
+  };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.print();
+  setTimeout(cleanup, 1500);
+}
+
+function firstMatch(text, patterns) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return "";
+}
+
+function extractCsvFromText(text) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const headerIndex = lines.findIndex((line) => /channel\s*,\s*spend\s*,\s*impressions/i.test(line));
+  if (headerIndex >= 0) return lines.slice(headerIndex).filter((line) => line.includes(",")).join("\n");
+  const csvLines = lines.filter((line) => line.includes(",") && line.split(",").length >= 4);
+  if (csvLines.length >= 2) return csvLines.join("\n");
+  return "";
+}
+
+function inferReportType(text) {
+  const source = text.toLowerCase();
+  if (source.includes("seo") || source.includes("organic") || source.includes("search console")) return "seo";
+  if (source.includes("social") || source.includes("instagram") || source.includes("facebook") || source.includes("threads")) return "social";
+  return "ads";
+}
+
+function inferClientName(text, fileName = "") {
+  const explicit = firstMatch(text, [
+    /(?:客戶|公司|品牌|client|company|brand)\s*[:：]\s*([^\n,，。]+)/i,
+    /客戶是\s*([^\n,，。]+)/,
+    /公司是\s*([^\n,，。]+)/,
+  ]);
+  if (explicit) return explicit.replace(/["']/g, "").trim();
+  if (fileName) return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+  return "";
+}
+
+function appendAiIntakeMessage(role, text, fileName = "") {
+  const thread = $("#aiIntakeThread");
+  if (!thread) return;
+  const message = document.createElement("div");
+  message.className = "ai-chat-message " + role;
+  const avatar = document.createElement("span");
+  avatar.className = "ai-chat-avatar";
+  avatar.textContent = role === "user" ? (state.lang === "en" ? "You" : "你") : "AI";
+  const bubble = document.createElement("div");
+  bubble.className = "ai-chat-bubble";
+  const body = document.createElement("p");
+  const cleanText = String(text || "").trim();
+  body.textContent = cleanText.length > 520 ? cleanText.slice(0, 520) + "..." : cleanText;
+  bubble.appendChild(body);
+  if (fileName) {
+    const attachment = document.createElement("small");
+    attachment.className = "ai-chat-attachment";
+    attachment.textContent = "附件：" + fileName;
+    bubble.appendChild(attachment);
+  }
+  message.append(avatar, bubble);
+  thread.appendChild(message);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function setAiIntakeNextAction(view, label) {
+  const button = $("#aiIntakeNextBtn");
+  if (!button) return;
+  button.hidden = false;
+  button.dataset.workspaceTarget = view;
+  button.textContent = label;
+}
+
+function setAiIntakeReply(title, copy) {
+  setText("#aiIntakeAnalysisTitle", title);
+  setText("#aiIntakeAnalysisCopy", copy);
+  const status = $("#aiIntakeStatus");
+  if (status) {
+    status.className = "status-panel ai-chat-status";
+    status.innerHTML = "";
+  }
+  const thread = $("#aiIntakeThread");
+  if (thread) thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+}
+
+function summarizeIntakeApplied(items) {
+  const zh = state.lang !== "en";
+  const node = $("#aiIntakeResult");
+  if (!node) return;
+  node.innerHTML = items.map(([label, value]) => `
+    <div>
+      <span>${label}</span>
+      <strong>${value || (zh ? "未偵測" : "Not detected")}</strong>
+    </div>
+  `).join("");
+  const message = $("#aiIntakeAnalysisMessage");
+  if (message) message.hidden = false;
+  const thread = $("#aiIntakeThread");
+  if (thread) thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+}
+
+function fillAiDemoBrief() {
+  const brief = state.lang === "en" ? `Client: Morning Light Dental Clinic
+Report month: 2026-06
+Report type: Advertising report
+Request: Review this month's CPA, ROAS, Google Search, and Meta Ads performance, then recommend next month's budget.
+
+${samples.ads}` : `客戶是晨光牙醫診所
+報告月份：2026-06
+報告類型：廣告月報
+需求：想知道本月 CPA、ROAS、Google Search 與 Meta Ads 表現，並需要下月預算建議。
+
+${samples.ads}`;
+  $("#aiIntakePrompt").value = brief;
+  $("#aiIntakePrompt").focus();
+  setStatus("#aiIntakeStatus", "ok", state.lang === "en" ? "Demo loaded" : "範例已帶入", state.lang === "en" ? "Click analyze to apply it." : "按下分析即可套用至專案。");
+}
+
+async function applyAiIntake() {
+  const zh = state.lang !== "en";
+  const file = $("#aiIntakeFile")?.files?.[0];
+  const typedText = $("#aiIntakePrompt")?.value || "";
+  const fileText = file ? await file.text() : "";
+  const intakeText = [typedText, fileText].filter(Boolean).join("\n\n");
+  if (!intakeText.trim()) {
+    setStatus("#aiIntakeStatus", "error", zh ? "尚未提供資料" : "No input yet", zh ? "請貼上文字、網址，或上傳 CSV/TXT 檔案。" : "Paste text, a URL, or upload a CSV/TXT file.");
+    return;
+  }
+
+  appendAiIntakeMessage("user", typedText || (zh ? "請分析這份附件並建立月報。" : "Analyze this attachment and create a report."), file?.name || "");
+  const analyzeButton = $("#aiAnalyzeApplyBtn");
+  if (analyzeButton) analyzeButton.disabled = true;
+  setStatus("#aiIntakeStatus", "", zh ? "AI 正在分析資料" : "AI is analyzing", zh ? "正在辨識案件、月份、資料來源與 KPI..." : "Detecting case, month, source, and KPI data...");
+
+  const url = firstMatch(intakeText, [/(https?:\/\/[^\s"'<>]+)/i]);
+  const month = firstMatch(intakeText, [/(\d{4}[-/]\d{2})/]);
+  const email = firstMatch(intakeText, [/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]);
+  const csv = extractCsvFromText(intakeText);
+  const reportType = inferReportType(intakeText);
+  const clientName = inferClientName(intakeText, file?.name);
+  const requestText = intakeText
+    .replace(csv, "")
+    .replace(url || "", "")
+    .trim()
+    .slice(0, 900);
+
+  if (clientName) $("#clientName").value = clientName;
+  if (month) $("#reportMonth").value = month.replace("/", "-");
+  if ($("#reportType")) $("#reportType").value = reportType;
+  if (requestText) $("#clientRequest").value = requestText;
+  if (email) {
+    $("#deliveryEmail").value = email;
+    $("#accountEmail").value = email;
+  }
+  if (url) {
+    $("#sheetUrl").value = url;
+    $("#sourceType").value = url.includes("docs.google.com") || url.includes("spreadsheets") ? "sheets" : "csv";
+  }
+  if (csv) $("#csvInput").value = csv;
+
+  summarizeIntakeApplied([
+    [zh ? "客戶" : "Client", $("#clientName").value],
+    [zh ? "月份" : "Month", $("#reportMonth").value],
+    [zh ? "資料來源" : "Source", url || (csv ? "CSV / file" : "")],
+    [zh ? "報告類型" : "Report type", $("#reportType").selectedOptions[0]?.textContent || reportType],
+  ]);
+
+  saveCaseProfile();
+  if (csv || $("#csvInput").value.trim()) {
+    try {
+      await generateReportFromButton();
+    } catch (error) {
+      setStatus("#aiIntakeStatus", "error", zh ? "AI 分析失敗" : "AI analysis failed", error.message);
+      return;
+    } finally {
+      if (analyzeButton) analyzeButton.disabled = false;
+    }
+    setAiIntakeNextAction("report", zh ? "查看報告結果" : "View report results");
+    setAiIntakeReply(
+      zh ? "完成了，月報已準備好" : "Done, your report is ready",
+      zh ? "我已將資料帶入案件、完成 KPI 分析並產生月報。您可以先確認下方辨識結果，再查看完整報告。" : "I applied the case data, analyzed the KPI, and generated the report. Review the detected details below, then open the full report.",
+    );
+    return;
+  }
+
+  setAiIntakeNextAction("data", zh ? "繼續資料檢查" : "Continue data review");
+  setAiIntakeReply(
+    zh ? "資料來源已整理完成" : "The data source is ready",
+    zh ? "我已帶入資料來源網址，但尚未偵測到可分析的 CSV。請繼續檢查來源，或在對話中加入 CSV/TXT 檔案。" : "I applied the source URL, but no analyzable CSV was detected. Continue reviewing the source or attach a CSV/TXT file in this chat.",
+  );
+  if (analyzeButton) analyzeButton.disabled = false;
+}
+
+function syncConsentAudit() {
+  const inputs = ["#consentData", "#consentAi", "#consentDelivery"].map((selector) => $(selector)).filter(Boolean);
+  const checked = inputs.filter((input) => input.checked).length;
+  const complete = checked === inputs.length && inputs.length > 0;
+  setText("#auditCount", String(checked));
+  setText("#auditStatus", complete ? "OK" : checked ? "Partial" : "-");
+  if (!checked) {
+    setStatus("#trustStatus", "", state.lang === "en" ? "No consent selected" : "尚未勾選同意");
+    return;
+  }
+  setStatus(
+    "#trustStatus",
+    complete ? "ok" : "warn",
+    state.lang === "en" ? "Consent updated" : "同意狀態已更新",
+    state.lang === "en" ? `${checked}/${inputs.length} items selected.` : `已勾選 ${checked}/${inputs.length} 項。`
+  );
+}
+
+function returnToLandingHome(event) {
+  event?.preventDefault();
+  document.documentElement.classList.add("public-landing");
+  document.documentElement.classList.remove("auth-locked", "portal-mode");
+  $("#overviewHome").hidden = false;
+  $("#caseWorkspace").hidden = true;
+  $("#report").hidden = true;
+  $("#authGate").hidden = true;
+  $("#landingLoginBtn").hidden = Boolean(state.auth);
+  $("#landingStartBtn").hidden = Boolean(state.auth);
+  $("#logoutBtn").hidden = !state.auth;
+  $("#overviewHome")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function setupEvents() {
+  $("[data-home-link]")?.addEventListener("click", returnToLandingHome);
   $("#landingLoginBtn")?.addEventListener("click", showAuthGate);
   $("#landingStartBtn")?.addEventListener("click", showAuthGate);
   $("#openCaseDetailBtn")?.addEventListener("click", showAuthGate);
@@ -1030,12 +1820,32 @@ function setupEvents() {
   $("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
   $("#authForm")?.addEventListener("submit", submitAuth);
   $("#registerBtn")?.addEventListener("click", registerAuth);
+  $("#forgotPasswordBtn")?.addEventListener("click", requestPasswordReset);
+  $("#resendVerificationBtn")?.addEventListener("click", resendVerificationEmail);
+  $("#resetPasswordBtn")?.addEventListener("click", completePasswordReset);
   $("#logoutBtn")?.addEventListener("click", logoutAuth);
   $$("[data-lang]").forEach((button) => button.addEventListener("click", () => applyLanguage(button.dataset.lang)));
   $$("[data-workspace-view]").forEach((button) => button.addEventListener("click", () => openWorkspace(button.dataset.workspaceView)));
   $("#viewMastheadAction")?.addEventListener("click", runWorkspacePrimaryAction);
-  $("#workspaceFocusAction")?.addEventListener("click", runWorkspacePrimaryAction);
   $("#overviewPrimaryAction")?.addEventListener("click", runWorkspacePrimaryAction);
+  $("#aiAnalyzeApplyBtn")?.addEventListener("click", applyAiIntake);
+  $("#aiUseDemoBriefBtn")?.addEventListener("click", fillAiDemoBrief);
+  $("#aiIntakeNextBtn")?.addEventListener("click", (event) => openWorkspace(event.currentTarget.dataset.workspaceTarget || "report"));
+  $$("[data-ai-prompt]").forEach((button) => button.addEventListener("click", () => {
+    $("#aiIntakePrompt").value = button.dataset.aiPrompt || "";
+    $("#aiIntakePrompt").focus();
+  }));
+  $("#aiIntakeFile")?.addEventListener("change", (event) => {
+    const file = event.currentTarget.files?.[0];
+    setText("#aiIntakeFileName", file?.name || (state.lang === "en" ? "No file selected" : "尚未選擇檔案"));
+  });
+  $("#aiIntakePrompt")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      $("#aiAnalyzeApplyBtn")?.click();
+    }
+  });
+  $$("[data-manual-view]").forEach((button) => button.addEventListener("click", () => openWorkspace(button.dataset.manualView)));
   $("#reportPreviewGenerateBtn")?.addEventListener("click", generateReportFromButton);
   $("#reportPreviewJumpBtn")?.addEventListener("click", () => $("#report")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   $("#completeDemoBtn")?.addEventListener("click", () => loadSample("ads"));
@@ -1046,19 +1856,16 @@ function setupEvents() {
   $("#quickSocialBtn")?.addEventListener("click", () => loadSample("social"));
   $("#generateBtn")?.addEventListener("click", generateReportFromButton);
   $("#runBackendAiBtn")?.addEventListener("click", runBackendAi);
-  $("#saveClientBtn")?.addEventListener("click", saveClient);
-  $("#syncClientsBtn")?.addEventListener("click", saveClient);
+  $("#saveClientBtn")?.addEventListener("click", saveCaseProfile);
   $("#saveReportBtn")?.addEventListener("click", saveCurrentReport);
+  $("#reportList")?.addEventListener("click", handleReportLibraryAction);
   $("#deliverReportBtn")?.addEventListener("click", deliverReport);
-  $("#approveDraftBtn")?.addEventListener("click", () => setStatus("#shareLinkPanel", "ok", state.lang === "en" ? "Draft approved" : "草稿已審核"));
-  $("#createShareLinkBtn")?.addEventListener("click", () => setStatus("#shareLinkPanel", "ok", "Share Link", `${location.origin}/report/demo`));
-  $("#queueEmailBtn")?.addEventListener("click", () => setStatus("#emailJobPanel", "ok", state.lang === "en" ? "Email draft created" : "Email 草稿已建立"));
+  $("#exportHtmlBtn")?.addEventListener("click", exportReportHtml);
+  $("#printBtn")?.addEventListener("click", printReportPdf);
   $("#saveAccountBtn")?.addEventListener("click", () => setStatus("#billingStatus", "ok", state.lang === "en" ? "Account saved" : "帳戶已儲存", $("#accountEmail").value));
   $("#createCheckoutBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
-  $("#createInvoiceBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
-  $("#saveConsentBtn")?.addEventListener("click", () => setStatus("#trustStatus", "ok", state.lang === "en" ? "Consent saved" : "同意已儲存"));
-  $("#refreshAuditBtn")?.addEventListener("click", () => { setText("#auditCount", "1"); setText("#auditStatus", "OK"); });
-  $("#clearLocalBtn")?.addEventListener("click", clearLocalData);
+  $$("[id^='consent']").forEach((input) => input.addEventListener("change", syncConsentAudit));
+  $("#refreshAuditBtn")?.addEventListener("click", syncConsentAudit);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${item}</strong></div>`).join("") : "";
@@ -1074,7 +1881,7 @@ function setupEvents() {
     if (action === "theme") applyTheme(state.theme === "light" ? "dark" : "light");
     if (action === "billing") openUpgradeModal();
     if (action === "usage") openWorkspace("billing");
-    if (action === "profile") openWorkspace("case");
+    if (action === "profile") openWorkspace("settings");
     if (action === "logout") logoutAuth();
   });
   $("#upgradeCloseBtn")?.addEventListener("click", closeUpgradeModal);
@@ -1094,20 +1901,12 @@ function setupEvents() {
     $("#csvInput").value = await file.text();
     generateReport();
   });
-  $("#leadForm")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    setStatus("#leadStatus", "ok", state.lang === "en" ? "Lead saved" : "名單已儲存", $("#leadEmail").value);
-  });
 }
 
 async function restoreSession() {
-  if (!authToken()) {
-    setAuthState(null);
-    return;
-  }
   try {
     const user = await api("/api/auth/me", { method: "GET" });
-    setAuthState({ token: authToken(), user });
+    setAuthState({ user });
     state.usage = user.usage || state.usage;
     updateUsageUi();
   } catch {
@@ -1123,7 +1922,7 @@ function init() {
   applyTheme(state.theme);
   applyLanguage(state.lang);
   renderWorkspace();
-  restoreSession();
+  restoreSession().then(processAuthActionLinks);
 }
 
 Object.assign(window, {

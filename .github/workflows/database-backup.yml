@@ -1,0 +1,34 @@
+name: Encrypted Database Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 18 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Export, encrypt, and verify PostgreSQL backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/agencyreport-backups
+        run: npm run db:backup
+      - name: Retain encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: agencyreport-db-${{ github.run_id }}
+          path: ${{ runner.temp }}/agencyreport-backups/*.backup.enc.json
+          retention-days: 30
+          if-no-files-found: error

@@ -72,6 +72,9 @@ async function main() {
   const targetUrl = argValue("--url", "http://127.0.0.1:4280/");
   const outDir = path.resolve(argValue("--out", "artifacts/workspace-visual-smoke"));
   const port = Number(argValue("--debug-port", "9333"));
+  const viewportWidth = Number(argValue("--width", "1440"));
+  const viewportHeight = Number(argValue("--height", "1100"));
+  const language = argValue("--lang", "zh") === "en" ? "en" : "zh";
   const chrome = chromePath();
   if (!chrome) throw new Error("Chrome or Edge was not found.");
 
@@ -108,8 +111,8 @@ async function main() {
     await send("Page.enable");
     await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", {
-      width: 1440,
-      height: 1100,
+      width: viewportWidth,
+      height: viewportHeight,
       deviceScaleFactor: 1,
       mobile: false,
     });
@@ -119,6 +122,7 @@ async function main() {
       expression: `
         localStorage.removeItem("agencyReportAuthToken");
         localStorage.setItem("agencyReportTheme", "dark");
+        localStorage.setItem("agencyReportLang", "${language}");
         location.reload();
       `,
       awaitPromise: false,
@@ -136,10 +140,29 @@ async function main() {
     });
     await new Promise((resolve) => setTimeout(resolve, 1200));
 
-    const views = ["overview", "report", "ai", "delivery", "billing"];
+    const libraryTestResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const expectedClient = document.querySelector("#clientName")?.value || "";
+        window.saveCurrentReport?.();
+        const saved = JSON.parse(localStorage.getItem("agencyReportReports:guest") || "[]");
+        const clientField = document.querySelector("#clientName");
+        if (clientField) clientField.value = "Temporary smoke value";
+        document.querySelector('[data-report-action="open"]')?.click();
+        return {
+          items: document.querySelectorAll(".report-library-item").length,
+          readyItems: document.querySelectorAll(".report-library-title .is-ready").length,
+          hasSnapshot: Boolean(saved[0]?.snapshot?.metrics && saved[0]?.snapshot?.csv),
+          restoredClient: clientField?.value === expectedClient
+        };
+      })()`,
+      returnByValue: true,
+    });
+    const libraryTest = libraryTestResult.result?.value || {};
+
+    const views = ["overview", "case", "report", "ai", "delivery", "billing", "settings"];
     const summary = {};
     for (const view of views) {
-      await send("Runtime.evaluate", { expression: `window.openWorkspace?.("${view}")`, awaitPromise: true });
+      await send("Runtime.evaluate", { expression: `window.openWorkspace?.("${view}"); window.scrollTo(0, 0)`, awaitPromise: true });
       await new Promise((resolve) => setTimeout(resolve, 500));
       const capture = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
       const file = path.join(outDir, `${view}.png`);
@@ -152,14 +175,24 @@ async function main() {
           tableRows: document.querySelectorAll("#detailTable tbody tr").length,
           reportBrief: Boolean(document.querySelector("#reportPreviewBrief")?.textContent.trim()),
           aiSummary: Boolean(document.querySelector("#aiSummaryOutput")?.textContent.trim()),
+          horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+          cjkLines: "${language}" === "en" ? [...new Set([...document.querySelectorAll('[data-workspace-group]:not([hidden]), #report:not([hidden]), .workspace-sidebar, .workspace-masthead')]
+            .flatMap((root) => (root.innerText || '').split(/\\n+/))
+            .map((line) => line.trim())
+            .filter((line) => /[\u3400-\u9fff]/.test(line)))]
+            .slice(0, 30) : [],
           bodyClass: document.documentElement.className
         }))()`,
         returnByValue: true,
       });
       summary[view] = { file, state: state.result?.value };
+      if (view === "delivery") summary[view].libraryTest = libraryTest;
     }
     await send("Runtime.evaluate", {
-      expression: `document.querySelector("#trendChart")?.scrollIntoView({ block: "start" })`,
+      expression: `
+        window.openWorkspace?.("report");
+        document.querySelector("#trendChart")?.scrollIntoView({ block: "start" });
+      `,
       awaitPromise: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -173,9 +206,30 @@ async function main() {
         tableRows: document.querySelectorAll("#detailTable tbody tr").length,
         highlightedRows: document.querySelectorAll("#detailTable tbody tr.is-weak").length,
         bestCells: document.querySelectorAll("td.is-best").length,
-        canvasCount: document.querySelectorAll("canvas").length
+        canvasCount: document.querySelectorAll("canvas").length,
+        reportSections: document.querySelectorAll(".report-section-block").length,
+        professionalKpis: document.querySelectorAll("#insights article").length,
+        findingPoints: document.querySelectorAll("#positiveFindings > div, #riskList > div").length,
+        actionPoints: document.querySelectorAll("#budgetPlan > div, #creativePlan > div, #recommendations > div").length
       }))()`,
       returnByValue: true,
+    });
+    await send("Runtime.evaluate", {
+      expression: `
+        document.querySelector("#report").hidden = false;
+        document.body.classList.add("printing-report");
+      `,
+      awaitPromise: true,
+    });
+    const pdf = await send("Page.printToPDF", {
+      printBackground: true,
+      displayHeaderFooter: false,
+      preferCSSPageSize: true,
+    });
+    fs.writeFileSync(path.join(outDir, "report.pdf"), Buffer.from(pdf.data, "base64"));
+    await send("Runtime.evaluate", {
+      expression: `document.body.classList.remove("printing-report")`,
+      awaitPromise: true,
     });
     summary.charts = { file: chartsFile, state: chartsState.result?.value };
     fs.writeFileSync(path.join(outDir, "summary.json"), JSON.stringify(summary, null, 2));
@@ -184,8 +238,23 @@ async function main() {
 
     const failures = Object.entries(summary).filter(([view, item]) => {
       if (fs.statSync(item.file).size < 1000) return true;
-      if (view === "charts") return item.state?.chartCards < 4 || item.state?.tableRows < 1;
-      return !item.state?.visible?.includes(view);
+      if (view === "charts") {
+        return item.state?.chartCards < 4
+          || item.state?.tableRows < 1
+          || item.state?.reportSections < 5
+          || item.state?.professionalKpis < 10
+          || item.state?.findingPoints < 4
+          || item.state?.actionPoints < 7;
+      }
+      if (view === "delivery") {
+        return item.libraryTest?.items < 1
+          || item.libraryTest?.readyItems < 1
+          || !item.libraryTest?.hasSnapshot
+          || !item.libraryTest?.restoredClient;
+      }
+      return !item.state?.visible?.includes(view)
+        || item.state?.horizontalOverflow > 1
+        || (language === "en" && item.state?.cjkLines?.length > 0);
     });
     console.log("AgencyReport AI workspace visual smoke");
     console.log(`Target: ${targetUrl}`);

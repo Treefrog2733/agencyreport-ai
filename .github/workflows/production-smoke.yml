@@ -1,5 +1,9 @@
 name: AgencyReport Production Smoke
 
+permissions:
+  contents: read
+  issues: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -29,4 +33,51 @@ jobs:
       - name: Run production smoke test
         env:
           APP_URL: ${{ inputs.app_url || secrets.APP_URL || 'https://app.virtualtrendworks.com' }}
-        run: npm run smoke:prod -- --url "$APP_URL" --strict
+        run: npm run smoke:prod -- --url "$APP_URL" --strict --require-operational
+
+      - name: Open or update outage issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "[monitor] AgencyReport production smoke failed";
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+            const body = `Production smoke failed at ${new Date().toISOString()}.
+
+            Workflow: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const existing = issues.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body });
+            }
+
+      - name: Close recovered outage issue
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "[monitor] AgencyReport production smoke failed";
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+            for (const issue of issues.filter((item) => item.title === title)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Recovered at ${new Date().toISOString()}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+            }

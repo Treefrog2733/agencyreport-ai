@@ -36,6 +36,16 @@ services:
         value: "120"
       - key: AUTH_RATE_LIMIT_MAX
         value: "20"
+      - key: LEGAL_VERSION
+        value: legal-2026-06-18
+      - key: LEGAL_REVIEWED
+        value: "false"
+      - key: BACKUP_ENABLED
+        value: "true"
+      - key: BACKUP_POLICY_URL
+        value: https://github.com/Treefrog2733/agencyreport-ai/actions/workflows/database-backup.yml
+      - key: MONITORING_URL
+        value: https://github.com/Treefrog2733/agencyreport-ai/actions/workflows/production-smoke.yml
       - key: DATABASE_URL
         sync: false
       - key: OPENAI_API_KEY
