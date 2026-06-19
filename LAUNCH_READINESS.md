@@ -42,7 +42,7 @@ This document separates verified production state, locally verified changes that
 
 - [x] Commit and push the hardened working tree as `1e65df5` on `main`.
 - [x] Confirm the custom production domain serves the hardened release through a 51/51 strict core smoke run.
-- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after deploying the simplified legal gate.
+- [x] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after deploying the simplified legal gate; all 53 checks passed with no missing required services.
 - [x] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
 
 ## External launch gates
