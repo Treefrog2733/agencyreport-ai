@@ -17,6 +17,7 @@
     "smoke:security": "node scripts/security-smoke.js",
     "smoke:payment": "node scripts/payment-smoke.js",
     "smoke:ai": "node scripts/ai-smoke.js",
+    "smoke:ai-runtime": "node scripts/ai-runtime-smoke.js",
     "smoke:backup": "node scripts/backup-smoke.js",
     "smoke:legal": "node scripts/legal-smoke.js",
     "smoke:worker": "node scripts/worker-smoke.js",

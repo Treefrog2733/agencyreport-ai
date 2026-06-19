@@ -49,6 +49,13 @@ let writeQueue = Promise.resolve();
 let pgPool = null;
 let pgStoreReady = false;
 const postgresSchemaVersion = 3;
+const aiRuntime = {
+  status: aiApiKey ? "untested" : "not_configured",
+  lastAttemptAt: null,
+  lastSuccessAt: null,
+  lastFailureAt: null,
+  lastErrorCode: null,
+};
 
 function loadLocalEnv() {
   const envPath = path.join(root, ".env");
@@ -239,6 +246,32 @@ function emailStatus() {
     mode: liveProvider && hasLiveCredentials ? "live-ready" : emailProvider,
     ready: liveProvider && hasLiveCredentials,
     senderIsProduction,
+  };
+}
+
+function classifyAiProviderError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  if (code.includes("quota") || message.includes("quota") || message.includes("billing")) return "quota_exceeded";
+  if (error?.status === 429 || code.includes("rate_limit") || message.includes("rate limit")) return "rate_limited";
+  if ([401, 403].includes(Number(error?.status)) || code.includes("auth") || message.includes("api key")) return "authentication_failed";
+  if (error?.name === "AbortError" || code === "timeout" || message.includes("timed out")) return "timeout";
+  return "provider_error";
+}
+
+function aiStatus() {
+  const configured = Boolean(aiApiKey);
+  const degraded = configured && aiRuntime.status === "degraded";
+  return {
+    provider: aiProvider,
+    configured,
+    mode: !configured ? "fallback" : degraded ? "degraded" : "live-ready",
+    model: configured ? aiModel : "rules",
+    runtimeStatus: aiRuntime.status,
+    lastAttemptAt: aiRuntime.lastAttemptAt,
+    lastSuccessAt: aiRuntime.lastSuccessAt,
+    lastFailureAt: aiRuntime.lastFailureAt,
+    lastErrorCode: degraded ? aiRuntime.lastErrorCode : null,
   };
 }
 
@@ -1144,6 +1177,7 @@ async function readinessReport() {
   const payment = paymentStatus();
   const paymentOk = payment.mode === "live-ready" && payment.webhookReady;
   const database = await databaseReadiness();
+  const ai = aiStatus();
   const checks = [
     {
       id: "database",
@@ -1162,9 +1196,13 @@ async function readinessReport() {
     {
       id: "ai",
       label: "AI provider",
-      ok: Boolean(aiApiKey),
+      ok: ai.configured && ai.runtimeStatus !== "degraded",
       required: true,
-      detail: aiApiKey ? `${aiProvider} configured.` : "Set OPENAI_API_KEY or AI_API_KEY for live AI drafts.",
+      detail: !ai.configured
+        ? "Set OPENAI_API_KEY or AI_API_KEY for live AI drafts."
+        : ai.runtimeStatus === "degraded"
+          ? `${aiProvider} is configured but the last live request failed (${ai.lastErrorCode}).`
+          : `${aiProvider} configured; runtime status ${ai.runtimeStatus}.`,
     },
     {
       id: "email",
@@ -1448,7 +1486,10 @@ async function callOpenAiCompatible(payload) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const message = data.error?.message || `AI provider returned ${response.status}`;
-      throw new Error(message);
+      const providerError = new Error(message);
+      providerError.status = response.status;
+      providerError.code = data.error?.code || data.error?.type || `http_${response.status}`;
+      throw providerError;
     }
     const content = data.choices?.[0]?.message?.content || "";
     return normalizeAiDraft(payload, parseAiJson(content), { provider: aiProvider, model: aiModel });
@@ -1459,9 +1500,17 @@ async function callOpenAiCompatible(payload) {
 
 async function generateAiDraft(payload) {
   if ((aiProvider === "openai" || aiProvider === "openai-compatible") && aiApiKey) {
+    aiRuntime.lastAttemptAt = new Date().toISOString();
     try {
-      return { ...(await callOpenAiCompatible(payload)), mode: "live" };
+      const draft = await callOpenAiCompatible(payload);
+      aiRuntime.status = "operational";
+      aiRuntime.lastSuccessAt = new Date().toISOString();
+      aiRuntime.lastErrorCode = null;
+      return { ...draft, mode: "live" };
     } catch (error) {
+      aiRuntime.status = "degraded";
+      aiRuntime.lastFailureAt = new Date().toISOString();
+      aiRuntime.lastErrorCode = classifyAiProviderError(error);
       return { ...fallbackAiDraft(payload), mode: "fallback", providerError: error.message };
     }
   }
@@ -2438,6 +2487,7 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname === "/api/health") {
     const readiness = await readinessReport();
+    const ai = aiStatus();
     return json(res, 200, {
       ok: true,
       service: "AgencyReport AI API",
@@ -2447,11 +2497,7 @@ async function handleApi(req, res, url) {
         score: readiness.score,
         missingRequired: readiness.missingRequired,
       },
-      ai: {
-        provider: aiProvider,
-        mode: aiApiKey ? "live-ready" : "fallback",
-        model: aiApiKey ? aiModel : "rules",
-      },
+      ai,
       email: {
         provider: emailProvider,
         mode: emailStatus().mode,

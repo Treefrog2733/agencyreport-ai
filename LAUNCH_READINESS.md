@@ -29,6 +29,7 @@ This document separates verified production state, locally verified changes that
 - [x] Bilingual clickable verification/reset emails and account-enumeration protection.
 - [x] Current dependency audit reports zero known vulnerabilities.
 - [x] Production smoke includes HTTPS enforcement, cold-start retries, and separate core-service versus full operational gates; the local production-mode run passed 51/51 checks.
+- [x] AI runtime monitoring records live provider degradation with sanitized quota/rate/auth/timeout categories, keeps rules fallback available, and automatically recovers readiness after the next successful live request; the local degradation/recovery smoke passed 9/9 assertions.
 - [x] **GitHub automation secrets:** repository Actions secrets now include `DATABASE_URL`, `BACKUP_ENCRYPTION_KEY`, `WORKER_SECRET`, and `APP_URL`; values remain encrypted and were not exposed during verification.
 - [x] **Backup automation:** manually triggered run `27844337774` completed successfully and produced encrypted artifact `agencyreport-db-27844337774` (52.9 KB) after the restore drill.
 - [x] **Worker automation:** manually triggered run `27844384272` completed successfully against the production application URL.

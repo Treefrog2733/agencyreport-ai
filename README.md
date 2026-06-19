@@ -77,6 +77,7 @@ node --check scripts/production-smoke.js
 npm run smoke:browser -- --url=http://127.0.0.1:4173/
 npm run db:check
 npm run smoke:ai
+npm run smoke:ai-runtime
 npm run smoke:legal
 npm run smoke:worker
 npm run smoke:i18n
@@ -314,6 +315,8 @@ Production requests use a 65-second timeout and retry eligible GET failures up t
 - both Traditional Chinese and English legal pages respond with a versioned policy
 
 Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live OpenAI report generation and fails unless the provider returns live structured summary, risk, action, client-message, and usage data. A ChatGPT subscription does not supply OpenAI API credits; API billing must be active separately.
+
+`npm run smoke:ai-runtime` uses a local fake provider to verify the operational state machine without spending API credits. A quota or provider failure must switch health and readiness to `degraded` with a sanitized error code while rules-based report output remains available; the next successful live response must automatically restore `live-ready` status.
 
 The public legal center is available at `/legal` and `/legal?lang=en`. Run `npm run smoke:legal` to verify bilingual section parity, the registered policy version, support contact, subprocessors, security headers, and mojibake protection. Use [LEGAL_REVIEW_CHECKLIST.md](LEGAL_REVIEW_CHECKLIST.md) for counsel review; keep `LEGAL_REVIEWED=false` until approval.
 
