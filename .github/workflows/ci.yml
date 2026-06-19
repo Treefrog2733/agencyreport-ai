@@ -1,0 +1,121 @@
+name: AgencyReport CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agencyreport-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run core regression
+        id: core
+        continue-on-error: true
+        shell: bash
+        run: |
+          status=0
+          for file in server.js app.js scripts/*.js; do
+            node --check "$file" || status=1
+          done
+          npm audit --omit=dev || status=1
+          npm run smoke:security || status=1
+          npm run smoke:payment || status=1
+          exit "$status"
+
+      - name: Start test server
+        id: server
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          NODE_ENV=test PORT=4280 node server.js > ci-server.log 2>&1 &
+          echo $! > ci-server.pid
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4280/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ci-server.log
+          exit 1
+
+      - name: Run browser smoke
+        id: browser
+        if: always() && steps.server.outcome == 'success'
+        continue-on-error: true
+        run: npm run smoke:browser -- --url http://127.0.0.1:4280/
+
+      - name: Run desktop English workspace smoke
+        id: desktop_en
+        if: always() && steps.server.outcome == 'success'
+        continue-on-error: true
+        run: npm run smoke:workspace -- --url http://127.0.0.1:4280/ --lang en --width 1440 --height 1100 --debug-port 9331 --out artifacts/workspace-desktop-en
+
+      - name: Run mobile English workspace smoke
+        id: mobile_en
+        if: always() && steps.server.outcome == 'success'
+        continue-on-error: true
+        run: npm run smoke:workspace -- --url http://127.0.0.1:4280/ --lang en --width 390 --height 844 --debug-port 9332 --out artifacts/workspace-mobile-en
+
+      - name: Run mobile Traditional Chinese workspace smoke
+        id: mobile_zh
+        if: always() && steps.server.outcome == 'success'
+        continue-on-error: true
+        run: npm run smoke:workspace -- --url http://127.0.0.1:4280/ --lang zh --width 390 --height 844 --debug-port 9333 --out artifacts/workspace-mobile-zh
+
+      - name: Stop test server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f ci-server.pid ]]; then
+            kill "$(cat ci-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agencyreport-ci-evidence
+          path: |
+            artifacts/
+            ci-server.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce regression gate
+        if: always()
+        shell: bash
+        run: |
+          failed=0
+          [[ "${{ steps.core.outcome }}" == "success" ]] || failed=1
+          [[ "${{ steps.server.outcome }}" == "success" ]] || failed=1
+          [[ "${{ steps.browser.outcome }}" == "success" ]] || failed=1
+          [[ "${{ steps.desktop_en.outcome }}" == "success" ]] || failed=1
+          [[ "${{ steps.mobile_en.outcome }}" == "success" ]] || failed=1
+          [[ "${{ steps.mobile_zh.outcome }}" == "success" ]] || failed=1
+          exit "$failed"

@@ -13,13 +13,26 @@ function argValue(name, fallback = "") {
 }
 
 function chromePath() {
-  return [
+  const candidates = [
     process.env.CHROME_PATH,
+    process.env.GOOGLE_CHROME_SHIM,
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  ].filter(Boolean).find((candidate) => fs.existsSync(candidate));
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+  ].filter(Boolean);
+  return candidates.find((candidate) => {
+    if (!candidate.includes("\\") && !candidate.includes("/")) return true;
+    return fs.existsSync(candidate);
+  });
 }
 
 async function waitForJson(url, timeoutMs = 15000) {

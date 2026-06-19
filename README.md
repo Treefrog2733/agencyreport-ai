@@ -304,6 +304,10 @@ The smoke test verifies:
 
 Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live OpenAI report generation and fails unless the provider returns live structured summary, risk, action, client-message, and usage data. A ChatGPT subscription does not supply OpenAI API credits; API billing must be active separately.
 
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push to `main`, pull request, and manual dispatch. It enforces syntax, dependency, security, ECPay signature, browser, desktop English, mobile English, and mobile Traditional Chinese regressions. Browser screenshots, report PDFs, DOM output, and server logs are uploaded as a 14-day workflow artifact even when a check fails.
+
 ## Security And Launch Notes
 
 Implemented launch hardening:
@@ -365,3 +369,4 @@ Still recommended before real paid traffic:
 - `scripts/security-smoke.js` - tenant, session, legal-consent, and password lifecycle regression test.
 - `scripts/payment-smoke.js` - ECPay stage signature and callback regression test.
 - `scripts/ai-smoke.js` - isolated live OpenAI report-generation regression test.
+- `.github/workflows/ci.yml` - push/PR regression gate with retained browser and report evidence.

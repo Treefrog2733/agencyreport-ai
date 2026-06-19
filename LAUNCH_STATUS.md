@@ -26,6 +26,7 @@ Last updated: 2026-06-19
 
 ## Automated Operations Added
 
+- Push/PR CI now runs syntax checks, dependency audit, tenant/session security regression, ECPay signature regression, browser smoke, and desktop/mobile bilingual workspace visual checks. Screenshots, PDFs, DOM output, and server logs are retained for 14 days.
 - Daily production smoke workflow with an outage issue opened on failure and closed on recovery.
 - Daily encrypted PostgreSQL backup workflow with 30-day artifact retention.
 - Database commands:
