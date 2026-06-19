@@ -17,7 +17,12 @@
     "smoke:security": "node scripts/security-smoke.js",
     "smoke:payment": "node scripts/payment-smoke.js",
     "smoke:ai": "node scripts/ai-smoke.js",
-    "smoke:backup": "node scripts/backup-smoke.js"
+    "smoke:backup": "node scripts/backup-smoke.js",
+    "smoke:legal": "node scripts/legal-smoke.js",
+    "smoke:worker": "node scripts/worker-smoke.js",
+    "smoke:i18n": "node scripts/i18n-smoke.js",
+    "smoke:auth-privacy": "node scripts/auth-privacy-smoke.js",
+    "smoke:connectors": "node scripts/connector-smoke.js"
   },
   "dependencies": {
     "pg": "^8.13.1"

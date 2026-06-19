@@ -1,5 +1,7 @@
 # AgencyReport AI
 
+See [LAUNCH_READINESS.md](LAUNCH_READINESS.md) for the evidence-based production launch gate and the remaining external approvals.
+
 AgencyReport AI is a monetizable SaaS MVP for marketing agencies. It helps agencies turn client requirements, CSV or Google Sheets data, and campaign KPIs into a client-ready monthly report with charts, AI-generated insights, next-month action items, and delivery records.
 
 The current product direction is simple: a public SaaS homepage first, then a gated agency workspace where users can import data and generate reports with minimal setup.
@@ -44,7 +46,7 @@ Local data/db.json fallback for development
 OpenAI / Resend / ECPay / connector credentials
 ```
 
-Production state is stored in normalized `agencyreport_records` rows, keyed by collection, record ID, and owner ID, with owner/collection indexes for tenant-scoped reads. `agencyreport_metadata` records schema state. The legacy `agencyreport_store` JSONB row is retained only as a migration rollback source; local development can still use `data/db.json`.
+Production state is stored in schema-v3 `agencyreport_records` rows, keyed by collection and record ID with explicit owner IDs. Writes use a transactional staging table, differential upserts, and deletion reconciliation so unchanged rows retain their database timestamps. Tenant/report indexes plus unique account-email, session-token-hash, and billing-token indexes enforce common lookup and identity invariants. An owner/payload constraint prevents tenant metadata drift. `agencyreport_metadata` records schema state. The legacy `agencyreport_store` JSONB row is retained only as a migration rollback source; local development can still use `data/db.json`.
 
 ## Local Development
 
@@ -75,6 +77,11 @@ node --check scripts/production-smoke.js
 npm run smoke:browser -- --url=http://127.0.0.1:4173/
 npm run db:check
 npm run smoke:ai
+npm run smoke:legal
+npm run smoke:worker
+npm run smoke:i18n
+npm run smoke:auth-privacy
+npm run smoke:connectors
 ```
 
 If PowerShell blocks `npm`, use:
@@ -296,6 +303,8 @@ The smoke test verifies:
 - homepage, API, robots, and sitemap responses include basic security headers
 - `robots.txt` exposes the sitemap
 - `sitemap.xml` responds
+
+Production requests use a 65-second timeout and retry eligible GET failures up to three times so Render free-tier cold starts do not create immediate false outages. Scheduled monitoring enforces core database, auth, AI, email, and worker health. Run the workflow manually with `require_operational=true`, or pass `--require-operational`, for the stricter legal, backup, and monitoring launch gate.
 - sensitive files such as `.env`, `server.js`, `data/db.json`, `package.json`, and `render.yaml` are blocked
 - `/api/health` is OK
 - production storage is PostgreSQL
@@ -306,9 +315,19 @@ The smoke test verifies:
 
 Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live OpenAI report generation and fails unless the provider returns live structured summary, risk, action, client-message, and usage data. A ChatGPT subscription does not supply OpenAI API credits; API billing must be active separately.
 
+The public legal center is available at `/legal` and `/legal?lang=en`. Run `npm run smoke:legal` to verify bilingual section parity, the registered policy version, support contact, subprocessors, security headers, and mojibake protection. Use [LEGAL_REVIEW_CHECKLIST.md](LEGAL_REVIEW_CHECKLIST.md) for counsel review; keep `LEGAL_REVIEWED=false` until approval.
+
+`npm run smoke:worker` verifies that the scheduled-report worker rejects unauthenticated calls, processes each due schedule once, generates an AI draft with safe fallback, advances the next run, sends the queued email, preserves tenant ownership, and keeps client content out of automation logs.
+
+`npm run smoke:i18n` verifies that every translated HTML key exists in both Traditional Chinese and English, both catalogs remain symmetric, HTML IDs stay unique, and public source files contain no replacement-character or private-use mojibake. English visual smoke also rejects visible CJK text on both the public landing page and every workspace view.
+
+`npm run smoke:auth-privacy` runs production-shaped password-reset and verification-resend requests against existing and missing addresses, ensuring that public responses cannot be used for account enumeration. Authentication emails follow the selected interface language and contain a clickable one-time action link.
+
+`npm run smoke:connectors` verifies report-ready CSV validation, Google Sheets URL allowlisting, localhost and arbitrary-host SSRF rejection, source ownership, and tenant-isolated sync history. Public Sheets imports are limited to HTTPS Google domains, validated across redirects, capped at 5 MB, and aborted after 12 seconds.
+
 ## Continuous Integration
 
-`.github/workflows/ci.yml` runs on every push to `main`, pull request, and manual dispatch. It enforces syntax, dependency, security, ECPay signature, browser, desktop English, mobile English, and mobile Traditional Chinese regressions. Browser screenshots, report PDFs, DOM output, and server logs are uploaded as a 14-day workflow artifact even when a check fails.
+`.github/workflows/ci.yml` runs on every push to `main`, pull request, and manual dispatch. It enforces syntax, dependency, security, ECPay signature, backup integrity, bilingual legal-document, browser, desktop English, mobile English, and mobile Traditional Chinese regressions. Browser screenshots, report PDFs, DOM output, and server logs are uploaded as a 14-day workflow artifact even when a check fails.
 
 ## Security And Launch Notes
 

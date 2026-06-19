@@ -95,8 +95,26 @@ async function run() {
   });
   const checkoutResponse = await fetch(`${baseUrl}${intent.checkoutUrl}`);
   const checkoutHtml = await checkoutResponse.text();
+  const checkoutCsp = checkoutResponse.headers.get("content-security-policy") || "";
+  const checkoutNonce = checkoutCsp.match(/'nonce-([^']+)'/)?.[1] || "";
   const fields = hiddenFields(checkoutHtml);
   const signatureMatches = fields.CheckMacValue === checkMac(fields);
+  const quoteResponse = await fetch(`${baseUrl}${intent.quoteUrl}`);
+  const quoteHtml = await quoteResponse.text();
+  const quoteCsp = quoteResponse.headers.get("content-security-policy") || "";
+  const quoteNonce = quoteCsp.match(/'nonce-([^']+)'/)?.[1] || "";
+  await json("/api/billing/quote/accept", {
+    method: "POST",
+    body: JSON.stringify({ token: intent.token, legalVersion: "legal-2026-06-18" }),
+  });
+  const invoice = await json("/api/billing/quote/invoice", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ token: intent.token }),
+  });
+  const invoiceResponse = await fetch(`${baseUrl}${invoice.invoiceUrl}`);
+  const invoiceHtml = await invoiceResponse.text();
+  const invoiceCsp = invoiceResponse.headers.get("content-security-policy") || "";
 
   const forged = new URLSearchParams({
     MerchantID: merchantId,
@@ -140,12 +158,16 @@ async function run() {
     checkoutUsesStageEndpoint: /payment-stage\.ecpay\.com\.tw/.test(checkoutHtml),
     checkoutHasRequiredFields: Boolean(fields.MerchantID && fields.MerchantTradeNo && fields.TotalAmount && fields.ReturnURL),
     checkoutSignatureMatches: signatureMatches,
+    checkoutUsesNonceCsp: Boolean(checkoutNonce) && checkoutHtml.includes(`nonce="${checkoutNonce}"`) && !/script-src[^;]*'unsafe-inline'/.test(checkoutCsp),
+    quoteUsesNonceCsp: Boolean(quoteNonce) && quoteHtml.includes(`nonce="${quoteNonce}"`) && !/script-src[^;]*'unsafe-inline'/.test(quoteCsp),
+    invoiceIsReadOnly: !invoiceHtml.includes("payInvoiceBtn") && !invoiceHtml.includes("/api/billing/invoice/pay") && !/script-src[^;]*'unsafe-inline'/.test(invoiceCsp),
     forgedCallbackRejected: forgedResponse.status === 403,
     signedWrongAmountRejected: wrongAmountResponse.status === 403,
     validCallbackAccepted: paidResponse.status === 200 && (await paidResponse.text()) === "1|OK",
     paidIntentIsTrusted: updated?.paymentStatus === "paid" && updated?.trustedPayment === true,
   };
   Object.entries(checks).forEach(([name, ok]) => console.log(`${ok ? "OK" : "FAIL"} ${name}`));
+  if (!checks.paidIntentIsTrusted) console.log(`Payment state: ${JSON.stringify(updated || null)}`);
   if (Object.values(checks).some((ok) => !ok)) process.exitCode = 1;
 }
 

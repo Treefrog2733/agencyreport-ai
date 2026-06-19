@@ -48,7 +48,7 @@ const connectorEnv = {
 let writeQueue = Promise.resolve();
 let pgPool = null;
 let pgStoreReady = false;
-const postgresSchemaVersion = 2;
+const postgresSchemaVersion = 3;
 
 function loadLocalEnv() {
   const envPath = path.join(root, ".env");
@@ -173,9 +173,10 @@ function securityHeaders(extra = {}) {
   };
 }
 
-function interactivePageHeaders(extra = {}) {
+function interactivePageHeaders(nonce, extra = {}) {
+  const scriptPolicy = nonce ? `'self' 'nonce-${nonce}'` : "'self'";
   return securityHeaders({
-    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw",
+    "content-security-policy": `default-src 'self'; script-src ${scriptPolicy}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw`,
     ...extra,
   });
 }
@@ -276,11 +277,37 @@ async function postgresPool() {
         on agencyreport_records (owner_id, collection);
       create index if not exists agencyreport_records_updated_idx
         on agencyreport_records (updated_at desc);
+      create index if not exists agencyreport_reports_owner_month_idx
+        on agencyreport_records (owner_id, ((payload->>'month')))
+        where collection = 'reports';
+      create unique index if not exists agencyreport_auth_users_email_uidx
+        on agencyreport_records (lower(payload->>'email'))
+        where collection = 'auth_users';
+      create unique index if not exists agencyreport_auth_sessions_hash_uidx
+        on agencyreport_records ((payload->>'tokenHash'))
+        where collection = 'auth_sessions';
+      create unique index if not exists agencyreport_billing_token_uidx
+        on agencyreport_records ((payload->>'token'))
+        where collection = 'billing_intents';
       create table if not exists agencyreport_metadata (
         key text primary key,
         value jsonb not null,
         updated_at timestamptz not null default now()
       );
+      do $$ begin
+        if not exists (select 1 from pg_constraint where conname = 'agencyreport_records_owner_matches_payload') then
+          alter table agencyreport_records add constraint agencyreport_records_owner_matches_payload
+            check (owner_id is not distinct from nullif(payload->>'ownerId', ''));
+        end if;
+      end $$;
+      insert into agencyreport_metadata (key, value, updated_at)
+      values ('schema_version', '${postgresSchemaVersion}'::jsonb, now())
+      on conflict (key) do update
+        set value = excluded.value,
+            updated_at = case
+              when agencyreport_metadata.value is distinct from excluded.value then now()
+              else agencyreport_metadata.updated_at
+            end;
     `);
     pgStoreReady = true;
   }
@@ -302,16 +329,41 @@ function normalizedRecords(db) {
 
 async function replaceNormalizedRecords(client, db) {
   const records = normalizedRecords(db);
-  await client.query("delete from agencyreport_records");
+  await client.query(`
+    create temporary table agencyreport_records_stage (
+      collection text not null,
+      record_id text not null,
+      owner_id text,
+      payload jsonb not null
+    ) on commit drop
+  `);
   if (records.length) {
     await client.query(
-      `insert into agencyreport_records (collection, record_id, owner_id, payload, created_at, updated_at)
-       select item.collection, item.record_id, item.owner_id, item.payload, now(), now()
+      `insert into agencyreport_records_stage (collection, record_id, owner_id, payload)
+       select item.collection, item.record_id, item.owner_id, item.payload
        from jsonb_to_recordset($1::jsonb)
          as item(collection text, record_id text, owner_id text, payload jsonb)`,
       [JSON.stringify(records)]
     );
   }
+  await client.query(`
+    insert into agencyreport_records (collection, record_id, owner_id, payload, created_at, updated_at)
+    select collection, record_id, owner_id, payload, now(), now()
+    from agencyreport_records_stage
+    on conflict (collection, record_id) do update
+      set owner_id = excluded.owner_id,
+          payload = excluded.payload,
+          updated_at = now()
+      where agencyreport_records.owner_id is distinct from excluded.owner_id
+         or agencyreport_records.payload is distinct from excluded.payload
+  `);
+  await client.query(`
+    delete from agencyreport_records current
+    where not exists (
+      select 1 from agencyreport_records_stage staged
+      where staged.collection = current.collection and staged.record_id = current.record_id
+    )
+  `);
   await client.query(
     `insert into agencyreport_metadata (key, value, updated_at)
      values ('schema_version', $1::jsonb, now()),
@@ -407,6 +459,8 @@ async function writeDb(db) {
 function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, securityHeaders({
     "content-type": "application/json;charset=utf-8",
+    "cache-control": "no-store",
+    pragma: "no-cache",
     ...extraHeaders,
   }));
   res.end(JSON.stringify(body));
@@ -435,8 +489,8 @@ function clearSessionCookie() {
   ].filter(Boolean).join("; ");
 }
 
-function legalHtml(language = "zh") {
-  if (language === "en") return legalEnglishHtml();
+function legacyLegalHtml(language = "zh") {
+  if (language === "en") return legacyLegalEnglishHtml();
   return `<!doctype html>
 <html lang="zh-Hant">
 <head>
@@ -498,7 +552,7 @@ function legalHtml(language = "zh") {
 </html>`;
 }
 
-function legalEnglishHtml() {
+function legacyLegalEnglishHtml() {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -554,7 +608,65 @@ function legalEnglishHtml() {
 </body>
 </html>`;
 }
-async function quoteHtml(token) {
+
+function legalDocumentHtml(language = "zh") {
+  const english = language === "en";
+  const copy = english ? {
+    lang: "en",
+    title: "Terms, Privacy and AI Notice",
+    description: "AgencyReport AI terms, privacy policy, AI disclosure, refund policy, and data processing addendum.",
+    switchLabel: "繁體中文",
+    switchHref: "/legal",
+    eyebrow: "Legal center",
+    status: "Publication draft · pending Taiwan counsel review",
+    intro: "This page explains the rights and responsibilities that apply to AgencyReport AI, how information is processed, and the rules for AI output and paid service. The policy version recorded at registration controls.",
+    contents: "Contents",
+    nav: ["Scope", "Terms", "Privacy", "AI transparency", "Billing and refunds", "Data processing", "Rights and contact"],
+    notice: "This is a pre-launch legal draft, not legal advice. Company registration details, refund-law applicability, international transfers, and jurisdiction language must still be confirmed by counsel familiar with Taiwan SaaS, privacy, consumer, and e-commerce law.",
+    sections: [
+      ["1. Scope and provider", `<p>AgencyReport AI is a marketing-report automation service operated by Virtual Trend Works. It imports marketing data and produces KPI charts, AI summaries, risk analysis, next-month actions, and client deliverables. Registering, signing in, or using the service means accepting the legal version shown at that time.</p>`],
+      ["2. Terms of Service", `<h3>Accounts and acceptable use</h3><ul><li>Users must provide accurate information, protect credentials, and remain responsible for account activity.</li><li>Users may not upload unlawful, infringing, malicious, or unauthorized personal data, or bypass usage, payment, or security controls.</li></ul><h3>Customer data and ownership</h3><ul><li>Users retain rights in uploaded data, brand content, and generated reports and represent that they are authorized to submit that data.</li><li>Virtual Trend Works retains rights in the platform, interfaces, templates, and underlying technology and does not acquire ownership of customer data beyond what is needed to provide the service.</li></ul><h3>Availability and responsibility</h3><ul><li>We use reasonable efforts to maintain the service but cannot guarantee uninterrupted third-party platforms, networks, or AI services.</li><li>Users must verify source data, platform definitions, forecasts, and client-facing content before delivery. Liability is limited to the extent permitted by law.</li></ul>`],
+      ["3. Privacy Policy", `<h3>Data collected</h3><ul><li>Account data: name, email, password hash, verification status, and authenticated sessions.</li><li>Business data: client names, report periods, requirements, CSV or spreadsheet content, KPIs, AI output, and delivery records.</li><li>Operational data: plan, usage, payment status, email delivery, audit events, hashed IP, browser information, and error records.</li></ul><h3>Purpose and retention</h3><ul><li>Data is processed for authentication, reporting, AI analysis, delivery, billing, fraud prevention, support, and service security.</li><li>Account and report data is generally retained until account deletion or no longer needed. Payment, audit, and statutory records are retained as required for law and disputes. Backup copies expire through rotation.</li><li>We do not sell customer data or use it for unrelated third-party marketing.</li></ul>`],
+      ["4. AI transparency and human review", `<ul><li>Necessary requirements, imported metrics, and strongest or weakest channels may be sent to an AI provider to create summaries, risks, actions, and client messages.</li><li>AI output may be incomplete or inaccurate. It is not legal, financial, medical, or advertising-compliance advice and does not make final decisions for the user.</li><li>If AI is unavailable, rules-based recommendations may be used. Users must review all output before delivery.</li></ul>`],
+      ["5. Subscriptions, cancellation and refunds", `<ul><li>Price, billing cycle, and report or AI limits are displayed before checkout. Plans begin after successful payment and renew according to the checkout terms.</li><li>Users may request cancellation before the next renewal and ordinarily retain access through the paid term.</li><li>Except where required by law, for duplicate charges, or when the service cannot be provided, used periods are generally not refunded pro rata. Mandatory consumer rights are not excluded.</li><li>Send refund or payment disputes to support@virtualtrendworks.com. Final timing and digital-service exceptions remain subject to counsel and payment-provider review.</li></ul>`],
+      ["6. Data Processing Addendum and subprocessors", `<p>For data uploaded on behalf of a client, the user generally acts as controller or instructing party and Virtual Trend Works acts as the service provider processing documented instructions. We use reasonable access controls, encryption in transit, session protection, audit logging, and backup verification.</p>`],
+      ["7. Data rights, termination and contact", `<ul><li>Signed-in users can export account data and delete an account, and may request access, correction, restriction, or deletion. Records required for payment, security, law, or disputes may be temporarily retained.</li><li>Account deletion revokes sessions and removes primary tenant data. Backup copies expire through rotation, while limited anonymous audit evidence may remain.</li><li>If translations differ, the version finally approved by counsel and shown at registration or checkout will control.</li></ul>`],
+    ],
+    providers: "Subprocessors and service regions",
+    providerNote: "Providers may process data outside Taiwan. We limit transferred data to service needs and manage providers through their terms and applicable requirements. Material security incidents will be assessed and notified as required by law.",
+    contact: "Contact",
+    footer: legalReviewed ? "Marked as counsel reviewed" : "Pending counsel review",
+  } : {
+    lang: "zh-Hant",
+    title: "服務條款、隱私政策與 AI 透明度聲明",
+    description: "AgencyReport AI 服務條款、隱私政策、AI 揭露、退款政策與資料處理附錄。",
+    switchLabel: "English",
+    switchHref: "/legal?lang=en",
+    eyebrow: "法律文件中心",
+    status: "發布草稿 · 待台灣法律顧問複核",
+    intro: "本頁說明使用 AgencyReport AI 時雙方的權利義務、資料如何處理，以及 AI 產出與付費服務的適用原則。生效版本以註冊時記錄的版本為準。",
+    contents: "文件目錄",
+    nav: ["適用範圍", "服務條款", "隱私政策", "AI 透明度", "訂閱與退款", "資料處理", "資料權利與聯絡"],
+    notice: "此文件是正式營運前的法律底稿，不取代專業法律意見。公司登記資訊、退款法規適用、跨境傳輸與管轄條款仍須由熟悉台灣 SaaS、個資及電子商務規範的法律顧問確認。",
+    sections: [
+      ["1. 適用範圍與服務提供者", `<p>AgencyReport AI 是由 Virtual Trend Works 營運的代理商月報自動化服務，協助使用者匯入行銷資料、產生 KPI 圖表、AI 摘要、風險分析、下月行動建議與客戶交付文件。註冊、登入或使用服務，即表示同意當時顯示的法律版本。</p>`],
+      ["2. 服務條款", `<h3>帳號與允許使用</h3><ul><li>使用者應提供正確資料、妥善保管登入憑證，並對帳號內的操作負責。</li><li>不得上傳違法、侵權、惡意程式或未經授權的個人資料，也不得繞過用量、付款或安全控制。</li></ul><h3>客戶資料與智慧財產</h3><ul><li>使用者保有上傳資料、品牌內容與產出報告的權利，並保證有權交付該等資料。</li><li>Virtual Trend Works 保有平台程式、介面、範本與底層技術的權利；除提供服務所必要外，不取得客戶資料所有權。</li></ul><h3>可用性與責任</h3><ul><li>我們採取合理措施維持服務，但不保證第三方平台、網路或 AI 服務永不中斷。</li><li>使用者須在交付前核對來源數據、平台定義、預測與文字內容。責任限制以法律允許範圍為限。</li></ul>`],
+      ["3. 隱私政策", `<h3>蒐集資料</h3><ul><li>帳號資料：名稱、Email、密碼雜湊、驗證狀態與登入工作階段。</li><li>業務資料：客戶名稱、報告月份、需求文字、CSV 或試算表內容、KPI、AI 產出與交付紀錄。</li><li>營運資料：方案、用量、付款狀態、Email 寄送、稽核事件、IP 雜湊、瀏覽器與錯誤紀錄。</li></ul><h3>處理目的與保存</h3><ul><li>資料用於身分驗證、產生與保存報告、AI 分析、交付、計費、詐欺防治、客服及系統安全。</li><li>帳號與報告資料通常保存至帳號刪除或不再需要；付款、稽核及法定紀錄依法律與爭議處理需要保存；備份依輪替週期移除。</li><li>我們不出售客戶資料，也不將資料用於無關的第三方行銷。</li></ul>`],
+      ["4. AI 透明度與人工覆核", `<ul><li>必要的客戶需求、匯入指標、最佳與最弱渠道可能傳送至 AI 供應商，以產生摘要、風險、行動建議及客戶說明稿。</li><li>AI 內容可能不完整或不正確，不構成法律、財務、醫療或廣告合規意見，也不會代替使用者作最終決策。</li><li>AI 服務失敗時，系統可能改用規則型建議；所有內容在交付前都須由使用者覆核。</li></ul>`],
+      ["5. 訂閱、取消與退款", `<ul><li>價格、計費週期、月報或 AI 用量會在結帳前顯示，方案於付款成功後啟用並依結帳條件續訂。</li><li>使用者可在下次續訂前提出停止續訂，既有權限原則上維持至已付期間結束。</li><li>除法律另有要求、重複扣款或服務確實無法提供外，已使用期間原則上不按比例退款；強制消費者權利不受排除。</li><li>退款或付款爭議請寄至 support@virtualtrendworks.com；最終時程與數位服務例外仍待法律與金流複核。</li></ul>`],
+      ["6. 資料處理附錄與第三方服務", `<p>就使用者代表客戶上傳的資料，使用者通常為資料控制者或委託方，Virtual Trend Works 為依指示處理資料的服務提供者。我們採取合理的存取控制、傳輸加密、工作階段保護、稽核與備份驗證措施。</p>`],
+      ["7. 資料權利、終止與聯絡", `<ul><li>登入後可匯出帳號資料及刪除帳號，也可要求查詢、更正、停止處理或刪除；付款、安全、法律或爭議所需紀錄可能暫時保留。</li><li>帳號刪除會撤銷工作階段並移除主要租戶資料；備份隨輪替移除，有限的匿名稽核證明可能保留。</li><li>中英文如有差異，以法律顧問最後核定並於註冊或結帳顯示的版本為準。</li></ul>`],
+    ],
+    providers: "第三方處理者與服務地區",
+    providerNote: "第三方服務可能在台灣以外地區處理資料。我們會把傳送範圍限制在服務所需，並依服務條款與適用規範管理。重大安全事件將在評估後依法律要求通知。",
+    contact: "聯絡方式",
+    footer: legalReviewed ? "已標記完成法律複核" : "待法律顧問複核",
+  };
+  const ids = ["overview", "terms", "privacy", "ai", "billing", "dpa", "rights"];
+  const providers = [["Render", english ? "Web and API hosting" : "網站與 API 託管"], ["Supabase / PostgreSQL", english ? "Production database" : "正式資料庫"], ["OpenAI", english ? "AI report processing" : "AI 報告內容處理"], ["Resend", english ? "Transactional and delivery email" : "交易與交付 Email"], ["ECPay", english ? "Payment processing when enabled" : "正式啟用後的付款處理"], ["GitHub Actions", english ? "Deployment checks and encrypted backups" : "部署檢查與加密備份"]];
+  return `<!doctype html><html lang="${copy.lang}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${copy.title} | AgencyReport AI</title><meta name="description" content="${copy.description}" /><link rel="canonical" href="${publicOrigin()}/legal${english ? "?lang=en" : ""}" /><link rel="alternate" hreflang="zh-Hant" href="${publicOrigin()}/legal" /><link rel="alternate" hreflang="en" href="${publicOrigin()}/legal?lang=en" /><style>:root{color-scheme:light;--ink:#10201f;--muted:#5c6d69;--line:#d8e3df;--brand:#0f766e}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:#f4f7f6}a{color:var(--brand)}header{background:#082f2d;color:#fff}.inner,main{max-width:1120px;margin:auto}.inner{padding:42px 24px}.top{display:flex;justify-content:space-between;gap:16px}.brand{font-weight:850}.switch{color:#d8fffa;font-weight:750}.eyebrow{margin-top:28px;color:#7ee7d7;font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}.status{display:inline-flex;padding:7px 10px;border:1px solid #c9a84a;border-radius:999px;background:#493c13;color:#fff4c3;font-size:13px;font-weight:800}h1{max-width:820px;margin:14px 0 0;font-size:clamp(32px,5vw,54px);line-height:1.08}header p{max-width:820px;color:#cbe0dc;line-height:1.7}main{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;padding:28px 24px 60px}nav{position:sticky;top:20px;align-self:start;padding:18px;border:1px solid var(--line);border-radius:8px;background:#fff}nav strong,nav a{display:block}nav a{padding:8px 0;color:#42534f;text-decoration:none;font-size:14px}article{min-width:0;padding:34px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 18px 50px rgba(15,23,42,.07)}section+section{padding-top:18px;border-top:1px solid var(--line)}h2{margin:22px 0 10px;font-size:24px}h3{margin:18px 0 8px;font-size:17px}p,li{color:var(--muted);line-height:1.75}li+li{margin-top:7px}.notice{padding:15px;border:1px solid #ead395;border-radius:8px;background:#fff8e7}.providers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.provider{padding:13px;border:1px solid var(--line);border-radius:8px;background:#fbfdfc}.provider span{display:block;margin-top:4px;color:var(--muted);font-size:13px}footer{margin-top:26px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}@media(max-width:760px){.inner{padding:32px 20px}.top{flex-direction:column}main{grid-template-columns:1fr;padding:18px 14px 40px}nav{position:static}article{padding:22px}.providers{grid-template-columns:1fr}}</style></head><body><header><div class="inner"><div class="top"><span class="brand">AgencyReport AI by Virtual Trend Works</span><a class="switch" href="${copy.switchHref}">${copy.switchLabel}</a></div><p class="eyebrow">${copy.eyebrow} · ${escapeHtml(legalVersion)}</p><span class="status">${copy.status}</span><h1>${copy.title}</h1><p>${copy.intro}</p></div></header><main><nav aria-label="${copy.contents}"><strong>${copy.contents}</strong>${copy.nav.map((label, index) => `<a href="#${ids[index]}">${label}</a>`).join("")}</nav><article><p class="notice"><strong>${english ? "Important:" : "重要："}</strong> ${copy.notice}</p>${copy.sections.map(([title, body], index) => `<section id="${ids[index]}"><h2>${title}</h2>${body}${index === 5 ? `<h3>${copy.providers}</h3><div class="providers">${providers.map(([name, purpose]) => `<div class="provider"><strong>${name}</strong><span>${purpose}</span></div>`).join("")}</div><p>${copy.providerNote}</p>` : ""}${index === 6 ? `<p><strong>${copy.contact}：</strong><a href="mailto:support@virtualtrendworks.com">support@virtualtrendworks.com</a><br /><strong>Website：</strong><a href="${publicOrigin()}">${publicOrigin()}</a></p>` : ""}</section>`).join("")}<footer>${english ? "Policy version" : "文件版本"}：${escapeHtml(legalVersion)} · ${copy.footer}</footer></article></main></body></html>`;
+}
+async function quoteHtml(token, nonce) {
   const db = await readDb();
   const quote = db.billing_intents.find((item) => item.id === token || item.token === token);
   if (!quote) return null;
@@ -597,7 +709,7 @@ async function quoteHtml(token) {
       <div class="status ${quote.status === "accepted" ? "ok" : ""}" id="quoteStatus">${quote.status === "accepted" ? `已於 ${escapeHtml(quote.acceptedAt || "-")} 接受。` : "接受後，代理商會收到可追蹤的 quote accepted 紀錄。"}</div>
     </article>
   </main>
-  <script>
+  <script nonce="${escapeHtml(nonce)}">
     const token = ${JSON.stringify(quote.token || token)};
     const button = document.querySelector("#acceptQuoteBtn");
     const statusBox = document.querySelector("#quoteStatus");
@@ -671,36 +783,9 @@ async function invoiceHtml(token) {
       <h2>付款前確認</h2>
       <ul><li>請確認方案、金額、到期日與服務範圍。</li><li>正式上線前請串接真實付款、發票與會計流程。</li><li>付款完成後即可啟用客戶入口、自動報告與交付流程。</li></ul>
       <a class="button" href="/legal" target="_blank" rel="noreferrer">查看條款與隱私</a>
-      <button class="button" id="payInvoiceBtn" type="button" ${invoice.status === "paid" ? "disabled" : ""}>${invoice.status === "paid" ? "已確認付款" : "確認付款"}</button>
-      <div class="status ${invoice.status === "paid" ? "ok" : ""}" id="invoicePayStatus">${invoice.status === "paid" ? `已於 ${escapeHtml(invoice.paidAt || "-")} 確認付款。` : "此 MVP 按鈕代表手動付款確認；正式上線時請改接金流 callback。"}</div>
+      <div class="status ${invoice.status === "paid" ? "ok" : ""}" id="invoicePayStatus">${invoice.status === "paid" ? `已於 ${escapeHtml(invoice.paidAt || "-")} 由金流回調確認付款。` : "付款狀態將由綠界安全回調更新，無需在此頁手動確認。"}</div>
     </article>
   </main>
-  <script>
-    const token = ${JSON.stringify(invoice.token || token)};
-    const button = document.querySelector("#payInvoiceBtn");
-    const statusBox = document.querySelector("#invoicePayStatus");
-    button?.addEventListener("click", async () => {
-      button.disabled = true;
-      button.textContent = "處理中...";
-      try {
-        const response = await fetch("/api/billing/invoice/pay", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token, legalVersion: ${JSON.stringify(legalVersion)} })
-        });
-        if (!response.ok) throw new Error("Pay failed");
-        const data = await response.json();
-        button.textContent = "已確認付款";
-        statusBox.className = "status ok";
-        statusBox.textContent = "已於 " + (data.item.paidAt || new Date().toISOString()) + " 確認付款。";
-      } catch (error) {
-        button.disabled = false;
-        button.textContent = "確認付款";
-        statusBox.className = "status";
-        statusBox.textContent = "確認失敗，請稍後再試或聯繫代理商。";
-      }
-    });
-  </script>
 </body>
 </html>`;
 }
@@ -841,11 +926,15 @@ async function readAnyBody(req) {
   }
 }
 
+function definedFields(payload = {}) {
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+}
+
 function withId(payload) {
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    ...payload,
+    ...definedFields(payload),
   };
 }
 
@@ -986,7 +1075,7 @@ function ecpayPayloadForIntent(intent) {
   return payload;
 }
 
-function autoSubmitForm(action, fields) {
+function autoSubmitForm(action, fields, nonce) {
   const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`).join("");
   return `<!doctype html>
 <html lang="zh-Hant">
@@ -1009,7 +1098,7 @@ function autoSubmitForm(action, fields) {
       <button class="button" type="submit">&#21069;&#24448;&#20184;&#27454;</button>
     </form>
   </main>
-  <script>document.forms[0].submit();</script>
+  <script nonce="${escapeHtml(nonce)}">document.forms[0].submit();</script>
 </body>
 </html>`;
 }
@@ -1105,9 +1194,11 @@ async function readinessReport() {
     {
       id: "connectors",
       label: "Data connectors",
-      ok: connectorEnv.google_ads || connectorEnv.meta_ads || connectorEnv.ga4 || connectorEnv.google_sheets,
+      ok: true,
       required: false,
-      detail: "At least one live connector is recommended; public Sheets CSV can still run MVP delivery.",
+      detail: connectorEnv.google_ads || connectorEnv.meta_ads || connectorEnv.ga4 || connectorEnv.google_sheets
+        ? "At least one authenticated connector is configured; manual CSV and secure public Google Sheets import are also available."
+        : "Manual CSV and secure public Google Sheets CSV import are ready; direct Ads and Analytics credentials remain optional upgrades.",
     },
     {
       id: "legal",
@@ -1378,7 +1469,7 @@ async function generateAiDraft(payload) {
 }
 
 function isWorkerAuthorized(req) {
-  if (!workerSecret) return true;
+  if (!workerSecret) return false;
   const headerSecret = req.headers["x-worker-secret"];
   if (typeof headerSecret !== "string" || headerSecret.length !== workerSecret.length) return false;
   return crypto.timingSafeEqual(Buffer.from(headerSecret), Buffer.from(workerSecret));
@@ -1394,11 +1485,77 @@ function nextScheduleRun(schedule, from = new Date()) {
 }
 
 function connectorStatus(type) {
-  const normalized = type || "manual_csv";
+  const normalized = normalizeConnectorType(type);
   if (normalized === "manual_csv") return { status: "ready", mode: "manual", provider: normalized };
   if (normalized === "google_sheets") return { status: connectorEnv.google_sheets ? "live-ready" : "csv-url-ready", mode: connectorEnv.google_sheets ? "api" : "public_csv", provider: normalized };
   if (connectorEnv[normalized]) return { status: "live-ready", mode: "api", provider: normalized };
   return { status: "needs_credentials", mode: "mock", provider: normalized };
+}
+
+function normalizeConnectorType(type) {
+  const value = String(type || "manual_csv").toLowerCase();
+  if (["csv", "manual", "manual_csv"].includes(value)) return "manual_csv";
+  if (["sheets", "sheet", "google_sheets"].includes(value)) return "google_sheets";
+  return value;
+}
+
+function validateReportCsv(text) {
+  const lines = String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  const headers = (lines[0] || "").split(",").map((item) => item.trim().replace(/^"|"$/g, "").toLowerCase());
+  const metrics = ["spend", "impressions", "clicks", "conversions", "revenue"];
+  return {
+    ok: lines.length > 1 && headers.includes("channel") && metrics.some((key) => headers.includes(key)),
+    rowCount: Math.max(0, lines.length - 1),
+    headers,
+  };
+}
+
+function googleSheetsCsvUrl(rawUrl) {
+  let url;
+  try {
+    url = new URL(String(rawUrl || ""));
+  } catch {
+    throw new Error("Enter a valid Google Sheets URL");
+  }
+  if (url.protocol !== "https:" || url.hostname !== "docs.google.com") throw new Error("Only HTTPS Google Sheets URLs are supported");
+  const published = url.pathname.match(/^\/spreadsheets\/d\/e\/([A-Za-z0-9_-]+)/);
+  const standard = url.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]+)/);
+  const gid = url.searchParams.get("gid") || (url.hash.match(/gid=(\d+)/)?.[1]) || "0";
+  if (published) return `https://docs.google.com/spreadsheets/d/e/${published[1]}/pub?output=csv&gid=${encodeURIComponent(gid)}`;
+  if (standard) return `https://docs.google.com/spreadsheets/d/${standard[1]}/export?format=csv&gid=${encodeURIComponent(gid)}`;
+  throw new Error("The Google Sheets URL does not contain a spreadsheet ID");
+}
+
+async function fetchPublicSheetCsv(rawUrl) {
+  let target = googleSheetsCsvUrl(rawUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    for (let redirect = 0; redirect < 4; redirect += 1) {
+      const response = await fetch(target, { redirect: "manual", signal: controller.signal, headers: { accept: "text/csv,text/plain;q=0.9" } });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) throw new Error("Google Sheets redirect is missing a destination");
+        const next = new URL(location, target);
+        const allowed = next.protocol === "https:" && (next.hostname === "docs.google.com" || next.hostname.endsWith(".googleusercontent.com"));
+        if (!allowed) throw new Error("Google Sheets redirected to an untrusted host");
+        target = next.toString();
+        continue;
+      }
+      if (!response.ok) throw new Error(`Google Sheets CSV returned ${response.status}`);
+      const declaredSize = Number(response.headers.get("content-length") || 0);
+      if (declaredSize > 5_000_000) throw new Error("Google Sheets CSV exceeds the 5 MB limit");
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > 5_000_000) throw new Error("Google Sheets CSV exceeds the 5 MB limit");
+      return bytes.toString("utf8").replace(/^\uFEFF/, "");
+    }
+    throw new Error("Google Sheets returned too many redirects");
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Google Sheets request timed out");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function countCsvRows(text) {
@@ -1409,29 +1566,30 @@ function countCsvRows(text) {
 }
 
 async function testDataConnector(payload) {
-  const type = payload.type || payload.sourceType || "manual_csv";
+  const type = normalizeConnectorType(payload.type || payload.sourceType);
   const base = connectorStatus(type);
   if (type === "manual_csv") {
-    const rowCount = countCsvRows(payload.csv || payload.sampleCsv || "");
-    return { ...base, ok: rowCount > 1, rowCount, message: rowCount > 1 ? "Manual CSV is parseable." : "Manual CSV needs a header and at least one row." };
+    const validation = validateReportCsv(payload.csv || payload.sampleCsv || "");
+    return { ...base, ok: validation.ok, rowCount: validation.rowCount, headers: validation.headers, message: validation.ok ? "Manual CSV is ready for reporting." : "CSV needs a channel column, at least one KPI column, and one data row." };
   }
   if (type === "google_sheets" && payload.url) {
-    const response = await fetch(payload.url);
-    if (!response.ok) throw new Error(`Google Sheets CSV returned ${response.status}`);
-    const text = await response.text();
-    return { ...base, ok: true, rowCount: countCsvRows(text), message: "Google Sheets CSV is reachable." };
+    const text = await fetchPublicSheetCsv(payload.url);
+    const validation = validateReportCsv(text);
+    return { ...base, ok: validation.ok, rowCount: validation.rowCount, headers: validation.headers, csv: validation.ok ? text : undefined, message: validation.ok ? "Google Sheets CSV was imported securely." : "The sheet is reachable but does not contain report-ready columns." };
   }
   if (base.status === "live-ready") return { ...base, ok: true, rowCount: 0, message: `${type} credentials are configured.` };
   return { ...base, ok: false, rowCount: 0, message: `${type} credentials are not configured yet.` };
 }
 
-async function createDataSync(payload) {
+async function createDataSync(payload, ownerId) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
-    const source = payload.sourceId ? db.data_sources.find((item) => item.id === payload.sourceId) : null;
+    const source = payload.sourceId ? db.data_sources.find((item) => item.id === payload.sourceId && item.ownerId === ownerId) : null;
+    if (payload.sourceId && !source) throw new Error("Data source not found");
     const test = await testDataConnector({ ...source, ...payload });
     const sync = withId({
       sourceId: source?.id || payload.sourceId || null,
+      ownerId,
       clientName: payload.clientName || source?.clientName || "",
       type: payload.type || source?.type || "manual_csv",
       status: test.ok ? "synced" : "needs_credentials",
@@ -1495,7 +1653,7 @@ async function updateEmailJobStatus(payload) {
     if (index === -1) throw new Error("Email job not found");
     const updated = {
       ...db.email_jobs[index],
-      ...payload,
+      ...definedFields(payload),
       updatedAt: new Date().toISOString(),
     };
     db.email_jobs[index] = updated;
@@ -1531,18 +1689,19 @@ async function processDueSchedules() {
     const createdEmails = [];
     const updatedSchedules = [];
     for (const schedule of due) {
-      const draft = fallbackAiDraft(schedule);
+      const draft = await generateAiDraft(schedule);
       const run = withId({
         ...schedule,
         scheduleId: schedule.id,
         status: "completed",
         ...draft,
-        mode: "scheduled-fallback",
+        mode: draft.mode === "live" ? "scheduled-live" : "scheduled-fallback",
       });
       db.ai_runs.push(run);
       createdRuns.push(run);
       if (schedule.deliveryEmail) {
-        const email = withId({
+        let email = withId({
+          ownerId: schedule.ownerId,
           agencyName: schedule.agencyName,
           clientName: schedule.clientName,
           reportMonth: schedule.reportMonth,
@@ -1555,6 +1714,11 @@ async function processDueSchedules() {
           scheduleId: schedule.id,
           queuedAt: new Date().toISOString(),
         });
+        try {
+          email = { ...email, ...(await sendEmailJob(email)) };
+        } catch (error) {
+          email = { ...email, status: "failed", error: error.message, provider: emailProvider };
+        }
         db.email_jobs.push(email);
         createdEmails.push(email);
       }
@@ -1590,8 +1754,8 @@ async function upsertOwnedRecord(collection, payload, ownerId) {
     const index = payload.id ? db[collection].findIndex((item) => item.id === payload.id && item.ownerId === ownerId) : -1;
     const now = new Date().toISOString();
     const record = index >= 0
-      ? { ...db[collection][index], ...payload, ownerId, updatedAt: now }
-      : withId({ ...payload, ownerId, updatedAt: now });
+      ? { ...db[collection][index], ...definedFields(payload), ownerId, updatedAt: now }
+      : withId({ ...definedFields(payload), ownerId, updatedAt: now });
     if (index >= 0) db[collection][index] = record;
     else db[collection].push(record);
     db.audit_logs.push(withId({ action: `${index >= 0 ? "update" : "create"}:${collection}`, recordId: record.id, ownerId }));
@@ -1623,7 +1787,7 @@ async function updatePortalSubmission(payload) {
     if (index === -1) throw new Error("Portal submission not found");
     const updated = {
       ...db.portal_submissions[index],
-      ...payload,
+      ...definedFields(payload),
       status: payload.status || "processed",
       processedAt: payload.processedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1644,7 +1808,7 @@ async function updateBillingIntent(payload) {
     if (index === -1) throw new Error("Billing quote not found");
     const updated = {
       ...db.billing_intents[index],
-      ...payload,
+      ...definedFields(payload),
       status: payload.status || "accepted",
       acceptedAt: payload.acceptedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1766,7 +1930,7 @@ async function createInvoiceFromQuote(payload) {
   return operation;
 }
 
-async function ecpayCheckoutHtml(token) {
+async function ecpayCheckoutHtml(token, nonce) {
   const db = await readDb();
   const intent = db.billing_intents.find((item) => item.token === token || item.id === token);
   if (!intent) return null;
@@ -1774,7 +1938,7 @@ async function ecpayCheckoutHtml(token) {
     return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8" /><title>ECPay not configured</title></head><body><main><h1>綠界付款尚未設定完成</h1><p>請確認 PAYMENT_PROVIDER=ecpay、ECPAY_MERCHANT_ID、ECPAY_HASH_KEY、ECPAY_HASH_IV 與回調網址。</p></main></body></html>`;
   }
   const payload = ecpayPayloadForIntent(intent);
-  return autoSubmitForm(ecpayCheckoutUrl, payload);
+  return autoSubmitForm(ecpayCheckoutUrl, payload, nonce);
 }
 
 async function ecpayResultHtml(url) {
@@ -1814,7 +1978,7 @@ async function updateInvoiceStatus(payload) {
     const now = new Date().toISOString();
     const updated = {
       ...db.invoices[index],
-      ...payload,
+      ...definedFields(payload),
       status: payload.status || "paid",
       trustedPayment: Boolean(payload.trustedPayment),
       paidAt: payload.paidAt || now,
@@ -2092,7 +2256,11 @@ function authActionUrl(req, action, token) {
 
 async function sendAuthEmail({ to, subject, body }) {
   try {
-    const result = await sendEmailJob({ to, subject, body, html: `<p>${escapeHtml(body)}</p>` });
+    const url = String(body).match(/https?:\/\/\S+/)?.[0] || "";
+    const html = url
+      ? `<p>${escapeHtml(String(body).replace(url, "").trim())}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#0f766e;color:#fff;text-decoration:none;font-weight:700">${/reset/i.test(subject) || /重設/.test(subject) ? "Reset password / 重設密碼" : "Verify email / 驗證信箱"}</a></p><p style="word-break:break-all;color:#60706d">${escapeHtml(url)}</p>`
+      : `<p>${escapeHtml(body)}</p>`;
+    const result = await sendEmailJob({ to, subject, body, html });
     return result.status === "sent";
   } catch {
     return false;
@@ -2330,8 +2498,8 @@ async function handleApi(req, res, url) {
       const verificationUrl = authActionUrl(req, "verify_email", verificationToken);
       const emailSent = await sendAuthEmail({
         to: user.email,
-        subject: "Verify your AgencyReport AI account",
-        body: `Open this link within 24 hours to verify your account: ${verificationUrl}`,
+        subject: payload.language === "en" ? "Verify your AgencyReport AI account" : "驗證你的 AgencyReport AI 帳號",
+        body: payload.language === "en" ? `Open this link within 24 hours to verify your account: ${verificationUrl}` : `請在 24 小時內開啟此連結完成帳號驗證：${verificationUrl}`,
       });
       return json(res, 201, { item: {
         requiresEmailVerification: true,
@@ -2378,11 +2546,11 @@ async function handleApi(req, res, url) {
     if (issued) {
       emailSent = await sendAuthEmail({
         to: issued.user.email,
-        subject: "Verify your AgencyReport AI account",
-        body: `Open this link within 24 hours to verify your account: ${authActionUrl(req, "verify_email", issued.token)}`,
+        subject: payload.language === "en" ? "Verify your AgencyReport AI account" : "驗證你的 AgencyReport AI 帳號",
+        body: payload.language === "en" ? `Open this link within 24 hours to verify your account: ${authActionUrl(req, "verify_email", issued.token)}` : `請在 24 小時內開啟此連結完成帳號驗證：${authActionUrl(req, "verify_email", issued.token)}`,
       });
     }
-    return json(res, 200, { item: { accepted: true, emailSent, ...(process.env.NODE_ENV === "test" && issued ? { verificationToken: issued.token } : {}) } });
+    return json(res, 200, { item: { accepted: true, ...(process.env.NODE_ENV === "test" ? { emailSent, ...(issued ? { verificationToken: issued.token } : {}) } : {}) } });
   }
 
   if (url.pathname === "/api/auth/request-password-reset" && req.method === "POST") {
@@ -2392,11 +2560,11 @@ async function handleApi(req, res, url) {
     if (issued) {
       emailSent = await sendAuthEmail({
         to: issued.user.email,
-        subject: "Reset your AgencyReport AI password",
-        body: `Open this link within 1 hour to reset your password: ${authActionUrl(req, "reset_password", issued.token)}`,
+        subject: payload.language === "en" ? "Reset your AgencyReport AI password" : "重設你的 AgencyReport AI 密碼",
+        body: payload.language === "en" ? `Open this link within 1 hour to reset your password: ${authActionUrl(req, "reset_password", issued.token)}` : `請在 1 小時內開啟此連結重設密碼：${authActionUrl(req, "reset_password", issued.token)}`,
       });
     }
-    return json(res, 200, { item: { accepted: true, emailSent, ...(process.env.NODE_ENV === "test" && issued ? { resetToken: issued.token } : {}) } });
+    return json(res, 200, { item: { accepted: true, ...(process.env.NODE_ENV === "test" ? { emailSent, ...(issued ? { resetToken: issued.token } : {}) } : {}) } });
   }
 
   if (url.pathname === "/api/auth/reset-password" && req.method === "POST") {
@@ -2424,7 +2592,14 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/worker/run" && req.method === "POST") {
     if (!isWorkerAuthorized(req)) return json(res, 401, { error: "Unauthorized worker" });
     const result = await processDueSchedules();
-    return json(res, 200, { item: result });
+    return json(res, 200, {
+      item: {
+        processed: result.processed,
+        aiRunIds: result.aiRuns.map((item) => item.id),
+        emailJobIds: result.emailJobs.map((item) => item.id),
+        scheduleIds: result.schedules.map((item) => item.id),
+      },
+    });
   }
 
   if (url.pathname === "/api/billing/webhook" && req.method === "POST") {
@@ -2529,15 +2704,24 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/data-sources/test" && req.method === "POST") {
-    const payload = await readBody(req);
-    const result = await testDataConnector(payload);
-    return json(res, 200, { item: result });
+    try {
+      const payload = await readBody(req);
+      const result = await testDataConnector(payload);
+      return json(res, result.ok ? 200 : 400, { item: result, ...(result.ok ? {} : { error: result.message }) });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "Data source test failed", code: "DATA_SOURCE_INVALID" });
+    }
   }
 
   if (url.pathname === "/api/data-sources/sync" && req.method === "POST") {
-    const payload = await readBody(req);
-    const sync = await createDataSync(payload);
-    return json(res, 201, { item: sync });
+    try {
+      const payload = await readBody(req);
+      const sync = await createDataSync(payload, req.auth.user.id);
+      return json(res, 201, { item: sync });
+    } catch (error) {
+      const missing = error.message === "Data source not found";
+      return json(res, missing ? 404 : 400, { error: error.message || "Data source sync failed", code: missing ? "DATA_SOURCE_NOT_FOUND" : "DATA_SOURCE_SYNC_FAILED" });
+    }
   }
 
   if (url.pathname === "/api/billing/quote/accept" && req.method === "POST") {
@@ -2730,13 +2914,14 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname === "/legal") {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
-    return res.end(legalHtml(url.searchParams.get("lang") === "en" ? "en" : "zh"));
+    return res.end(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh"));
   }
   if (url.pathname.startsWith("/billing/quote/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
-    const html = await quoteHtml(token);
+    const nonce = crypto.randomBytes(18).toString("base64");
+    const html = await quoteHtml(token, nonce);
     if (html) {
-      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders(nonce, { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
@@ -2744,9 +2929,10 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname.startsWith("/billing/ecpay/checkout/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
-    const html = await ecpayCheckoutHtml(token);
+    const nonce = crypto.randomBytes(18).toString("base64");
+    const html = await ecpayCheckoutHtml(token, nonce);
     if (html) {
-      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders(nonce, { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
@@ -2754,14 +2940,14 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname === "/billing/ecpay/result") {
     const html = await ecpayResultHtml(url);
-    res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
+    res.writeHead(200, interactivePageHeaders("", { "content-type": "text/html;charset=utf-8" }));
     return res.end(html);
   }
   if (url.pathname.startsWith("/billing/invoice/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const html = await invoiceHtml(token);
     if (html) {
-      res.writeHead(200, interactivePageHeaders({ "content-type": "text/html;charset=utf-8" }));
+      res.writeHead(200, interactivePageHeaders("", { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
     }
     res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));

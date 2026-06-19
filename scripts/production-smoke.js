@@ -3,6 +3,7 @@
 const baseRequiredChecks = ["database", "auth", "ai", "email", "worker"];
 const sensitivePaths = ["/.env", "/server.js", "/data/db.json", "/package.json", "/render.yaml"];
 const mojibakePattern = /[\uFFFD\uF386\uEE6A]|\u876E|\u7362|\u95AE|\u648C|\u6470|\u9903|\u7E5A|\u977D|\u92B4|\u920D|\u7508|\u761A|\u969E|\u96FF|\u64B1|\u875D|\?\?\?/;
+let requestTimeoutMs = 65000;
 
 function argValue(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -18,9 +19,28 @@ function normalizeBaseUrl(raw) {
 }
 
 async function fetchText(url, options = {}) {
-  const response = await fetch(url, options);
-  const text = await response.text();
-  return { response, text };
+  const retryable = !options.method || String(options.method).toUpperCase() === "GET";
+  let lastError;
+  for (let attempt = 0; attempt < (retryable ? 3 : 1); attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      const text = await response.text();
+      if (retryable && [502, 503, 504].includes(response.status) && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        continue;
+      }
+      return { response, text };
+    } catch (error) {
+      lastError = error.name === "AbortError" ? new Error(`${url} timed out after ${requestTimeoutMs}ms`) : error;
+      if (!retryable || attempt === 2) throw lastError;
+      await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError || new Error(`${url} failed`);
 }
 
 async function fetchJson(url, options = {}) {
@@ -54,6 +74,7 @@ function checkSecurityHeaders(response, label) {
 
 async function run() {
   const baseUrl = normalizeBaseUrl(argValue("--url"));
+  requestTimeoutMs = Math.max(5000, Number(argValue("--timeout", "65000")) || 65000);
   const strict = process.argv.includes("--strict");
   const requirePayment = process.argv.includes("--require-payment");
   const requireOperational = process.argv.includes("--require-operational");
@@ -63,6 +84,9 @@ async function run() {
     ...(requirePayment ? ["payment"] : []),
   ];
   const results = [];
+  const parsedTarget = new URL(baseUrl);
+  const localTarget = ["localhost", "127.0.0.1", "::1"].includes(parsedTarget.hostname);
+  results.push(check(localTarget || parsedTarget.protocol === "https:", "public target uses HTTPS", parsedTarget.protocol));
 
   const home = await fetchText(`${baseUrl}/`);
   results.push(check(home.response.ok, "homepage responds", `${home.response.status}`));
@@ -80,10 +104,14 @@ async function run() {
 
   const legalZh = await fetchText(`${baseUrl}/legal`);
   results.push(check(legalZh.response.ok && /<html lang="zh-Hant">/.test(legalZh.text), "Traditional Chinese legal page responds"));
+  results.push(check(["服務條款", "隱私政策", "AI 透明度", "資料處理附錄"].every((text) => legalZh.text.includes(text)), "Traditional Chinese legal package is complete"));
+  results.push(check(!mojibakePattern.test(legalZh.text), "Traditional Chinese legal page has no known mojibake"));
   const legalEn = await fetchText(`${baseUrl}/legal?lang=en`);
-  results.push(check(legalEn.response.ok && /Terms of Service and Privacy Policy/.test(legalEn.text), "English legal page responds"));
+  results.push(check(legalEn.response.ok && /Terms, Privacy and AI Notice/.test(legalEn.text), "English legal page responds"));
+  results.push(check(["Terms of Service", "Privacy Policy", "AI transparency", "Data Processing Addendum"].every((text) => legalEn.text.includes(text)), "English legal package is complete"));
   const legalApi = await fetchJson(`${baseUrl}/api/legal`);
   results.push(check(/^legal-\d{4}-\d{2}-\d{2}$/.test(legalApi.body.item?.version || ""), "legal API exposes a versioned policy", legalApi.body.item?.version || "missing"));
+  results.push(check(legalZh.text.includes(legalApi.body.item?.version || "missing") && legalEn.text.includes(legalApi.body.item?.version || "missing"), "legal pages match the registered API version"));
 
   for (const pathname of sensitivePaths) {
     const sensitive = await fetchText(`${baseUrl}${pathname}`);
@@ -108,8 +136,13 @@ async function run() {
   const readiness = await fetchJson(`${baseUrl}/api/readiness`);
   const item = readiness.body.item || readiness.body;
   results.push(check(readiness.response.ok, "readiness endpoint responds", `${readiness.response.status}`));
-  results.push(check(item.ready === true, "readiness ready=true", `missing=${(item.missingRequired || []).join(",") || "none"}`));
   const checks = Array.isArray(item.checks) ? item.checks : [];
+  const baseReady = baseRequiredChecks.every((id) => checks.find((entry) => entry.id === id)?.ok === true);
+  results.push(check(
+    requireOperational ? item.ready === true : baseReady,
+    requireOperational ? "full operational readiness ready=true" : "core service readiness is healthy",
+    `missing=${(item.missingRequired || []).join(",") || "none"}`
+  ));
   requiredChecks.forEach((id) => {
     const found = checks.find((entry) => entry.id === id);
     results.push(check(found?.ok === true, `required readiness check: ${id}`, found?.detail || "missing"));

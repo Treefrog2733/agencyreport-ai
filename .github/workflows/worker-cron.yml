@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  APP_URL: ${{ secrets.APP_URL || 'https://agencyreport-ai.onrender.com' }}
+  APP_URL: ${{ secrets.APP_URL || 'https://app.virtualtrendworks.com' }}
   WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
 
 jobs:
@@ -25,8 +25,10 @@ jobs:
           fi
 
       - name: Trigger scheduled reports
+        shell: bash
         run: |
-          curl --fail-with-body \
+          response="$(curl --fail-with-body --silent --show-error \
             --request POST \
             --header "x-worker-secret: $WORKER_SECRET" \
-            "$APP_URL/api/worker/run"
+            "$APP_URL/api/worker/run")"
+          node -e 'const body=JSON.parse(process.argv[1]); const item=body.item||{}; console.log(`Processed ${item.processed||0} schedule(s); AI runs: ${(item.aiRunIds||[]).length}; emails: ${(item.emailJobIds||[]).length}`)' "$response"

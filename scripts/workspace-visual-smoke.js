@@ -141,6 +141,18 @@ async function main() {
       awaitPromise: false,
     });
     await new Promise((resolve) => setTimeout(resolve, 2200));
+    const landingCapture = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    const landingFile = path.join(outDir, "landing.png");
+    fs.writeFileSync(landingFile, Buffer.from(landingCapture.data, "base64"));
+    const landingStateResult = await send("Runtime.evaluate", {
+      expression: `(() => ({
+        visible: !document.querySelector("#overviewHome")?.hidden,
+        horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        cjkLines: "${language}" === "en" ? [...new Set((document.querySelector("#overviewHome")?.innerText || "")
+          .split(/\\n+/).map((line) => line.trim()).filter((line) => /[\u3400-\u9fff]/.test(line)))] : []
+      }))()`,
+      returnByValue: true,
+    });
     await send("Runtime.evaluate", {
       expression: `
         document.documentElement.classList.remove("public-landing");
@@ -152,6 +164,28 @@ async function main() {
       awaitPromise: true,
     });
     await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    const xssTestResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const csv = document.querySelector("#csvInput");
+        const client = document.querySelector("#clientName");
+        const originalClient = client?.value || "";
+        window.__agencyXssProbe = 0;
+        if (client) client.value = '<img data-xss-client src=x onerror="window.__agencyXssProbe=1">';
+        if (csv) csv.value = 'channel,spend,impressions,clicks,conversions,revenue,last_spend,last_clicks,last_conversions,last_revenue\\n<img data-xss-channel src=x onerror="window.__agencyXssProbe=1">,100,1000,100,10,500,90,90,9,450';
+        window.generateReport?.();
+        const result = {
+          executed: window.__agencyXssProbe,
+          injectedNodes: document.querySelectorAll("[data-xss-client],[data-xss-channel]").length,
+          literalChannelVisible: (document.querySelector("#detailTable")?.textContent || "").includes("<img data-xss-channel")
+        };
+        if (client) client.value = originalClient;
+        window.loadSample?.("ads");
+        return result;
+      })()`,
+      returnByValue: true,
+    });
+    const xssTest = xssTestResult.result?.value || {};
 
     const libraryTestResult = await send("Runtime.evaluate", {
       expression: `(() => {
@@ -173,7 +207,7 @@ async function main() {
     const libraryTest = libraryTestResult.result?.value || {};
 
     const views = ["overview", "case", "report", "ai", "delivery", "billing", "settings"];
-    const summary = {};
+    const summary = { landing: { file: landingFile, state: landingStateResult.result?.value } };
     for (const view of views) {
       await send("Runtime.evaluate", { expression: `window.openWorkspace?.("${view}"); window.scrollTo(0, 0)`, awaitPromise: true });
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -201,6 +235,7 @@ async function main() {
         returnByValue: true,
       });
       summary[view] = { file, state: state.result?.value };
+      if (view === "report") summary[view].xssTest = xssTest;
       if (view === "delivery") summary[view].libraryTest = libraryTest;
       if (view === "settings") {
         await send("Runtime.evaluate", {
@@ -281,12 +316,18 @@ async function main() {
           || item.state?.findingPoints < 4
           || item.state?.actionPoints < 7;
       }
+      if (view === "landing") {
+        return !item.state?.visible
+          || item.state?.horizontalOverflow > 1
+          || (language === "en" && item.state?.cjkLines?.length > 0);
+      }
       if (view === "delivery") {
         return item.libraryTest?.items < 1
           || item.libraryTest?.readyItems < 1
           || !item.libraryTest?.hasSnapshot
           || !item.libraryTest?.restoredClient;
       }
+      if (view === "report" && (item.xssTest?.executed !== 0 || item.xssTest?.injectedNodes !== 0 || !item.xssTest?.literalChannelVisible)) return true;
       if (view === "settings") {
         return !item.state?.accountDataControls
           || !item.deletePanel?.state?.panelVisible

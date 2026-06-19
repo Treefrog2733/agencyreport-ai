@@ -46,6 +46,11 @@ jobs:
           npm run smoke:security || status=1
           npm run smoke:payment || status=1
           npm run smoke:backup || status=1
+          npm run smoke:legal || status=1
+          npm run smoke:worker || status=1
+          npm run smoke:i18n || status=1
+          npm run smoke:auth-privacy || status=1
+          npm run smoke:connectors || status=1
           exit "$status"
 
       - name: Start test server

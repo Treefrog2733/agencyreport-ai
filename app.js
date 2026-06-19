@@ -292,7 +292,7 @@ async function api(path, options = {}) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(body.code || body.error || body.message || `HTTP ${response.status}`);
+    const error = new Error(body.error || body.message || body.code || `HTTP ${response.status}`);
     error.status = response.status;
     error.code = body.code;
     error.details = body.item;
@@ -636,6 +636,7 @@ async function registerAuth() {
       name: $("#authName").value.trim() || "AgencyReport AI",
       email: $("#authEmail").value.trim(),
       password: $("#authPassword").value,
+      language: state.lang,
       legalAccepted: true,
       legalVersion: legal.version,
     };
@@ -651,7 +652,7 @@ async function resendVerificationEmail() {
   const email = $("#authEmail").value.trim();
   if (!email) return setStatus("#authStatus", "warning", state.lang === "en" ? "Enter your email" : "請先輸入 Email");
   try {
-    await api("/api/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) });
+    await api("/api/auth/resend-verification", { method: "POST", body: JSON.stringify({ email, language: state.lang }) });
     setStatus("#authStatus", "ok", state.lang === "en" ? "Verification email requested" : "已重新申請驗證信", state.lang === "en" ? "Check your inbox and spam folder." : "請檢查收件匣與垃圾郵件匣。" );
   } catch (error) {
     setStatus("#authStatus", "error", state.lang === "en" ? "Unable to resend" : "無法重新寄送", error.message);
@@ -662,7 +663,7 @@ async function requestPasswordReset() {
   const email = $("#authEmail").value.trim();
   if (!email) return setStatus("#authStatus", "warning", state.lang === "en" ? "Enter your email" : "請先輸入 Email");
   try {
-    await api("/api/auth/request-password-reset", { method: "POST", body: JSON.stringify({ email }) });
+    await api("/api/auth/request-password-reset", { method: "POST", body: JSON.stringify({ email, language: state.lang }) });
     setStatus("#authStatus", "ok", state.lang === "en" ? "Reset email requested" : "已申請密碼重設信", state.lang === "en" ? "If the account exists, a reset link will arrive shortly." : "若帳號存在，重設連結將寄至該信箱。" );
   } catch (error) {
     setStatus("#authStatus", "error", state.lang === "en" ? "Reset request failed" : "申請重設失敗", error.message);
@@ -1012,7 +1013,7 @@ function renderReport() {
     ["CVR", formatPercent(m.conversionRate), state.lang === "en" ? "Conversion rate" : "轉換率"],
     ["CPC", formatMoney(cpc), state.lang === "en" ? "Cost per click" : "單次點擊成本"],
   ];
-  $("#insights").innerHTML = cards.map(([label, value, note]) => `<article><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`).join("");
+  $("#insights").innerHTML = cards.map(([label, value, note]) => `<article><span>${escapeLibraryText(label)}</span><strong>${escapeLibraryText(value)}</strong><small>${escapeLibraryText(note)}</small></article>`).join("");
   const topRevenue = [...m.channels].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))[0];
   const lowestCpa = [...m.channels].sort((a, b) => Number(a.cpa || 0) - Number(b.cpa || 0))[0];
   $("#detailTable").innerHTML = `
@@ -1316,7 +1317,7 @@ function renderWorkspace() {
     [state.lang === "en" ? "Revenue" : "營收", m ? formatMoney(m.totals.revenue) : "-"],
     [state.lang === "en" ? "AI usage" : "AI 用量", state.usage ? `${state.usage.used}/${state.usage.limit}` : "0/3"],
     [state.lang === "en" ? "Payment" : "付款", state.invoices.length ? "Draft" : "-"],
-  ].map(([a, b]) => `<div><strong>${a}</strong><span>${b}</span></div>`).join("");
+  ].map(([a, b]) => `<div><strong>${escapeLibraryText(a)}</strong><span>${escapeLibraryText(b)}</span></div>`).join("");
   setText("#overviewCaseStatus", steps[0] ? (zh ? "已設定" : "Ready") : (zh ? "未完成" : "Missing"));
   setText("#overviewCaseMeta", $("#clientName").value || (zh ? "尚未確認客戶資料" : "No client yet"));
   setText("#overviewDataStatus", steps[1] ? (zh ? "已匯入" : "Imported") : (zh ? "未匯入" : "Missing"));
@@ -1667,7 +1668,7 @@ function exportReportHtml() {
   const report = source.cloneNode(true);
   report.hidden = false;
   report.removeAttribute("hidden");
-  const titleText = ($("#clientName")?.value || "AgencyReport AI").replace(/[<>&]/g, "");
+  const titleText = escapeLibraryText($("#clientName")?.value || "AgencyReport AI");
   const html = "<!doctype html><html lang=\"" + document.documentElement.lang + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>" + titleText + " 月報</title><style>" + collectExportStyles() + "body{padding:24px}.report-shell{display:block!important;margin:0 auto!important}</style></head><body class=\"theme-light\">" + report.outerHTML + "</body></html>";
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1784,8 +1785,8 @@ function summarizeIntakeApplied(items) {
   if (!node) return;
   node.innerHTML = items.map(([label, value]) => `
     <div>
-      <span>${label}</span>
-      <strong>${value || (zh ? "未偵測" : "Not detected")}</strong>
+      <span>${escapeLibraryText(label)}</span>
+      <strong>${escapeLibraryText(value || (zh ? "未偵測" : "Not detected"))}</strong>
     </div>
   `).join("");
   const message = $("#aiIntakeAnalysisMessage");
@@ -1878,12 +1879,72 @@ async function applyAiIntake() {
     return;
   }
 
+  if (url) {
+    try {
+      const imported = await testAndImportDataSource({ generate: true });
+      if (imported?.csv) {
+        setAiIntakeNextAction("report", zh ? "查看報告結果" : "View report results");
+        setAiIntakeReply(zh ? "Google Sheets 已匯入並完成月報" : "Google Sheets imported and report generated", zh ? `已安全匯入 ${imported.rowCount} 筆資料，完成 KPI、圖表與 AI 建議。` : `Securely imported ${imported.rowCount} rows and generated KPI, charts, and AI advice.`);
+        if (analyzeButton) analyzeButton.disabled = false;
+        return;
+      }
+    } catch (error) {
+      setStatus("#aiIntakeStatus", "error", zh ? "資料網址無法匯入" : "Unable to import the data URL", error.message);
+      if (analyzeButton) analyzeButton.disabled = false;
+      return;
+    }
+  }
+
   setAiIntakeNextAction("data", zh ? "繼續資料檢查" : "Continue data review");
   setAiIntakeReply(
     zh ? "資料來源已整理完成" : "The data source is ready",
     zh ? "我已帶入資料來源網址，但尚未偵測到可分析的 CSV。請繼續檢查來源，或在對話中加入 CSV/TXT 檔案。" : "I applied the source URL, but no analyzable CSV was detected. Continue reviewing the source or attach a CSV/TXT file in this chat.",
   );
   if (analyzeButton) analyzeButton.disabled = false;
+}
+
+function dataSourcePayload() {
+  return {
+    type: $("#sourceType")?.value === "sheets" ? "google_sheets" : "manual_csv",
+    url: $("#sheetUrl")?.value.trim() || "",
+    csv: $("#csvInput")?.value || "",
+    owner: $("#sourceOwner")?.value.trim() || "",
+    clientName: $("#clientName")?.value.trim() || "",
+  };
+}
+
+function renderDataSourceResult(result, saved = false) {
+  const list = $("#sourceList");
+  if (!list) return;
+  const item = document.createElement("div");
+  const title = document.createElement("strong");
+  const detail = document.createElement("span");
+  title.textContent = result.provider === "google_sheets" ? "Google Sheets" : "CSV";
+  detail.textContent = saved
+    ? (state.lang === "en" ? "Source saved to this workspace" : "資料來源已儲存至工作區")
+    : `${result.rowCount || 0} ${state.lang === "en" ? "rows ready" : "筆資料可用"}`;
+  item.append(title, detail);
+  list.replaceChildren(item);
+}
+
+async function saveDataSource() {
+  const payload = dataSourcePayload();
+  if (payload.type === "google_sheets" && !payload.url) throw new Error(state.lang === "en" ? "Enter a Google Sheets URL" : "請輸入 Google Sheets URL");
+  const source = await api("/api/data-sources", { method: "POST", body: JSON.stringify(payload) });
+  renderDataSourceResult(source, true);
+  setStatus("#sourceStatus", "ok", state.lang === "en" ? "Data source saved" : "資料來源已儲存", payload.type === "google_sheets" ? payload.url : (state.lang === "en" ? "Manual CSV" : "手動 CSV"));
+  return source;
+}
+
+async function testAndImportDataSource({ generate = true } = {}) {
+  const payload = dataSourcePayload();
+  setStatus("#sourceStatus", "", state.lang === "en" ? "Testing data source..." : "正在測試資料來源...");
+  const result = await api("/api/data-sources/test", { method: "POST", body: JSON.stringify(payload) });
+  if (result.csv) $("#csvInput").value = result.csv;
+  renderDataSourceResult(result);
+  setStatus("#sourceStatus", "ok", state.lang === "en" ? "Data source ready" : "資料來源可用", `${result.rowCount || 0} ${state.lang === "en" ? "rows imported" : "筆資料已匯入"}`);
+  if (generate && $("#csvInput")?.value.trim()) await generateReportFromButton();
+  return result;
 }
 
 function syncConsentAudit() {
@@ -1959,6 +2020,8 @@ function setupEvents() {
   $("#completeDemoBtn")?.addEventListener("click", () => loadSample("ads"));
   $("#insertCsvTemplateBtn")?.addEventListener("click", () => { $("#csvInput").value = samples.ads; });
   $("#downloadSampleBtn")?.addEventListener("click", downloadSampleCsv);
+  $("#saveSourceBtn")?.addEventListener("click", () => saveDataSource().catch((error) => setStatus("#sourceStatus", "error", state.lang === "en" ? "Unable to save source" : "資料來源儲存失敗", error.message)));
+  $("#testSourceBtn")?.addEventListener("click", () => testAndImportDataSource().catch((error) => setStatus("#sourceStatus", "error", state.lang === "en" ? "Source test failed" : "來源測試失敗", error.message)));
   $("#quickAdsBtn")?.addEventListener("click", () => loadSample("ads"));
   $("#quickSeoBtn")?.addEventListener("click", () => loadSample("seo"));
   $("#quickSocialBtn")?.addEventListener("click", () => loadSample("social"));
@@ -1980,7 +2043,7 @@ function setupEvents() {
   $("#confirmDeleteAccountBtn")?.addEventListener("click", deleteCurrentAccount);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
-    $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${item}</strong></div>`).join("") : "";
+    $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${escapeLibraryText(item)}</strong></div>`).join("") : "";
   });
   $("#accountDockToggle")?.addEventListener("click", (event) => {
     event.stopPropagation();

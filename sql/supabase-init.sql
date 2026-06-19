@@ -22,6 +22,29 @@ create index if not exists agencyreport_records_owner_idx
 create index if not exists agencyreport_records_updated_idx
   on public.agencyreport_records (updated_at desc);
 
+create index if not exists agencyreport_reports_owner_month_idx
+  on public.agencyreport_records (owner_id, ((payload->>'month')))
+  where collection = 'reports';
+
+create unique index if not exists agencyreport_auth_users_email_uidx
+  on public.agencyreport_records (lower(payload->>'email'))
+  where collection = 'auth_users';
+
+create unique index if not exists agencyreport_auth_sessions_hash_uidx
+  on public.agencyreport_records ((payload->>'tokenHash'))
+  where collection = 'auth_sessions';
+
+create unique index if not exists agencyreport_billing_token_uidx
+  on public.agencyreport_records ((payload->>'token'))
+  where collection = 'billing_intents';
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'agencyreport_records_owner_matches_payload') then
+    alter table public.agencyreport_records add constraint agencyreport_records_owner_matches_payload
+      check (owner_id is not distinct from nullif(payload->>'ownerId', ''));
+  end if;
+end $$;
+
 create table if not exists public.agencyreport_metadata (
   key text primary key,
   value jsonb not null,

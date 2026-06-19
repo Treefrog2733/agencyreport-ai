@@ -119,6 +119,7 @@ async function run() {
     sessionTokensAreHashed: db.auth_sessions.every((session) => session.tokenHash && !session.token),
     sessionCookieIsHttpOnly: /HttpOnly/i.test(sessionCookie) && /SameSite=Lax/i.test(sessionCookie),
     sessionCookieAuthenticates: cookieMeResponse.status === 200,
+    authenticatedResponsesAreNotCached: /no-store/i.test(cookieMeResponse.headers.get("cache-control") || ""),
     legalConsentIsVersioned: exported.collections?.consents?.length === 1
       && db.consents.length === 1
       && [...exported.collections.consents, ...db.consents].every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),

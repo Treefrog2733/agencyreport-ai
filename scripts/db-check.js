@@ -66,16 +66,45 @@ async function main() {
       );
       create index if not exists agencyreport_records_owner_idx
         on agencyreport_records (owner_id, collection);
+      create index if not exists agencyreport_records_updated_idx
+        on agencyreport_records (updated_at desc);
+      create index if not exists agencyreport_reports_owner_month_idx
+        on agencyreport_records (owner_id, ((payload->>'month')))
+        where collection = 'reports';
+      create unique index if not exists agencyreport_auth_users_email_uidx
+        on agencyreport_records (lower(payload->>'email'))
+        where collection = 'auth_users';
+      create unique index if not exists agencyreport_auth_sessions_hash_uidx
+        on agencyreport_records ((payload->>'tokenHash'))
+        where collection = 'auth_sessions';
+      create unique index if not exists agencyreport_billing_token_uidx
+        on agencyreport_records ((payload->>'token'))
+        where collection = 'billing_intents';
       create table if not exists agencyreport_metadata (
         key text primary key,
         value jsonb not null,
         updated_at timestamptz not null default now()
       )
+      ;
+      do $$ begin
+        if not exists (select 1 from pg_constraint where conname = 'agencyreport_records_owner_matches_payload') then
+          alter table agencyreport_records add constraint agencyreport_records_owner_matches_payload
+            check (owner_id is not distinct from nullif(payload->>'ownerId', ''));
+        end if;
+      end $$
     `);
     const version = await pool.query("select version()");
     const store = await pool.query("select key, updated_at from agencyreport_store order by key");
     const records = await pool.query("select collection, count(*)::int as count from agencyreport_records group by collection order by collection");
     const schema = await pool.query("select value from agencyreport_metadata where key = 'schema_version'");
+    const indexes = await pool.query(`select indexname from pg_indexes where schemaname = 'public' and tablename = 'agencyreport_records' order by indexname`);
+    const constraints = await pool.query(`select conname, convalidated from pg_constraint where conrelid = 'agencyreport_records'::regclass order by conname`);
+    const integrity = await pool.query(`
+      select
+        count(*) filter (where owner_id is distinct from nullif(payload->>'ownerId', ''))::int as owner_mismatches,
+        count(*) filter (where not jsonb_typeof(payload) = 'object')::int as invalid_payloads
+      from agencyreport_records
+    `);
     console.log(JSON.stringify({
       ok: true,
       ssl: !isLocal && sslEnabled,
@@ -84,6 +113,9 @@ async function main() {
       schemaVersion: schema.rows[0]?.value || null,
       recordRows: records.rows.reduce((total, row) => total + row.count, 0),
       collections: records.rows,
+      indexes: indexes.rows.map((row) => row.indexname),
+      constraints: constraints.rows,
+      integrity: integrity.rows[0],
       storeRows: store.rowCount,
       keys: store.rows.map((row) => ({ key: row.key, updatedAt: row.updated_at })),
     }, null, 2));
