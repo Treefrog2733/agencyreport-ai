@@ -35,9 +35,9 @@ const state = {
   metrics: null,
   ai: null,
   reports: [],
-  clients: JSON.parse(localStorage.getItem("agencyReportClients") || "[]"),
-  deliveries: JSON.parse(localStorage.getItem("agencyReportDeliveries") || "[]"),
-  invoices: JSON.parse(localStorage.getItem("agencyReportInvoices") || "[]"),
+  clients: [],
+  deliveries: [],
+  invoices: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -456,6 +456,16 @@ function translateStaticWorkspace() {
     if (auditLabels[index]) node.textContent = auditLabels[index];
   });
   apply("#refreshAuditBtn", "更新稽核", "Refresh audit");
+  apply("#accountDataTitle", "帳號與資料", "Account and data");
+  apply("#accountDataCopy", "下載帳號資料副本，或永久刪除帳號與此帳號建立的專案資料。", "Download a copy of your data or permanently delete the account and its workspace records.");
+  apply("#exportAccountDataBtn", "下載我的資料", "Download my data");
+  apply("#openDeleteAccountBtn", "刪除帳號", "Delete account");
+  apply("#deleteAccountTitle", "永久刪除帳號", "Permanently delete account");
+  apply("#deleteAccountCopy", "此操作無法復原。請輸入目前密碼，並在確認欄輸入 DELETE。", "This cannot be undone. Enter your current password and type DELETE in the confirmation field.");
+  apply("#deletePasswordLabel", "目前密碼", "Current password");
+  apply("#deleteConfirmationLabel", "確認文字", "Confirmation text");
+  apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
+  apply("#cancelDeleteAccountBtn", "取消", "Cancel");
 
   apply("#reportCommandScoreLabel", "報告健康度", "Report health");
   apply("#reportCommandQualityLabel", "資料品質", "Data quality");
@@ -523,6 +533,7 @@ function setAuthState(auth) {
   if (auth?.token) localStorage.setItem("agencyReportAuthToken", auth.token);
   else if (auth) localStorage.removeItem("agencyReportAuthToken");
   const isAuthed = Boolean(state.auth);
+  loadScopedWorkspaceState();
   document.documentElement.classList.toggle("public-landing", !isAuthed);
   $("#overviewHome").hidden = isAuthed;
   $("#caseWorkspace").hidden = !isAuthed;
@@ -535,6 +546,33 @@ function setAuthState(auth) {
     syncReportsFromServer();
     renderWorkspace();
   }
+}
+
+function scopedWorkspaceKey(base, userId = state.auth?.user?.id) {
+  return `${base}:${userId || "guest"}`;
+}
+
+function readScopedWorkspaceList(base) {
+  try {
+    const value = JSON.parse(localStorage.getItem(scopedWorkspaceKey(base)) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadScopedWorkspaceState() {
+  state.clients = readScopedWorkspaceList("agencyReportClients");
+  state.deliveries = readScopedWorkspaceList("agencyReportDeliveries");
+  state.invoices = readScopedWorkspaceList("agencyReportInvoices");
+}
+
+function clearCurrentAccountCache(userId = state.auth?.user?.id) {
+  ["agencyReportClients", "agencyReportDeliveries", "agencyReportInvoices"].forEach((base) => {
+    localStorage.removeItem(`${base}:${userId || "guest"}`);
+    localStorage.removeItem(base);
+  });
+  if (userId) localStorage.removeItem(`agencyReportReports:${userId}`);
 }
 
 function reportCacheKey() {
@@ -673,6 +711,9 @@ async function logoutAuth() {
   localStorage.removeItem("agencyReportAuthToken");
   state.auth = null;
   state.reports = [];
+  state.clients = [];
+  state.deliveries = [];
+  state.invoices = [];
   $("#overviewHome").hidden = false;
   $("#caseWorkspace").hidden = true;
   $("#report").hidden = true;
@@ -680,6 +721,73 @@ async function logoutAuth() {
   $("#landingStartBtn").hidden = false;
   $("#logoutBtn").hidden = true;
   document.documentElement.classList.add("public-landing");
+}
+
+async function exportAccountData() {
+  try {
+    const exported = await api("/api/account/export", { method: "GET" });
+    const blob = new Blob([`${JSON.stringify(exported, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `agencyreport-account-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus(
+      "#accountDataStatus",
+      "ok",
+      state.lang === "en" ? "Data export ready" : "資料匯出完成",
+      state.lang === "en" ? "The JSON file contains this account's profile and workspace records." : "JSON 檔案包含此帳號的個人資料與工作區紀錄。"
+    );
+  } catch (error) {
+    setStatus("#accountDataStatus", "error", state.lang === "en" ? "Export failed" : "匯出失敗", error.message);
+  }
+}
+
+function toggleDeleteAccountPanel(show) {
+  const panel = $("#deleteAccountPanel");
+  if (!panel) return;
+  panel.hidden = !show;
+  if (show) $("#deleteAccountPassword")?.focus();
+  else {
+    $("#deleteAccountPassword").value = "";
+    $("#deleteAccountConfirmation").value = "";
+  }
+}
+
+async function deleteCurrentAccount() {
+  const password = $("#deleteAccountPassword").value;
+  const confirmation = $("#deleteAccountConfirmation").value.trim();
+  if (!password || confirmation !== "DELETE") {
+    return setStatus(
+      "#accountDataStatus",
+      "warning",
+      state.lang === "en" ? "Confirmation required" : "需要再次確認",
+      state.lang === "en" ? "Enter your current password and type DELETE exactly." : "請輸入目前密碼，並完整輸入 DELETE。"
+    );
+  }
+  const userId = state.auth?.user?.id;
+  try {
+    await api("/api/account", { method: "DELETE", body: JSON.stringify({ password, confirmation }) });
+    clearCurrentAccountCache(userId);
+    localStorage.removeItem("agencyReportAuthToken");
+    state.auth = null;
+    state.reports = [];
+    state.clients = [];
+    state.deliveries = [];
+    state.invoices = [];
+    toggleDeleteAccountPanel(false);
+    returnToLandingHome();
+    showAuthGate();
+    setStatus(
+      "#authStatus",
+      "ok",
+      state.lang === "en" ? "Account deleted" : "帳號已刪除",
+      state.lang === "en" ? "Your account and linked workspace data were permanently removed." : "帳號與其工作區關聯資料已永久移除。"
+    );
+  } catch (error) {
+    setStatus("#accountDataStatus", "error", state.lang === "en" ? "Deletion failed" : "刪除失敗", error.message);
+  }
 }
 
 function setStatus(selector, type, title, body = "") {
@@ -1389,7 +1497,7 @@ async function chooseUpgradePlan(plan) {
   try {
     const intent = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
     state.invoices.unshift(intent);
-    localStorage.setItem("agencyReportInvoices", JSON.stringify(state.invoices));
+    localStorage.setItem(scopedWorkspaceKey("agencyReportInvoices"), JSON.stringify(state.invoices));
     setStatus("#upgradeStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", intent.checkoutUrl || intent.quoteUrl || "");
     setStatus("#billingStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", planDisplayName(plan));
     renderWorkspace();
@@ -1401,7 +1509,7 @@ async function chooseUpgradePlan(plan) {
 function saveCaseProfile() {
   const client = { name: $("#clientName").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
   state.clients.unshift(client);
-  localStorage.setItem("agencyReportClients", JSON.stringify(state.clients));
+  localStorage.setItem(scopedWorkspaceKey("agencyReportClients"), JSON.stringify(state.clients));
   setStatus("#clientHubStatus", "ok", state.lang === "en" ? "Case created" : "案件已建立", client.name);
   renderWorkspace();
 }
@@ -1511,7 +1619,7 @@ async function handleReportLibraryAction(event) {
 function deliverReport() {
   const delivery = { email: $("#deliveryEmail").value, month: $("#reportMonth").value, createdAt: new Date().toISOString() };
   state.deliveries.unshift(delivery);
-  localStorage.setItem("agencyReportDeliveries", JSON.stringify(state.deliveries));
+  localStorage.setItem(scopedWorkspaceKey("agencyReportDeliveries"), JSON.stringify(state.deliveries));
   $("#deliveryCenter").innerHTML = state.deliveries.map((item) => `<div><strong>${escapeLibraryText(item.email || "client@example.com")}</strong><span>${escapeLibraryText(item.month)}</span></div>`).join("");
   renderWorkspace();
 }
@@ -1866,6 +1974,10 @@ function setupEvents() {
   $("#createCheckoutBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
   $$("[id^='consent']").forEach((input) => input.addEventListener("change", syncConsentAudit));
   $("#refreshAuditBtn")?.addEventListener("click", syncConsentAudit);
+  $("#exportAccountDataBtn")?.addEventListener("click", exportAccountData);
+  $("#openDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(true));
+  $("#cancelDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(false));
+  $("#confirmDeleteAccountBtn")?.addEventListener("click", deleteCurrentAccount);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${item}</strong></div>`).join("") : "";

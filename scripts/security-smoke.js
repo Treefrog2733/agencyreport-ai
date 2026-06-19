@@ -87,7 +87,29 @@ async function run() {
   await request("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ token: resetRequest.resetToken, password: "NewSecurityPassword123!" }) });
   const revokedResponse = await fetch(`http://127.0.0.1:${port}/api/reports`, { headers: authA });
   const newLogin = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email: emailA, password: "NewSecurityPassword123!" }) });
+  const newAuthA = { authorization: `Bearer ${newLogin.token}` };
+  const exported = await request("/api/account/export", { headers: newAuthA });
+  const badDeleteResponse = await fetch(`http://127.0.0.1:${port}/api/account`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json", ...newAuthA },
+    body: JSON.stringify({ password: "incorrect-password", confirmation: "DELETE" }),
+  });
+  const missingConfirmationResponse = await fetch(`http://127.0.0.1:${port}/api/account`, {
+    method: "DELETE",
+    headers: { "content-type": "application/json", ...newAuthA },
+    body: JSON.stringify({ password: "NewSecurityPassword123!", confirmation: "delete" }),
+  });
+  const deletedAccount = await request("/api/account", {
+    method: "DELETE",
+    headers: newAuthA,
+    body: JSON.stringify({ password: "NewSecurityPassword123!", confirmation: "DELETE" }),
+  });
+  const deletedSessionResponse = await fetch(`http://127.0.0.1:${port}/api/auth/me`, { headers: newAuthA });
+  const survivingTenantResponse = await fetch(`http://127.0.0.1:${port}/api/auth/me`, { headers: authB });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
+  const exportedUser = exported.collections?.auth_users?.[0] || {};
+  const exportedSessions = exported.collections?.auth_sessions || [];
+  const deletionAudit = db.audit_logs.find((item) => item.action === "account:deleted");
   const checks = {
     tenantASeesOwnReport: reportsA.length === 1,
     tenantBCannotSeeTenantA: reportsB.length === 0,
@@ -97,9 +119,19 @@ async function run() {
     sessionTokensAreHashed: db.auth_sessions.every((session) => session.tokenHash && !session.token),
     sessionCookieIsHttpOnly: /HttpOnly/i.test(sessionCookie) && /SameSite=Lax/i.test(sessionCookie),
     sessionCookieAuthenticates: cookieMeResponse.status === 200,
-    legalConsentIsVersioned: db.consents.length === 2 && db.consents.every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),
+    legalConsentIsVersioned: exported.collections?.consents?.length === 1
+      && db.consents.length === 1
+      && [...exported.collections.consents, ...db.consents].every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),
     passwordResetRevokesSessions: revokedResponse.status === 401,
     passwordResetAllowsNewLogin: Boolean(newLogin.token),
+    accountExportContainsOnlyTenantData: exported.account?.id === tenantA.user.id && exported.collections?.reports?.length === 1 && !JSON.stringify(exported).includes(emailB),
+    accountExportOmitsCredentials: !exportedUser.passwordHash && exportedSessions.every((session) => !session.tokenHash && !session.token),
+    accountDeleteRequiresPassword: badDeleteResponse.status === 400,
+    accountDeleteRequiresExactConfirmation: missingConfirmationResponse.status === 400,
+    accountDeleteRemovesTenant: deletedAccount.deleted === true && !db.auth_users.some((user) => user.id === tenantA.user.id) && !db.reports.some((report) => report.ownerId === tenantA.user.id),
+    accountDeleteRevokesSession: deletedSessionResponse.status === 401,
+    accountDeletePreservesOtherTenant: survivingTenantResponse.status === 200 && db.auth_users.some((user) => user.id === tenantB.user.id),
+    deletionAuditIsAnonymous: Boolean(deletionAudit?.subjectHash) && !deletionAudit.ownerId && !deletionAudit.userId && !deletionAudit.email,
   };
   Object.entries(checks).forEach(([name, ok]) => console.log(`${ok ? "OK" : "FAIL"} ${name}`));
   if (Object.values(checks).some((ok) => !ok)) process.exitCode = 1;

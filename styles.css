@@ -3582,6 +3582,62 @@ html.theme-dark .auth-reset-panel {
   margin-top: 2px;
   accent-color: var(--accent);
 }
+.account-data-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.account-data-section h3,
+.account-data-section p {
+  margin: 0;
+}
+.account-data-section h3 {
+  font-size: 17px;
+}
+.account-data-section p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.delete-account-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(190, 63, 98, 0.38);
+  border-radius: 8px;
+  background: rgba(190, 63, 98, 0.07);
+}
+.delete-account-panel[hidden] {
+  display: none;
+}
+.delete-account-panel > strong {
+  color: var(--rose);
+  font-size: 15px;
+}
+.delete-account-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.delete-account-fields label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.delete-account-fields input {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 680px) {
+  .delete-account-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .trust-status {
   display: grid;
   gap: 3px;
@@ -12904,12 +12960,14 @@ html:not(.public-landing) .report-nav {
 
 /* Final workspace density override. */
 html:not(.public-landing) .overview-dashboard,
-html:not(.public-landing) [data-workspace-group="report"] {
+html:not(.public-landing) [data-workspace-group="report"],
+html:not(.public-landing) [data-workspace-group="settings"] {
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
 html:not(.public-landing) .overview-dashboard > article,
-html:not(.public-landing) [data-workspace-group="report"] > article {
+html:not(.public-landing) [data-workspace-group="report"] > article,
+html:not(.public-landing) [data-workspace-group="settings"] > article {
   grid-column: 1 / -1 !important;
   width: 100%;
 }

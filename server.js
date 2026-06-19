@@ -1993,6 +1993,89 @@ async function currentSession(req) {
   return user ? { session, user } : null;
 }
 
+const emailLinkedAccountCollections = new Set([
+  "accounts",
+  "billing_intents",
+  "email_jobs",
+  "invoices",
+  "leads",
+  "payment_events",
+  "subscriptions",
+]);
+
+function accountRecordBelongsToUser(collection, item, user) {
+  if (!item || typeof item !== "object") return false;
+  if (collection === "auth_users") return item.id === user.id;
+  if (item.ownerId === user.id || item.userId === user.id) return true;
+  if (collection === "auth_sessions") return item.userId === user.id;
+  if (collection === "audit_logs") {
+    return item.ownerId === user.id
+      || item.userId === user.id
+      || (item.recordId === user.id && String(item.action || "").includes("auth_users"));
+  }
+  if (!emailLinkedAccountCollections.has(collection)) return false;
+  const userEmail = String(user.email || "").trim().toLowerCase();
+  return [item.email, item.userEmail, item.accountEmail, item.billingEmail]
+    .some((value) => String(value || "").trim().toLowerCase() === userEmail);
+}
+
+function sanitizedAccountRecord(collection, item) {
+  const copy = { ...item };
+  if (collection === "auth_users") {
+    delete copy.passwordHash;
+    delete copy.emailVerificationTokenHash;
+    delete copy.passwordResetTokenHash;
+  }
+  if (collection === "auth_sessions") {
+    delete copy.token;
+    delete copy.tokenHash;
+  }
+  return copy;
+}
+
+function buildAccountDataExport(db, user) {
+  const collections = {};
+  Object.keys(emptyDb).forEach((collection) => {
+    const records = (Array.isArray(db[collection]) ? db[collection] : [])
+      .filter((item) => accountRecordBelongsToUser(collection, item, user))
+      .map((item) => sanitizedAccountRecord(collection, item));
+    if (records.length) collections[collection] = records;
+  });
+  return {
+    format: "agencyreport-account-export-v1",
+    exportedAt: new Date().toISOString(),
+    legalVersion,
+    account: sanitizedAccountRecord("auth_users", user),
+    collections,
+  };
+}
+
+async function deleteAuthAccount(userId, password, confirmation) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const user = db.auth_users.find((item) => item.id === userId);
+    if (!user || !verifyPassword(password, user.passwordHash)) throw new Error("INVALID_PASSWORD");
+    if (confirmation !== "DELETE") throw new Error("DELETE_CONFIRMATION_REQUIRED");
+    const deleted = {};
+    Object.keys(emptyDb).forEach((collection) => {
+      const before = Array.isArray(db[collection]) ? db[collection] : [];
+      const remaining = before.filter((item) => !accountRecordBelongsToUser(collection, item, user));
+      const count = before.length - remaining.length;
+      if (count) deleted[collection] = count;
+      db[collection] = remaining;
+    });
+    db.audit_logs.push(withId({
+      action: "account:deleted",
+      subjectHash: hashSessionToken(`deleted:${user.id}:${user.email}`),
+      deletedCollections: deleted,
+    }));
+    await writeDb(db);
+    return { deleted: true, deletedCollections: deleted };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
 function oneTimeToken(hours = 1) {
   const token = crypto.randomBytes(32).toString("hex");
   return {
@@ -2386,6 +2469,34 @@ async function handleApi(req, res, url) {
     const auth = await currentSession(req);
     if (!auth) return json(res, 401, { error: "Unauthorized" });
     req.auth = auth;
+  }
+
+  if (url.pathname === "/api/account/export" && req.method === "GET") {
+    const db = await readDb();
+    const exported = buildAccountDataExport(db, req.auth.user);
+    const date = new Date().toISOString().slice(0, 10);
+    return json(res, 200, { item: exported }, {
+      "content-disposition": `attachment; filename="agencyreport-account-${date}.json"`,
+      "cache-control": "no-store",
+    });
+  }
+
+  if (url.pathname === "/api/account" && req.method === "DELETE") {
+    try {
+      const payload = await readBody(req);
+      const result = await deleteAuthAccount(req.auth.user.id, payload.password, payload.confirmation);
+      return json(res, 200, { item: result }, {
+        "set-cookie": clearSessionCookie(),
+        "cache-control": "no-store",
+      });
+    } catch (error) {
+      const invalidPassword = error.message === "INVALID_PASSWORD";
+      const invalidConfirmation = error.message === "DELETE_CONFIRMATION_REQUIRED";
+      return json(res, 400, {
+        error: invalidPassword ? "Password is incorrect" : invalidConfirmation ? "Type DELETE to confirm account deletion" : "Account deletion failed",
+        code: error.message || "ACCOUNT_DELETE_FAILED",
+      });
+    }
   }
 
   if (url.pathname === "/api/billing/checkout" && req.method === "POST") {

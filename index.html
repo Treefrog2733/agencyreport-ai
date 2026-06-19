@@ -519,6 +519,29 @@
             <div class="metric-row"><div><span>稽核紀錄</span><strong id="auditCount">0</strong></div><div><span>狀態</span><strong id="auditStatus">-</strong></div></div>
             <div id="auditList" class="feed-list"></div>
             <div id="trustStatus" class="status-panel"></div>
+            <div class="account-data-section">
+              <div>
+                <h3 id="accountDataTitle">帳號與資料</h3>
+                <p id="accountDataCopy">下載帳號資料副本，或永久刪除帳號與此帳號建立的專案資料。</p>
+              </div>
+              <div class="button-row">
+                <button class="ghost" id="exportAccountDataBtn" type="button">下載我的資料</button>
+                <button class="danger" id="openDeleteAccountBtn" type="button">刪除帳號</button>
+              </div>
+              <div class="delete-account-panel" id="deleteAccountPanel" hidden>
+                <strong id="deleteAccountTitle">永久刪除帳號</strong>
+                <p id="deleteAccountCopy">此操作無法復原。請輸入目前密碼，並在確認欄輸入 DELETE。</p>
+                <div class="delete-account-fields">
+                  <label><span id="deletePasswordLabel">目前密碼</span><input id="deleteAccountPassword" type="password" autocomplete="current-password" /></label>
+                  <label><span id="deleteConfirmationLabel">確認文字</span><input id="deleteAccountConfirmation" type="text" autocomplete="off" placeholder="DELETE" /></label>
+                </div>
+                <div class="button-row">
+                  <button class="danger" id="confirmDeleteAccountBtn" type="button">永久刪除</button>
+                  <button class="ghost" id="cancelDeleteAccountBtn" type="button">取消</button>
+                </div>
+              </div>
+              <div id="accountDataStatus" class="status-panel"></div>
+            </div>
           </article>
         </section>
       </section>

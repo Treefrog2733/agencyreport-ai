@@ -168,6 +168,8 @@ Core:
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
+- `GET /api/account/export`
+- `DELETE /api/account` with the current password and an exact `DELETE` confirmation
 
 Agency workflow:
 
@@ -317,6 +319,9 @@ Implemented launch hardening:
 - JSON and HTML responses include basic security headers.
 - API requests have configurable IP rate limits.
 - Auth endpoints use a tighter rate limit bucket.
+- Browser-side client, delivery, invoice, and report caches are scoped by authenticated user ID.
+- Account exports omit password and session credential material.
+- Account deletion removes only the authenticated tenant's linked records, revokes every session, and leaves an anonymous deletion audit hash.
 - ECPay callback and health checks are excluded from rate limiting to avoid blocking payment and uptime checks.
 - `.env` and `.env.local` are ignored by Git.
 - `robots.txt` blocks private API, billing, and client report paths.
@@ -366,7 +371,7 @@ Still recommended before real paid traffic:
 - `scripts/db-backup.js` - encrypted PostgreSQL backup and verification.
 - `scripts/email-check.js` - email provider check.
 - `scripts/production-smoke.js` - production readiness smoke test.
-- `scripts/security-smoke.js` - tenant, session, legal-consent, and password lifecycle regression test.
+- `scripts/security-smoke.js` - tenant, session, legal-consent, password, account export, and account deletion lifecycle regression test.
 - `scripts/payment-smoke.js` - ECPay stage signature and callback regression test.
 - `scripts/ai-smoke.js` - isolated live OpenAI report-generation regression test.
 - `.github/workflows/ci.yml` - push/PR regression gate with retained browser and report evidence.

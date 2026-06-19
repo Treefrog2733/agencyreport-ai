@@ -188,6 +188,8 @@ async function main() {
           tableRows: document.querySelectorAll("#detailTable tbody tr").length,
           reportBrief: Boolean(document.querySelector("#reportPreviewBrief")?.textContent.trim()),
           aiSummary: Boolean(document.querySelector("#aiSummaryOutput")?.textContent.trim()),
+          accountDataControls: ["#exportAccountDataBtn", "#openDeleteAccountBtn", "#deleteAccountPanel"]
+            .every((selector) => Boolean(document.querySelector(selector))),
           horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
           cjkLines: "${language}" === "en" ? [...new Set([...document.querySelectorAll('[data-workspace-group]:not([hidden]), #report:not([hidden]), .workspace-sidebar, .workspace-masthead')]
             .flatMap((root) => (root.innerText || '').split(/\\n+/))
@@ -200,6 +202,26 @@ async function main() {
       });
       summary[view] = { file, state: state.result?.value };
       if (view === "delivery") summary[view].libraryTest = libraryTest;
+      if (view === "settings") {
+        await send("Runtime.evaluate", {
+          expression: `document.querySelector("#openDeleteAccountBtn")?.click()`,
+          awaitPromise: true,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const deleteCapture = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+        const deleteFile = path.join(outDir, "settings-delete.png");
+        fs.writeFileSync(deleteFile, Buffer.from(deleteCapture.data, "base64"));
+        const deleteState = await send("Runtime.evaluate", {
+          expression: `(() => ({
+            panelVisible: document.querySelector("#deleteAccountPanel")?.hidden === false,
+            passwordField: Boolean(document.querySelector("#deleteAccountPassword")),
+            confirmationField: Boolean(document.querySelector("#deleteAccountConfirmation")),
+            horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)
+          }))()`,
+          returnByValue: true,
+        });
+        summary[view].deletePanel = { file: deleteFile, state: deleteState.result?.value };
+      }
     }
     await send("Runtime.evaluate", {
       expression: `
@@ -264,6 +286,13 @@ async function main() {
           || item.libraryTest?.readyItems < 1
           || !item.libraryTest?.hasSnapshot
           || !item.libraryTest?.restoredClient;
+      }
+      if (view === "settings") {
+        return !item.state?.accountDataControls
+          || !item.deletePanel?.state?.panelVisible
+          || !item.deletePanel?.state?.passwordField
+          || !item.deletePanel?.state?.confirmationField
+          || item.deletePanel?.state?.horizontalOverflow > 1;
       }
       return !item.state?.visible?.includes(view)
         || item.state?.horizontalOverflow > 1
