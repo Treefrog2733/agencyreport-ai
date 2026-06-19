@@ -50,7 +50,7 @@ This document separates verified production state, locally verified changes that
 - [ ] **ECPay production approval:** obtain and configure production Merchant ID, HashKey, and HashIV after public-site review; then complete one low-value real payment and refund/reconciliation check.
 - [x] **OpenAI live capacity:** after API balance was added, the 2026-06-20 live smoke passed provider, structured summary/risk/action/client-message, and usage assertions.
 - [x] **Scheduled production monitoring:** manual workflow run `27844664556` succeeded after the hardened commit was deployed; the daily schedule remains enabled.
-- [ ] **Operational ownership:** choose the person and response target for payment disputes, privacy/deletion requests, failed reports, and monitoring alerts.
+- [x] **Operational ownership:** the repository owner is the service owner, `support@virtualtrendworks.com` is the single intake address, and `OPERATIONS_RUNBOOK.md` defines response targets for payment, privacy, report, monitoring, and backup events.
 
 ## Launch decision
 

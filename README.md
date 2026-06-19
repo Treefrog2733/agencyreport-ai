@@ -1,6 +1,7 @@
 # AgencyReport AI
 
 See [LAUNCH_READINESS.md](LAUNCH_READINESS.md) for the evidence-based production launch gate and the remaining external approvals.
+See [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) for role-based response targets, incident handling, payment reconciliation, and privacy request procedures.
 
 AgencyReport AI is a monetizable SaaS MVP for marketing agencies. It helps agencies turn client requirements, CSV or Google Sheets data, and campaign KPIs into a client-ready monthly report with charts, AI-generated insights, next-month action items, and delivery records.
 
