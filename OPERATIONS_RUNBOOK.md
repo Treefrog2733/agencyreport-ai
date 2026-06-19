@@ -46,4 +46,3 @@ This runbook keeps early operations role-based and low-cost. The repository owne
 - Customer intake: `support@virtualtrendworks.com`
 - Automated incidents: GitHub issue titled `[monitor] AgencyReport production smoke failed`
 - Infrastructure: Render, Supabase, Cloudflare, Resend, OpenAI, or ECPay provider dashboard according to the failing readiness category
-
