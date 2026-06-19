@@ -14,7 +14,8 @@
     "smoke:workspace": "node scripts/workspace-visual-smoke.js",
     "smoke:prod": "node scripts/production-smoke.js",
     "smoke:security": "node scripts/security-smoke.js",
-    "smoke:payment": "node scripts/payment-smoke.js"
+    "smoke:payment": "node scripts/payment-smoke.js",
+    "smoke:ai": "node scripts/ai-smoke.js"
   },
   "dependencies": {
     "pg": "^8.13.1"

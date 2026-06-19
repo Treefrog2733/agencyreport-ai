@@ -1,6 +1,6 @@
 # AgencyReport AI Launch Status
 
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 ## Verified In Current Worktree
 
@@ -21,6 +21,8 @@ Last updated: 2026-06-18
 - Security smoke passes tenant isolation, session, legal-consent, and password-reset checks.
 - Local production smoke correctly fails the email readiness gate while the sender is still the temporary Resend domain.
 - Dependency audit reports 0 known production vulnerabilities.
+- Render deployed commit `1479c2a`; the production service exposes normalized PostgreSQL schema v2 with 377 migrated records.
+- The isolated AI report flow reaches OpenAI and safely falls back when unavailable. The current account returns an API quota/credit exhaustion response, so live AI generation remains a launch blocker.
 
 ## Automated Operations Added
 
@@ -41,6 +43,7 @@ Last updated: 2026-06-18
   ```bash
   npm run smoke:security
   npm run smoke:payment
+  npm run smoke:ai
   npm run smoke:workspace -- --lang en
   npm run smoke:prod -- --url <url> --strict
   npm run smoke:prod -- --url <url> --strict --require-operational --require-payment
@@ -48,7 +51,7 @@ Last updated: 2026-06-18
 
 ## External Launch Blockers
 
-1. Push this worktree and allow Render to deploy the new commit.
+1. Add API billing credits or raise the project spend limit, then require `npm run smoke:ai` to pass in live mode.
 2. Add `app.virtualtrendworks.com` as a Render custom domain.
 3. In Cloudflare, add `CNAME app -> agencyreport-ai.onrender.com` as DNS-only until Render provisions TLS.
 4. Add and verify `reports.virtualtrendworks.com` in Resend, then set:
@@ -69,6 +72,7 @@ Last updated: 2026-06-18
 - Resend API key: send-only; it cannot create or inspect domains.
 - Local runtime sender: `AgencyReport AI <onboarding@resend.dev>`.
 - Local payment provider: `mock`; production ECPay credentials are not present locally.
+- OpenAI request path: authenticated and reachable, but the current API project has exhausted or unavailable quota/credits.
 
 ## Final Go-Live Gate
 

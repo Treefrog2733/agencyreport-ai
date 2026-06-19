@@ -38,13 +38,13 @@ Browser frontend
 Node.js API server
   server.js
         |
-PostgreSQL JSONB store when DATABASE_URL is set
+Normalized PostgreSQL record store when DATABASE_URL is set
 Local data/db.json fallback for development
         |
 OpenAI / Resend / ECPay / connector credentials
 ```
 
-The MVP currently stores app state in one PostgreSQL table named `agencyreport_store`. This keeps the data model simple for launch while still allowing the service to run on Supabase or another hosted PostgreSQL provider.
+Production state is stored in normalized `agencyreport_records` rows, keyed by collection, record ID, and owner ID, with owner/collection indexes for tenant-scoped reads. `agencyreport_metadata` records schema state. The legacy `agencyreport_store` JSONB row is retained only as a migration rollback source; local development can still use `data/db.json`.
 
 ## Local Development
 
@@ -74,6 +74,7 @@ node --check app.js
 node --check scripts/production-smoke.js
 npm run smoke:browser -- --url=http://127.0.0.1:4173/
 npm run db:check
+npm run smoke:ai
 ```
 
 If PowerShell blocks `npm`, use:
@@ -301,6 +302,8 @@ The smoke test verifies:
 - `/api/readiness` reports all required checks as passing
 - both Traditional Chinese and English legal pages respond with a versioned policy
 
+Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live OpenAI report generation and fails unless the provider returns live structured summary, risk, action, client-message, and usage data. A ChatGPT subscription does not supply OpenAI API credits; API billing must be active separately.
+
 ## Security And Launch Notes
 
 Implemented launch hardening:
@@ -326,8 +329,8 @@ Still recommended before real paid traffic:
 
 ## Launch Checklist
 
-- [ ] Push latest code to GitHub.
-- [ ] Confirm Render redeploy succeeds.
+- [x] Push latest launch-hardening code to GitHub.
+- [x] Confirm Render redeploy succeeds.
 - [ ] Set all required Render environment variables.
 - [ ] Confirm `GET /api/health` returns `storage: "postgres"`.
 - [ ] Confirm `GET /api/readiness` returns `ready: true`.
@@ -361,3 +364,4 @@ Still recommended before real paid traffic:
 - `scripts/production-smoke.js` - production readiness smoke test.
 - `scripts/security-smoke.js` - tenant, session, legal-consent, and password lifecycle regression test.
 - `scripts/payment-smoke.js` - ECPay stage signature and callback regression test.
+- `scripts/ai-smoke.js` - isolated live OpenAI report-generation regression test.
