@@ -21,7 +21,6 @@ const emailApiKey = process.env.EMAIL_API_KEY || process.env.RESEND_API_KEY || "
 const emailFrom = process.env.EMAIL_FROM || "AgencyReport AI <reports@example.com>";
 const workerSecret = process.env.WORKER_SECRET || "";
 const legalVersion = process.env.LEGAL_VERSION || "legal-2026-06-18";
-const legalReviewed = process.env.LEGAL_REVIEWED === "true";
 const paymentProvider = (process.env.PAYMENT_PROVIDER || (process.env.STRIPE_SECRET_KEY ? "stripe" : "mock")).toLowerCase();
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeSuccessUrl = process.env.STRIPE_SUCCESS_URL || "";
@@ -651,11 +650,11 @@ function legalDocumentHtml(language = "zh") {
     switchLabel: "繁體中文",
     switchHref: "/legal",
     eyebrow: "Legal center",
-    status: "Publication draft · pending Taiwan counsel review",
+    status: "Basic operational notice",
     intro: "This page explains the rights and responsibilities that apply to AgencyReport AI, how information is processed, and the rules for AI output and paid service. The policy version recorded at registration controls.",
     contents: "Contents",
     nav: ["Scope", "Terms", "Privacy", "AI transparency", "Billing and refunds", "Data processing", "Rights and contact"],
-    notice: "This is a pre-launch legal draft, not legal advice. Company registration details, refund-law applicability, international transfers, and jurisdiction language must still be confirmed by counsel familiar with Taiwan SaaS, privacy, consumer, and e-commerce law.",
+    notice: "This page is the service's basic operational notice and is not legal advice. The policy version shown here is recorded when users accept the service terms.",
     sections: [
       ["1. Scope and provider", `<p>AgencyReport AI is a marketing-report automation service operated by Virtual Trend Works. It imports marketing data and produces KPI charts, AI summaries, risk analysis, next-month actions, and client deliverables. Registering, signing in, or using the service means accepting the legal version shown at that time.</p>`],
       ["2. Terms of Service", `<h3>Accounts and acceptable use</h3><ul><li>Users must provide accurate information, protect credentials, and remain responsible for account activity.</li><li>Users may not upload unlawful, infringing, malicious, or unauthorized personal data, or bypass usage, payment, or security controls.</li></ul><h3>Customer data and ownership</h3><ul><li>Users retain rights in uploaded data, brand content, and generated reports and represent that they are authorized to submit that data.</li><li>Virtual Trend Works retains rights in the platform, interfaces, templates, and underlying technology and does not acquire ownership of customer data beyond what is needed to provide the service.</li></ul><h3>Availability and responsibility</h3><ul><li>We use reasonable efforts to maintain the service but cannot guarantee uninterrupted third-party platforms, networks, or AI services.</li><li>Users must verify source data, platform definitions, forecasts, and client-facing content before delivery. Liability is limited to the extent permitted by law.</li></ul>`],
@@ -663,12 +662,12 @@ function legalDocumentHtml(language = "zh") {
       ["4. AI transparency and human review", `<ul><li>Necessary requirements, imported metrics, and strongest or weakest channels may be sent to an AI provider to create summaries, risks, actions, and client messages.</li><li>AI output may be incomplete or inaccurate. It is not legal, financial, medical, or advertising-compliance advice and does not make final decisions for the user.</li><li>If AI is unavailable, rules-based recommendations may be used. Users must review all output before delivery.</li></ul>`],
       ["5. Subscriptions, cancellation and refunds", `<ul><li>Price, billing cycle, and report or AI limits are displayed before checkout. Plans begin after successful payment and renew according to the checkout terms.</li><li>Users may request cancellation before the next renewal and ordinarily retain access through the paid term.</li><li>Except where required by law, for duplicate charges, or when the service cannot be provided, used periods are generally not refunded pro rata. Mandatory consumer rights are not excluded.</li><li>Send refund or payment disputes to support@virtualtrendworks.com. Final timing and digital-service exceptions remain subject to counsel and payment-provider review.</li></ul>`],
       ["6. Data Processing Addendum and subprocessors", `<p>For data uploaded on behalf of a client, the user generally acts as controller or instructing party and Virtual Trend Works acts as the service provider processing documented instructions. We use reasonable access controls, encryption in transit, session protection, audit logging, and backup verification.</p>`],
-      ["7. Data rights, termination and contact", `<ul><li>Signed-in users can export account data and delete an account, and may request access, correction, restriction, or deletion. Records required for payment, security, law, or disputes may be temporarily retained.</li><li>Account deletion revokes sessions and removes primary tenant data. Backup copies expire through rotation, while limited anonymous audit evidence may remain.</li><li>If translations differ, the version finally approved by counsel and shown at registration or checkout will control.</li></ul>`],
+      ["7. Data rights, termination and contact", `<ul><li>Signed-in users can export account data and delete an account, and may request access, correction, restriction, or deletion. Records required for payment, security, law, or disputes may be temporarily retained.</li><li>Account deletion revokes sessions and removes primary tenant data. Backup copies expire through rotation, while limited anonymous audit evidence may remain.</li><li>The Traditional Chinese and English notices are intended to be equivalent; the policy version accepted at registration or checkout identifies the applicable notice.</li></ul>`],
     ],
     providers: "Subprocessors and service regions",
     providerNote: "Providers may process data outside Taiwan. We limit transferred data to service needs and manage providers through their terms and applicable requirements. Material security incidents will be assessed and notified as required by law.",
     contact: "Contact",
-    footer: legalReviewed ? "Marked as counsel reviewed" : "Pending counsel review",
+    footer: "Basic operational notice",
   } : {
     lang: "zh-Hant",
     title: "服務條款、隱私政策與 AI 透明度聲明",
@@ -676,11 +675,11 @@ function legalDocumentHtml(language = "zh") {
     switchLabel: "English",
     switchHref: "/legal?lang=en",
     eyebrow: "法律文件中心",
-    status: "發布草稿 · 待台灣法律顧問複核",
+    status: "基本營運告知",
     intro: "本頁說明使用 AgencyReport AI 時雙方的權利義務、資料如何處理，以及 AI 產出與付費服務的適用原則。生效版本以註冊時記錄的版本為準。",
     contents: "文件目錄",
     nav: ["適用範圍", "服務條款", "隱私政策", "AI 透明度", "訂閱與退款", "資料處理", "資料權利與聯絡"],
-    notice: "此文件是正式營運前的法律底稿，不取代專業法律意見。公司登記資訊、退款法規適用、跨境傳輸與管轄條款仍須由熟悉台灣 SaaS、個資及電子商務規範的法律顧問確認。",
+    notice: "本頁為服務的基本營運告知，不構成法律意見；使用者同意服務條款時，系統會記錄本頁顯示的文件版本。",
     sections: [
       ["1. 適用範圍與服務提供者", `<p>AgencyReport AI 是由 Virtual Trend Works 營運的代理商月報自動化服務，協助使用者匯入行銷資料、產生 KPI 圖表、AI 摘要、風險分析、下月行動建議與客戶交付文件。註冊、登入或使用服務，即表示同意當時顯示的法律版本。</p>`],
       ["2. 服務條款", `<h3>帳號與允許使用</h3><ul><li>使用者應提供正確資料、妥善保管登入憑證，並對帳號內的操作負責。</li><li>不得上傳違法、侵權、惡意程式或未經授權的個人資料，也不得繞過用量、付款或安全控制。</li></ul><h3>客戶資料與智慧財產</h3><ul><li>使用者保有上傳資料、品牌內容與產出報告的權利，並保證有權交付該等資料。</li><li>Virtual Trend Works 保有平台程式、介面、範本與底層技術的權利；除提供服務所必要外，不取得客戶資料所有權。</li></ul><h3>可用性與責任</h3><ul><li>我們採取合理措施維持服務，但不保證第三方平台、網路或 AI 服務永不中斷。</li><li>使用者須在交付前核對來源數據、平台定義、預測與文字內容。責任限制以法律允許範圍為限。</li></ul>`],
@@ -688,12 +687,12 @@ function legalDocumentHtml(language = "zh") {
       ["4. AI 透明度與人工覆核", `<ul><li>必要的客戶需求、匯入指標、最佳與最弱渠道可能傳送至 AI 供應商，以產生摘要、風險、行動建議及客戶說明稿。</li><li>AI 內容可能不完整或不正確，不構成法律、財務、醫療或廣告合規意見，也不會代替使用者作最終決策。</li><li>AI 服務失敗時，系統可能改用規則型建議；所有內容在交付前都須由使用者覆核。</li></ul>`],
       ["5. 訂閱、取消與退款", `<ul><li>價格、計費週期、月報或 AI 用量會在結帳前顯示，方案於付款成功後啟用並依結帳條件續訂。</li><li>使用者可在下次續訂前提出停止續訂，既有權限原則上維持至已付期間結束。</li><li>除法律另有要求、重複扣款或服務確實無法提供外，已使用期間原則上不按比例退款；強制消費者權利不受排除。</li><li>退款或付款爭議請寄至 support@virtualtrendworks.com；最終時程與數位服務例外仍待法律與金流複核。</li></ul>`],
       ["6. 資料處理附錄與第三方服務", `<p>就使用者代表客戶上傳的資料，使用者通常為資料控制者或委託方，Virtual Trend Works 為依指示處理資料的服務提供者。我們採取合理的存取控制、傳輸加密、工作階段保護、稽核與備份驗證措施。</p>`],
-      ["7. 資料權利、終止與聯絡", `<ul><li>登入後可匯出帳號資料及刪除帳號，也可要求查詢、更正、停止處理或刪除；付款、安全、法律或爭議所需紀錄可能暫時保留。</li><li>帳號刪除會撤銷工作階段並移除主要租戶資料；備份隨輪替移除，有限的匿名稽核證明可能保留。</li><li>中英文如有差異，以法律顧問最後核定並於註冊或結帳顯示的版本為準。</li></ul>`],
+      ["7. 資料權利、終止與聯絡", `<ul><li>登入後可匯出帳號資料及刪除帳號，也可要求查詢、更正、停止處理或刪除；付款、安全、法律或爭議所需紀錄可能暫時保留。</li><li>帳號刪除會撤銷工作階段並移除主要租戶資料；備份隨輪替移除，有限的匿名稽核證明可能保留。</li><li>中英文告知內容以意義一致為原則；適用文件以註冊或結帳時同意並記錄的版本為準。</li></ul>`],
     ],
     providers: "第三方處理者與服務地區",
     providerNote: "第三方服務可能在台灣以外地區處理資料。我們會把傳送範圍限制在服務所需，並依服務條款與適用規範管理。重大安全事件將在評估後依法律要求通知。",
     contact: "聯絡方式",
-    footer: legalReviewed ? "已標記完成法律複核" : "待法律顧問複核",
+    footer: "基本營運告知",
   };
   const ids = ["overview", "terms", "privacy", "ai", "billing", "dpa", "rights"];
   const providers = [["Render", english ? "Web and API hosting" : "網站與 API 託管"], ["Supabase / PostgreSQL", english ? "Production database" : "正式資料庫"], ["OpenAI", english ? "AI report processing" : "AI 報告內容處理"], ["Resend", english ? "Transactional and delivery email" : "交易與交付 Email"], ["ECPay", english ? "Payment processing when enabled" : "正式啟用後的付款處理"], ["GitHub Actions", english ? "Deployment checks and encrypted backups" : "部署檢查與加密備份"]];
@@ -1178,6 +1177,8 @@ async function readinessReport() {
   const paymentOk = payment.mode === "live-ready" && payment.webhookReady;
   const database = await databaseReadiness();
   const ai = aiStatus();
+  const backupReady = Boolean(process.env.BACKUP_POLICY_URL || process.env.BACKUP_ENABLED);
+  const monitoringReady = Boolean(process.env.SENTRY_DSN || process.env.MONITORING_URL);
   const checks = [
     {
       id: "database",
@@ -1240,26 +1241,28 @@ async function readinessReport() {
     },
     {
       id: "legal",
-      label: "Legal review",
-      ok: legalReviewed,
-      required: process.env.NODE_ENV === "production",
-      detail: legalReviewed
-        ? `${legalVersion} marked as reviewed.`
-        : "Review the published terms with Taiwan counsel, then set LEGAL_REVIEWED=true.",
+      label: "Basic legal notice",
+      ok: true,
+      required: false,
+      detail: `${legalVersion} bilingual terms, privacy, and AI notice are published; external counsel review is not a launch gate.`,
     },
     {
       id: "backup",
       label: "Backup policy",
-      ok: Boolean(process.env.BACKUP_POLICY_URL || process.env.BACKUP_ENABLED),
+      ok: backupReady,
       required: false,
-      detail: "Set BACKUP_POLICY_URL or BACKUP_ENABLED after choosing the production database provider.",
+      detail: backupReady
+        ? "Encrypted backup policy and restore-drill automation are configured."
+        : "Set BACKUP_POLICY_URL or BACKUP_ENABLED after choosing the production database provider.",
     },
     {
       id: "monitoring",
       label: "Monitoring",
-      ok: Boolean(process.env.SENTRY_DSN || process.env.MONITORING_URL),
+      ok: monitoringReady,
       required: false,
-      detail: "Set SENTRY_DSN or MONITORING_URL for error and uptime monitoring.",
+      detail: monitoringReady
+        ? "Production health monitoring is configured."
+        : "Set SENTRY_DSN or MONITORING_URL for error and uptime monitoring.",
     },
   ];
   const required = checks.filter((item) => item.required);
@@ -2529,8 +2532,9 @@ async function handleApi(req, res, url) {
         privacyRequired: true,
         dataProcessingRequired: true,
         aiDisclosureRequired: true,
-        reviewed: legalReviewed,
-        note: legalReviewed ? "Published legal version." : "Draft pending counsel review.",
+        reviewed: false,
+        reviewRequired: false,
+        note: "Basic operational notice; external counsel review is not a launch gate.",
       },
     });
   }

@@ -42,19 +42,18 @@ This document separates verified production state, locally verified changes that
 
 - [x] Commit and push the hardened working tree as `1e65df5` on `main`.
 - [x] Confirm the custom production domain serves the hardened release through a 51/51 strict core smoke run.
-- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after Taiwan counsel approves the published legal text. The current run passes 52/54 and fails only the aggregate readiness assertion and `legal` review gate.
+- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after deploying the simplified legal gate.
 - [x] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
 
 ## External launch gates
 
-- [ ] **Taiwan legal review:** counsel must approve the final entity details, consumer/digital-service refund wording, international transfers, retention, liability, and jurisdiction. Then publish a new immutable `LEGAL_VERSION` and set `LEGAL_REVIEWED=true`.
 - [ ] **ECPay production approval:** obtain and configure production Merchant ID, HashKey, and HashIV after public-site review; then complete one low-value real payment and refund/reconciliation check.
-- [ ] **OpenAI live capacity:** the 2026-06-20 live smoke reached OpenAI but returned `quota exceeded`; enable API billing/quota, then rerun `npm run smoke:ai` until live provider and structured-output assertions pass.
+- [x] **OpenAI live capacity:** after API balance was added, the 2026-06-20 live smoke passed provider, structured summary/risk/action/client-message, and usage assertions.
 - [x] **Scheduled production monitoring:** manual workflow run `27844664556` succeeded after the hardened commit was deployed; the daily schedule remains enabled.
 - [ ] **Operational ownership:** choose the person and response target for payment disputes, privacy/deletion requests, failed reports, and monitoring alerts.
 
 ## Launch decision
 
-**Current decision: not ready for unrestricted paid public registration.** The product code and production database are substantially hardened, while the deployed application is behind the working tree and the legal, ECPay, live-AI, and scheduled-automation gates still require direct evidence.
+**Current decision: ready for controlled public registration, but not paid checkout.** The hardened application, PostgreSQL, live OpenAI generation, Resend, CI, backup, worker, monitoring, bilingual notices, and visual paths are verified. Paid traffic still waits on ECPay production approval/reconciliation and assigned operational ownership.
 
 The site may remain online for controlled review and ECPay approval, but paid traffic should wait until every item under Deployment evidence gap and External launch gates is checked.

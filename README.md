@@ -135,7 +135,6 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=120
 AUTH_RATE_LIMIT_MAX=20
 LEGAL_VERSION=legal-2026-06-18
-LEGAL_REVIEWED=true
 
 APP_BASE_URL=https://app.virtualtrendworks.com
 PAYMENT_PROVIDER=ecpay
@@ -305,7 +304,7 @@ The smoke test verifies:
 - `robots.txt` exposes the sitemap
 - `sitemap.xml` responds
 
-Production requests use a 65-second timeout and retry eligible GET failures up to three times so Render free-tier cold starts do not create immediate false outages. Scheduled monitoring enforces core database, auth, AI, email, and worker health. Run the workflow manually with `require_operational=true`, or pass `--require-operational`, for the stricter legal, backup, and monitoring launch gate.
+Production requests use a 65-second timeout and retry eligible GET failures up to three times so Render free-tier cold starts do not create immediate false outages. Scheduled monitoring enforces core database, auth, AI, email, and worker health. Run the workflow manually with `require_operational=true`, or pass `--require-operational`, for the stricter backup and monitoring launch gate.
 - sensitive files such as `.env`, `server.js`, `data/db.json`, `package.json`, and `render.yaml` are blocked
 - `/api/health` is OK
 - production storage is PostgreSQL
@@ -318,7 +317,7 @@ Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live Ope
 
 `npm run smoke:ai-runtime` uses a local fake provider to verify the operational state machine without spending API credits. A quota or provider failure must switch health and readiness to `degraded` with a sanitized error code while rules-based report output remains available; the next successful live response must automatically restore `live-ready` status.
 
-The public legal center is available at `/legal` and `/legal?lang=en`. Run `npm run smoke:legal` to verify bilingual section parity, the registered policy version, support contact, subprocessors, security headers, and mojibake protection. Use [LEGAL_REVIEW_CHECKLIST.md](LEGAL_REVIEW_CHECKLIST.md) for counsel review; keep `LEGAL_REVIEWED=false` until approval.
+The public legal center is available at `/legal` and `/legal?lang=en`. Run `npm run smoke:legal` to verify bilingual section parity, the registered policy version, support contact, subprocessors, security headers, and mojibake protection. These pages remain the product's basic operational notice; external counsel review is not enforced as a launch gate.
 
 `npm run smoke:worker` verifies that the scheduled-report worker rejects unauthenticated calls, processes each due schedule once, generates an AI draft with safe fallback, advances the next run, sends the queued email, preserves tenant ownership, and keeps client content out of automation logs.
 

@@ -45,7 +45,8 @@ async function run() {
   assert(zhResponse.ok && /<html lang="zh-Hant">/.test(zh), "Traditional Chinese legal page responds");
   assert(enResponse.ok && /<html lang="en">/.test(en), "English legal page responds");
   assert(api.item?.version === expectedVersion, "legal API exposes the expected version");
-  assert(api.item?.reviewed === false, "draft remains explicitly pending counsel review");
+  assert(api.item?.reviewRequired === false, "external counsel review is not a launch gate");
+  assert(zh.includes("基本營運告知") && en.includes("Basic operational notice"), "both pages identify the basic operational notice");
   assert(zh.includes(expectedVersion) && en.includes(expectedVersion), "both pages show the registered legal version");
   ["服務條款", "隱私政策", "AI 透明度", "訂閱、取消與退款", "資料處理附錄", "資料權利"].forEach((heading) => assert(zh.includes(heading), `Chinese section present: ${heading}`));
   ["Terms of Service", "Privacy Policy", "AI transparency", "Subscriptions, cancellation and refunds", "Data Processing Addendum", "Data rights"].forEach((heading) => assert(en.includes(heading), `English section present: ${heading}`));

@@ -38,8 +38,6 @@ services:
         value: "20"
       - key: LEGAL_VERSION
         value: legal-2026-06-18
-      - key: LEGAL_REVIEWED
-        value: "false"
       - key: BACKUP_ENABLED
         value: "true"
       - key: BACKUP_POLICY_URL

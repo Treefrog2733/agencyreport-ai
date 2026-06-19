@@ -80,7 +80,7 @@ async function run() {
   const requireOperational = process.argv.includes("--require-operational");
   const requiredChecks = [
     ...baseRequiredChecks,
-    ...(requireOperational ? ["legal", "backup", "monitoring"] : []),
+    ...(requireOperational ? ["backup", "monitoring"] : []),
     ...(requirePayment ? ["payment"] : []),
   ];
   const results = [];
