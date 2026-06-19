@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
@@ -104,6 +104,7 @@ jobs:
           path: |
             artifacts/
             ci-server.log
+            !artifacts/**/profile/**
           if-no-files-found: warn
           retention-days: 14
 
