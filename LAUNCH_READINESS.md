@@ -32,20 +32,23 @@ This document separates verified production state, locally verified changes that
 - [x] **GitHub automation secrets:** repository Actions secrets now include `DATABASE_URL`, `BACKUP_ENCRYPTION_KEY`, `WORKER_SECRET`, and `APP_URL`; values remain encrypted and were not exposed during verification.
 - [x] **Backup automation:** manually triggered run `27844337774` completed successfully and produced encrypted artifact `agencyreport-db-27844337774` (52.9 KB) after the restore drill.
 - [x] **Worker automation:** manually triggered run `27844384272` completed successfully against the production application URL.
+- [x] **Release CI:** commit `1e65df5` passed AgencyReport CI run `27844509691`, including core, security, bilingual, browser, desktop, and mobile checks.
+- [x] **Production deployment:** commit `1e65df5` is served at `https://app.virtualtrendworks.com`; the deployed core production smoke passed 51/51 checks.
+- [x] **Production monitoring:** manual monitor run `27844664556` completed successfully against the custom domain and closed the prior outage issue.
 
 ## Deployment evidence gap
 
-- [ ] Commit and push the current working tree. Local Git writes are currently blocked from creating `.git/index.lock` by the execution permission profile.
-- [ ] Confirm Render deploys the new commit. The production dashboard currently reports live commit `58c2c67` (`Add account data lifecycle controls`), so the local launch hardening is not yet online.
-- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` against the deployed commit.
+- [x] Commit and push the hardened working tree as `1e65df5` on `main`.
+- [x] Confirm the custom production domain serves the hardened release through a 51/51 strict core smoke run.
+- [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after Taiwan counsel approves the published legal text. The current run passes 52/54 and fails only the aggregate readiness assertion and `legal` review gate.
 - [ ] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
 
 ## External launch gates
 
 - [ ] **Taiwan legal review:** counsel must approve the final entity details, consumer/digital-service refund wording, international transfers, retention, liability, and jurisdiction. Then publish a new immutable `LEGAL_VERSION` and set `LEGAL_REVIEWED=true`.
 - [ ] **ECPay production approval:** obtain and configure production Merchant ID, HashKey, and HashIV after public-site review; then complete one low-value real payment and refund/reconciliation check.
-- [ ] **OpenAI live capacity:** confirm API billing/quota and run `npm run smoke:ai`; a configured key without a successful live response is not sufficient evidence.
-- [ ] **Scheduled production monitoring:** observe one successful production-monitor run after the hardened commit is deployed.
+- [ ] **OpenAI live capacity:** the 2026-06-20 live smoke reached OpenAI but returned `quota exceeded`; enable API billing/quota, then rerun `npm run smoke:ai` until live provider and structured-output assertions pass.
+- [x] **Scheduled production monitoring:** manual workflow run `27844664556` succeeded after the hardened commit was deployed; the daily schedule remains enabled.
 - [ ] **Operational ownership:** choose the person and response target for payment disputes, privacy/deletion requests, failed reports, and monitoring alerts.
 
 ## Launch decision
