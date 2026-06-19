@@ -16,9 +16,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Validate backup secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "$DATABASE_URL" ]] || missing+=(DATABASE_URL)
+          [[ -n "$BACKUP_ENCRYPTION_KEY" ]] || missing+=(BACKUP_ENCRYPTION_KEY)
+          if (( ${#missing[@]} )); then
+            echo "::error::Add repository Actions secrets: ${missing[*]}"
+            exit 1
+          fi
       - name: Export, encrypt, and verify PostgreSQL backup
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -26,6 +39,7 @@ jobs:
           BACKUP_OUTPUT_DIR: ${{ runner.temp }}/agencyreport-backups
         run: npm run db:backup
       - name: Retain encrypted backup
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: agencyreport-db-${{ github.run_id }}

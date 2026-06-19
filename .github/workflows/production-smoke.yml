@@ -10,7 +10,7 @@ on:
       app_url:
         description: "Production URL to test"
         required: false
-        default: "https://app.virtualtrendworks.com"
+        default: "https://agencyreport-ai.onrender.com"
   schedule:
     - cron: "40 0 * * *"
 
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
@@ -32,7 +32,7 @@ jobs:
 
       - name: Run production smoke test
         env:
-          APP_URL: ${{ inputs.app_url || secrets.APP_URL || 'https://app.virtualtrendworks.com' }}
+          APP_URL: ${{ inputs.app_url || secrets.APP_URL || 'https://agencyreport-ai.onrender.com' }}
         run: npm run smoke:prod -- --url "$APP_URL" --strict --require-operational
 
       - name: Open or update outage issue

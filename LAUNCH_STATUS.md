@@ -63,7 +63,7 @@ Last updated: 2026-06-19
 
    The current sender is `onboarding@resend.dev` and is intentionally rejected by the new production readiness gate.
 5. Have the published `legal-2026-06-18` draft reviewed for Taiwan paid SaaS use, then set `LEGAL_REVIEWED=true`.
-6. Add GitHub secrets `APP_URL`, `WORKER_SECRET`, `DATABASE_URL`, and `BACKUP_ENCRYPTION_KEY`.
+6. Add GitHub secrets `WORKER_SECRET`, `DATABASE_URL`, and `BACKUP_ENCRYPTION_KEY`; add `APP_URL` after the custom domain is live to replace the temporary Render fallback.
 7. After the public URL is reachable, submit it to ECPay and add the production merchant credentials in Render.
 
 ## Current DNS And Provider Evidence
@@ -74,6 +74,7 @@ Last updated: 2026-06-19
 - Local runtime sender: `AgencyReport AI <onboarding@resend.dev>`.
 - Local payment provider: `mock`; production ECPay credentials are not present locally.
 - OpenAI request path: authenticated and reachable, but the current API project has exhausted or unavailable quota/credits.
+- GitHub CI run `27800344798` passed all automated regression checks. Scheduled backup still requires `DATABASE_URL` and `BACKUP_ENCRYPTION_KEY`; scheduled Worker requires `WORKER_SECRET`. `APP_URL` is optional until the custom domain is ready because workflows fall back to the Render URL.
 
 ## Final Go-Live Gate
 

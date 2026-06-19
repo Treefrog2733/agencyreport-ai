@@ -5,13 +5,28 @@ on:
     - cron: "15 0 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  APP_URL: ${{ secrets.APP_URL || 'https://agencyreport-ai.onrender.com' }}
+  WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+
 jobs:
   run-worker:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate worker secret
+        shell: bash
+        run: |
+          if [[ -z "$WORKER_SECRET" ]]; then
+            echo "::error::Add WORKER_SECRET in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Trigger scheduled reports
         run: |
           curl --fail-with-body \
             --request POST \
-            --header "x-worker-secret: ${{ secrets.WORKER_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/worker/run"
+            --header "x-worker-secret: $WORKER_SECRET" \
+            "$APP_URL/api/worker/run"
