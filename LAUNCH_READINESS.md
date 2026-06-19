@@ -44,6 +44,7 @@ This document separates verified production state, locally verified changes that
 - [x] Confirm the custom production domain serves the hardened release through a 51/51 strict core smoke run.
 - [x] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after deploying the simplified legal gate; all 53 checks passed with no missing required services.
 - [x] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
+- [x] Deploy refund reconciliation commit `745bdac`; the custom production domain exposed the new release and passed the strict operational smoke test 53/53 on 2026-06-20.
 
 ## External launch gates
 
