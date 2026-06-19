@@ -35,13 +35,14 @@ This document separates verified production state, locally verified changes that
 - [x] **Release CI:** commit `1e65df5` passed AgencyReport CI run `27844509691`, including core, security, bilingual, browser, desktop, and mobile checks.
 - [x] **Production deployment:** commit `1e65df5` is served at `https://app.virtualtrendworks.com`; the deployed core production smoke passed 51/51 checks.
 - [x] **Production monitoring:** manual monitor run `27844664556` completed successfully against the custom domain and closed the prior outage issue.
+- [x] **Production visual QA:** desktop and mobile runs passed in both Traditional Chinese and English across landing, overview, case, report, AI, delivery, billing, settings, and chart views (36 rendered states total).
 
 ## Deployment evidence gap
 
 - [x] Commit and push the hardened working tree as `1e65df5` on `main`.
 - [x] Confirm the custom production domain serves the hardened release through a 51/51 strict core smoke run.
 - [ ] Run `npm run smoke:prod -- --url https://app.virtualtrendworks.com --strict --require-operational` after Taiwan counsel approves the published legal text. The current run passes 52/54 and fails only the aggregate readiness assertion and `legal` review gate.
-- [ ] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
+- [x] Run desktop/mobile Traditional Chinese and English visual tests against the deployed commit.
 
 ## External launch gates
 
