@@ -92,6 +92,7 @@ const emptyDb = {
   share_links: [],
   email_jobs: [],
   payment_events: [],
+  refund_records: [],
   billing_intents: [],
   invoices: [],
   subscriptions: [],
@@ -660,7 +661,7 @@ function legalDocumentHtml(language = "zh") {
       ["2. Terms of Service", `<h3>Accounts and acceptable use</h3><ul><li>Users must provide accurate information, protect credentials, and remain responsible for account activity.</li><li>Users may not upload unlawful, infringing, malicious, or unauthorized personal data, or bypass usage, payment, or security controls.</li></ul><h3>Customer data and ownership</h3><ul><li>Users retain rights in uploaded data, brand content, and generated reports and represent that they are authorized to submit that data.</li><li>Virtual Trend Works retains rights in the platform, interfaces, templates, and underlying technology and does not acquire ownership of customer data beyond what is needed to provide the service.</li></ul><h3>Availability and responsibility</h3><ul><li>We use reasonable efforts to maintain the service but cannot guarantee uninterrupted third-party platforms, networks, or AI services.</li><li>Users must verify source data, platform definitions, forecasts, and client-facing content before delivery. Liability is limited to the extent permitted by law.</li></ul>`],
       ["3. Privacy Policy", `<h3>Data collected</h3><ul><li>Account data: name, email, password hash, verification status, and authenticated sessions.</li><li>Business data: client names, report periods, requirements, CSV or spreadsheet content, KPIs, AI output, and delivery records.</li><li>Operational data: plan, usage, payment status, email delivery, audit events, hashed IP, browser information, and error records.</li></ul><h3>Purpose and retention</h3><ul><li>Data is processed for authentication, reporting, AI analysis, delivery, billing, fraud prevention, support, and service security.</li><li>Account and report data is generally retained until account deletion or no longer needed. Payment, audit, and statutory records are retained as required for law and disputes. Backup copies expire through rotation.</li><li>We do not sell customer data or use it for unrelated third-party marketing.</li></ul>`],
       ["4. AI transparency and human review", `<ul><li>Necessary requirements, imported metrics, and strongest or weakest channels may be sent to an AI provider to create summaries, risks, actions, and client messages.</li><li>AI output may be incomplete or inaccurate. It is not legal, financial, medical, or advertising-compliance advice and does not make final decisions for the user.</li><li>If AI is unavailable, rules-based recommendations may be used. Users must review all output before delivery.</li></ul>`],
-      ["5. Subscriptions, cancellation and refunds", `<ul><li>Price, billing cycle, and report or AI limits are displayed before checkout. Plans begin after successful payment and renew according to the checkout terms.</li><li>Users may request cancellation before the next renewal and ordinarily retain access through the paid term.</li><li>Except where required by law, for duplicate charges, or when the service cannot be provided, used periods are generally not refunded pro rata. Mandatory consumer rights are not excluded.</li><li>Send refund or payment disputes to support@virtualtrendworks.com. Final timing and digital-service exceptions remain subject to counsel and payment-provider review.</li></ul>`],
+      ["5. Subscriptions, cancellation and refunds", `<ul><li>Price, billing cycle, and report or AI limits are displayed before checkout. Plans begin after successful payment and renew according to the checkout terms.</li><li>Users may request cancellation before the next renewal and ordinarily retain access through the paid term.</li><li>Except where required by law, for duplicate charges, or when the service cannot be provided, used periods are generally not refunded pro rata. Mandatory consumer rights are not excluded.</li><li>Send refund or payment disputes to support@virtualtrendworks.com. Processing time follows the payment provider's procedures and applicable rules.</li></ul>`],
       ["6. Data Processing Addendum and subprocessors", `<p>For data uploaded on behalf of a client, the user generally acts as controller or instructing party and Virtual Trend Works acts as the service provider processing documented instructions. We use reasonable access controls, encryption in transit, session protection, audit logging, and backup verification.</p>`],
       ["7. Data rights, termination and contact", `<ul><li>Signed-in users can export account data and delete an account, and may request access, correction, restriction, or deletion. Records required for payment, security, law, or disputes may be temporarily retained.</li><li>Account deletion revokes sessions and removes primary tenant data. Backup copies expire through rotation, while limited anonymous audit evidence may remain.</li><li>The Traditional Chinese and English notices are intended to be equivalent; the policy version accepted at registration or checkout identifies the applicable notice.</li></ul>`],
     ],
@@ -1949,6 +1950,75 @@ async function recordPaymentEvent(payload) {
   return operation;
 }
 
+async function recordRefundReconciliation(payload, ownerId) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    db.refund_records = Array.isArray(db.refund_records) ? db.refund_records : [];
+    const intent = db.billing_intents.find((item) => item.id === payload.billingIntentId && item.ownerId === ownerId);
+    if (!intent) throw new Error("BILLING_INTENT_NOT_FOUND");
+    if (!intent.trustedPayment || intent.paymentStatus !== "paid") throw new Error("PAYMENT_NOT_VERIFIED");
+
+    const amount = Number(payload.amount);
+    const paidAmount = Number(intent.amount || 0);
+    const providerRefundReference = String(payload.providerRefundReference || "").trim();
+    const reason = String(payload.reason || "").trim();
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error("REFUND_AMOUNT_INVALID");
+    if (!providerRefundReference) throw new Error("REFUND_REFERENCE_REQUIRED");
+    if (!reason) throw new Error("REFUND_REASON_REQUIRED");
+    if (db.refund_records.some((item) => item.provider === "ecpay" && item.providerRefundReference === providerRefundReference)) {
+      throw new Error("REFUND_REFERENCE_DUPLICATE");
+    }
+
+    const priorAmount = db.refund_records
+      .filter((item) => item.billingIntentId === intent.id && item.status === "recorded")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    if (amount > paidAmount - priorAmount) throw new Error("REFUND_AMOUNT_EXCEEDS_PAYMENT");
+
+    const now = new Date().toISOString();
+    const totalRefunded = priorAmount + amount;
+    const fullyRefunded = totalRefunded === paidAmount;
+    const record = withId({
+      ownerId,
+      billingIntentId: intent.id,
+      provider: "ecpay",
+      providerRefundReference,
+      currency: intent.currency || "TWD",
+      amount,
+      reason,
+      actorId: ownerId,
+      status: "recorded",
+      verificationStatus: "manual_reconciliation",
+      recordedAt: now,
+    });
+    db.refund_records.push(record);
+
+    const intentIndex = db.billing_intents.findIndex((item) => item.id === intent.id);
+    db.billing_intents[intentIndex] = {
+      ...intent,
+      refundStatus: fullyRefunded ? "refunded" : "partially_refunded",
+      refundedAmount: totalRefunded,
+      updatedAt: now,
+    };
+    if (fullyRefunded) {
+      db.subscriptions = (Array.isArray(db.subscriptions) ? db.subscriptions : []).map((item) => (
+        item.sourceRecordId === intent.id && item.status === "active"
+          ? { ...item, status: "canceled", cancelReason: "full_refund", canceledAt: now, updatedAt: now }
+          : item
+      ));
+    }
+    db.audit_logs.push(withId({
+      action: "create:refund_records",
+      recordId: record.id,
+      ownerId,
+      billingIntentId: intent.id,
+    }));
+    await writeDb(db);
+    return record;
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
 async function createInvoiceFromQuote(payload) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
@@ -2216,6 +2286,7 @@ const emailLinkedAccountCollections = new Set([
   "invoices",
   "leads",
   "payment_events",
+  "refund_records",
   "subscriptions",
 ]);
 
@@ -2748,6 +2819,27 @@ async function handleApi(req, res, url) {
     return json(res, 201, { item: intent });
   }
 
+  if (url.pathname === "/api/billing/refunds" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const record = await recordRefundReconciliation(payload, req.auth.user.id);
+      return json(res, 201, { item: record });
+    } catch (error) {
+      const codes = new Set([
+        "BILLING_INTENT_NOT_FOUND",
+        "PAYMENT_NOT_VERIFIED",
+        "REFUND_AMOUNT_INVALID",
+        "REFUND_REFERENCE_REQUIRED",
+        "REFUND_REASON_REQUIRED",
+        "REFUND_REFERENCE_DUPLICATE",
+        "REFUND_AMOUNT_EXCEEDS_PAYMENT",
+      ]);
+      const code = codes.has(error.message) ? error.message : "REFUND_RECORD_FAILED";
+      const status = code === "BILLING_INTENT_NOT_FOUND" ? 404 : code === "PAYMENT_NOT_VERIFIED" ? 409 : 400;
+      return json(res, status, { error: "Refund reconciliation record was not created", code });
+    }
+  }
+
   if (url.pathname === "/api/usage" && req.method === "GET") {
     const db = await readDb();
     return json(res, 200, { item: usageSummary(db, req.auth.user, "ai_report") });
@@ -2910,6 +3002,7 @@ async function handleApi(req, res, url) {
     "/api/email-jobs": "email_jobs",
     "/api/invoices": "invoices",
     "/api/payment-events": "payment_events",
+    "/api/billing/refunds": "refund_records",
     "/api/billing-intents": "billing_intents",
     "/api/portal-invites": "portal_invites",
     "/api/portal-submissions": "portal_submissions",
@@ -2926,7 +3019,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST") {
-    const protectedCollections = new Set(["subscriptions", "usage_events", "invoices", "payment_events", "billing_intents", "audit_logs"]);
+    const protectedCollections = new Set(["subscriptions", "usage_events", "invoices", "payment_events", "refund_records", "billing_intents", "audit_logs"]);
     if (protectedCollections.has(collection)) {
       return json(res, 403, {
         error: "Forbidden",

@@ -33,7 +33,7 @@ This runbook keeps early operations role-based and low-cost. The repository owne
 
 - Do not enable paid traffic until `PAYMENT_PROVIDER=ecpay`, production credentials are configured, and `--require-payment` passes.
 - Reconcile ECPay `MerchantTradeNo`, amount, billing-intent token, callback signature, and trusted-payment flag before granting a paid plan.
-- A refund must retain the provider refund reference, amount, reason, actor, and timestamp. Never mark a payment refunded from an unverified browser return alone.
+- Complete the refund in ECPay first, then record it through `POST /api/billing/refunds` with the billing intent ID, amount, ECPay refund reference, and reason. The system retains the actor and timestamp, rejects duplicate or excessive refunds, and cancels the plan after a full refund. Never mark a payment refunded from an unverified browser return alone.
 
 ## Privacy and account requests
 

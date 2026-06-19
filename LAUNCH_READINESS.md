@@ -1,6 +1,6 @@
 # AgencyReport AI Launch Readiness
 
-Last evidence review: 2026-06-19 (Asia/Taipei)
+Last evidence review: 2026-06-20 (Asia/Taipei)
 
 This document separates verified production state, locally verified changes that still need deployment, and external approvals. A checked item must have direct runtime, database, browser, or automated-test evidence.
 
@@ -14,14 +14,14 @@ This document separates verified production state, locally verified changes that
 - [x] **Database schema:** schema v3 is applied to 379 records with seven indexes and validated primary-key and owner/payload constraints.
 - [x] **Database integrity:** zero owner mismatches and zero invalid JSON payloads.
 
-## Locally complete, awaiting Git deployment
+## Verified application controls
 
 - [x] Tenant-scoped records, account export/deletion, password reset session revocation, and 20 security assertions.
 - [x] Transactional differential PostgreSQL upserts and schema-v3 indexes/constraints.
 - [x] Encrypted backup format, checksum/tamper checks, and rollback-only restore drill.
-- [x] ECPay signature, amount, merchant, duplicate-callback, and trusted-payment tests.
+- [x] ECPay signature, amount, merchant, duplicate-callback, trusted-payment, and tenant-scoped refund reconciliation tests (15/15 assertions).
 - [x] Nonce-based CSP on quote and ECPay redirect pages; invoice page is read-only.
-- [x] Bilingual legal center, policy version tracking, subprocessors, AI/refund/DPA sections, and counsel checklist.
+- [x] Low-cost bilingual operating notice, policy version tracking, subprocessors, AI/refund/DPA sections, and consent records; external counsel review is not a launch gate.
 - [x] Traditional Chinese and English catalog parity plus visible English landing/workspace CJK rejection.
 - [x] Frontend dynamic-content escaping and browser XSS injection test.
 - [x] Scheduled worker: authenticated, idempotent, tenant-scoped, AI-first with fallback, and automatic email processing.
@@ -54,6 +54,6 @@ This document separates verified production state, locally verified changes that
 
 ## Launch decision
 
-**Current decision: ready for controlled public registration, but not paid checkout.** The hardened application, PostgreSQL, live OpenAI generation, Resend, CI, backup, worker, monitoring, bilingual notices, and visual paths are verified. Paid traffic still waits on ECPay production approval/reconciliation and assigned operational ownership.
+**Current decision: ready for controlled public registration, but not paid checkout.** The hardened application, PostgreSQL, live OpenAI generation, Resend, CI, backup, worker, monitoring, bilingual notices, visual paths, and operational ownership are verified. Paid traffic still waits on ECPay production approval and one real payment/refund reconciliation exercise.
 
 The site may remain online for controlled review and ECPay approval, but paid traffic should wait until every item under Deployment evidence gap and External launch gates is checked.

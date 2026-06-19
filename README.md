@@ -350,7 +350,7 @@ Implemented launch hardening:
 
 Still recommended before real paid traffic:
 
-- Review privacy policy, terms, AI disclosure, refund policy, and data processing terms with counsel.
+- Keep the bilingual basic operating notice, consent version, refund rules, and AI disclosure aligned with the actual service behavior.
 - Verify Resend sender domain.
 - Submit the live public URL for ECPay review, then run one ECPay production or test checkout end to end.
 - Add GitHub secrets for the encrypted backup workflow and run one restore drill.

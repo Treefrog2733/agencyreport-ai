@@ -152,6 +152,27 @@ async function run() {
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(callback),
   });
+  const partialRefund = await fetch(`${baseUrl}/api/billing/refunds`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ billingIntentId: intent.id, amount: 100, providerRefundReference: `RF-${suffix}-1`, reason: "Smoke test partial refund" }),
+  });
+  const duplicateRefund = await fetch(`${baseUrl}/api/billing/refunds`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ billingIntentId: intent.id, amount: 1, providerRefundReference: `RF-${suffix}-1`, reason: "Duplicate reference" }),
+  });
+  const excessiveRefund = await fetch(`${baseUrl}/api/billing/refunds`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ billingIntentId: intent.id, amount: Number(fields.TotalAmount), providerRefundReference: `RF-${suffix}-2`, reason: "Excessive refund" }),
+  });
+  const finalRefund = await fetch(`${baseUrl}/api/billing/refunds`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ billingIntentId: intent.id, amount: Number(fields.TotalAmount) - 100, providerRefundReference: `RF-${suffix}-3`, reason: "Smoke test final refund" }),
+  });
+  const refunds = await json("/api/billing/refunds", { headers });
   const intents = await json("/api/billing-intents", { headers });
   const updated = intents.find((item) => item.id === intent.id);
   const checks = {
@@ -165,6 +186,11 @@ async function run() {
     signedWrongAmountRejected: wrongAmountResponse.status === 403,
     validCallbackAccepted: paidResponse.status === 200 && (await paidResponse.text()) === "1|OK",
     paidIntentIsTrusted: updated?.paymentStatus === "paid" && updated?.trustedPayment === true,
+    partialRefundRecorded: partialRefund.status === 201,
+    duplicateRefundRejected: duplicateRefund.status === 400,
+    excessiveRefundRejected: excessiveRefund.status === 400,
+    fullRefundRecorded: finalRefund.status === 201 && updated?.refundStatus === "refunded" && updated?.refundedAmount === Number(fields.TotalAmount),
+    refundHistoryIsTenantScoped: refunds.length === 2 && refunds.every((item) => item.ownerId === auth.user.id),
   };
   Object.entries(checks).forEach(([name, ok]) => console.log(`${ok ? "OK" : "FAIL"} ${name}`));
   if (!checks.paidIntentIsTrusted) console.log(`Payment state: ${JSON.stringify(updated || null)}`);
