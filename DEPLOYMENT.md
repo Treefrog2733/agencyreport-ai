@@ -178,6 +178,21 @@ DATABASE_URL=the-same-supabase-connection-string
 BACKUP_ENCRYPTION_KEY=a-long-random-secret-kept-outside-the-repository
 ```
 
+The backup workflow now performs three gates before retaining an artifact:
+
+1. Export normalized PostgreSQL records and metadata.
+2. Encrypt with AES-256-GCM, add a SHA-256 payload checksum, and decrypt-verify the file.
+3. Load the decrypted rows into PostgreSQL temporary tables, compare all row and collection counts, and roll the transaction back.
+
+Run the same restore drill manually without changing production data:
+
+```bash
+npm run db:backup
+npm run db:restore:drill -- --file backups/agencyreport-<timestamp>.backup.enc.json
+```
+
+The restore drill always reports `transaction: "rolled-back"` and `productionDataChanged: false`. Keep `BACKUP_ENCRYPTION_KEY` outside the repository; losing it makes every encrypted artifact unrecoverable.
+
 The workflow calls:
 
 ```text

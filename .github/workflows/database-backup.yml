@@ -38,6 +38,19 @@ jobs:
           BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
           BACKUP_OUTPUT_DIR: ${{ runner.temp }}/agencyreport-backups
         run: npm run db:backup
+      - name: Run transactional restore drill
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          BACKUP_OUTPUT_DIR: ${{ runner.temp }}/agencyreport-backups
+        shell: bash
+        run: |
+          backup_file="$(find "$BACKUP_OUTPUT_DIR" -maxdepth 1 -name '*.backup.enc.json' -type f -print -quit)"
+          if [[ -z "$backup_file" ]]; then
+            echo "::error::Encrypted backup file was not created"
+            exit 1
+          fi
+          npm run db:restore:drill -- --file "$backup_file"
       - name: Retain encrypted backup
         if: success()
         uses: actions/upload-artifact@v4

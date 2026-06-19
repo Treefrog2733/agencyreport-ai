@@ -9,13 +9,15 @@
     "db:check": "node scripts/db-check.js",
     "db:migrate": "node scripts/db-migrate.js",
     "db:backup": "node scripts/db-backup.js",
+    "db:restore:drill": "node scripts/db-restore-drill.js",
     "email:check": "node scripts/email-check.js",
     "smoke:browser": "node scripts/browser-smoke.js",
     "smoke:workspace": "node scripts/workspace-visual-smoke.js",
     "smoke:prod": "node scripts/production-smoke.js",
     "smoke:security": "node scripts/security-smoke.js",
     "smoke:payment": "node scripts/payment-smoke.js",
-    "smoke:ai": "node scripts/ai-smoke.js"
+    "smoke:ai": "node scripts/ai-smoke.js",
+    "smoke:backup": "node scripts/backup-smoke.js"
   },
   "dependencies": {
     "pg": "^8.13.1"

@@ -45,6 +45,7 @@ jobs:
           npm audit --omit=dev || status=1
           npm run smoke:security || status=1
           npm run smoke:payment || status=1
+          npm run smoke:backup || status=1
           exit "$status"
 
       - name: Start test server

@@ -369,6 +369,8 @@ Still recommended before real paid traffic:
 - `scripts/db-check.js` - database connectivity check.
 - `scripts/db-migrate.js` - dry-run/apply migration from the legacy JSONB row to normalized records.
 - `scripts/db-backup.js` - encrypted PostgreSQL backup and verification.
+- `scripts/db-restore-drill.js` - decrypt and load a backup into PostgreSQL temporary tables, verify row counts, then roll back.
+- `scripts/backup-smoke.js` - encryption, checksum, tamper, wrong-key, and duplicate-record regression test.
 - `scripts/email-check.js` - email provider check.
 - `scripts/production-smoke.js` - production readiness smoke test.
 - `scripts/security-smoke.js` - tenant, session, legal-consent, password, account export, and account deletion lifecycle regression test.
