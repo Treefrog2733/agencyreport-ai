@@ -2549,16 +2549,45 @@ async function createAutomatedConnectorReport(ownerId) {
   if (!data.reportMonth || !data.rowCount) return null;
   const automationKey = `connectors:${data.reportMonth}`;
   const db = await readDb();
-  const existing = (db.ai_runs || []).find((item) => item.ownerId === ownerId && item.automationKey === automationKey);
-  if (existing) return { id: existing.id, reportMonth: data.reportMonth, existing: true };
+  const fingerprintPayload = {
+    reportMonth: data.reportMonth,
+    totals: data.totals,
+    previousTotals: data.previousTotals,
+    breakdown: [...data.breakdown]
+      .map((item) => ({
+        provider: item.provider,
+        channel: item.channel,
+        campaignId: item.campaignId,
+        campaignName: item.campaignName,
+        spend: item.spend,
+        impressions: item.impressions,
+        clicks: item.clicks,
+        conversions: item.conversions,
+        revenue: item.revenue,
+        sessions: item.sessions,
+        users: item.users,
+      }))
+      .sort((left, right) => `${left.provider}:${left.campaignId || left.channel}`.localeCompare(`${right.provider}:${right.campaignId || right.channel}`)),
+    sources: [...data.sources]
+      .map((item) => ({ id: item.id, provider: item.provider, externalAccountId: item.externalAccountId }))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  };
+  const dataFingerprint = crypto.createHash("sha256").update(JSON.stringify(fingerprintPayload)).digest("hex");
+  const existing = (db.ai_runs || [])
+    .filter((item) => item.ownerId === ownerId && item.automationKey === automationKey)
+    .sort((left, right) => String(right.updatedAt || right.createdAt).localeCompare(String(left.updatedAt || left.createdAt)))[0];
+  if (existing?.dataFingerprint === dataFingerprint) {
+    return { id: existing.id, reportMonth: data.reportMonth, existing: true, updated: false };
+  }
   const user = (db.auth_users || []).find((item) => item.id === ownerId) || { id: ownerId };
   const usage = await consumeApiUsage(user, "ai_report", { endpoint: "worker:connector-report", reportMonth: data.reportMonth });
   if (!usage.allowed) {
     await createRecord("audit_logs", { action: "connector:auto_report_quota_exceeded", reportMonth: data.reportMonth }, ownerId);
     return null;
   }
-  const best = data.breakdown[0] || null;
-  const weakest = [...data.breakdown].sort((a, b) => a.roas - b.roas || a.conversions - b.conversions)[0] || null;
+  const actionableChannels = data.breakdown.filter((item) => ["google_ads", "meta_ads"].includes(item.provider) && item.spend > 0);
+  const best = [...actionableChannels].sort((a, b) => b.roas - a.roas || b.conversions - a.conversions)[0] || null;
+  const weakest = [...actionableChannels].sort((a, b) => a.roas - b.roas || a.conversions - b.conversions)[0] || null;
   const payload = {
     reportMonth: data.reportMonth,
     reportType: "Automated multi-channel report",
@@ -2568,16 +2597,31 @@ async function createAutomatedConnectorReport(ownerId) {
     previousMetrics: data.previousTotals,
     channels: data.breakdown,
     bestChannel: best,
-    weakestChannel: weakest,
+    weakChannel: weakest,
     dataSources: data.sources,
   };
   const draft = await generateAiDraft(payload);
-  const run = await createRecord("ai_runs", {
-    ...payload, ...draft, automationKey, status: "completed", mode: draft.mode === "live" ? "connector-live" : "connector-fallback", usageEventId: usage.eventId, usage,
-  }, ownerId);
-  const report = await createRecord("reports", {
+  const runPayload = {
+    ...payload,
+    ...draft,
     automationKey,
+    dataFingerprint,
+    status: "completed",
+    mode: draft.mode === "live" ? "connector-live" : "connector-fallback",
+    usageEventId: usage.eventId,
+    usage,
+  };
+  const run = existing
+    ? await upsertOwnedRecord("ai_runs", { id: existing.id, ...runPayload }, ownerId)
+    : await createRecord("ai_runs", runPayload, ownerId);
+  const existingReport = (db.reports || [])
+    .filter((item) => item.ownerId === ownerId && (item.automationKey === automationKey || item.parentAutomationKey === automationKey) && item.generatedBy === "connector-worker")
+    .sort((left, right) => String(right.updatedAt || right.createdAt).localeCompare(String(left.updatedAt || left.createdAt)))[0];
+  const mayUpdateDraft = existingReport && ["draft", "generated"].includes(existingReport.status || "draft");
+  const reportPayload = {
+    automationKey: existingReport?.automationKey || automationKey,
     aiRunId: run.id,
+    dataFingerprint,
     reportMonth: data.reportMonth,
     month: data.reportMonth,
     clientName: payload.clientName,
@@ -2592,9 +2636,18 @@ async function createAutomatedConnectorReport(ownerId) {
     nextActions: draft.nextActions,
     clientReplyDraft: draft.clientReplyDraft,
     generatedBy: "connector-worker",
-  }, ownerId);
-  await createRecord("audit_logs", { action: "connector:auto_report_created", reportMonth: data.reportMonth, recordId: report.id, aiRunId: run.id }, ownerId);
-  return { id: run.id, reportId: report.id, reportMonth: data.reportMonth, existing: false };
+  };
+  const report = mayUpdateDraft
+    ? await upsertOwnedRecord("reports", { id: existingReport.id, ...reportPayload }, ownerId)
+    : await createRecord("reports", {
+      ...reportPayload,
+      automationKey: existingReport ? `${automationKey}:revision:${dataFingerprint.slice(0, 12)}` : automationKey,
+      parentAutomationKey: existingReport ? automationKey : null,
+      supersedesReportId: existingReport?.id || null,
+    }, ownerId);
+  const updated = Boolean(existing && mayUpdateDraft);
+  await createRecord("audit_logs", { action: updated ? "connector:auto_report_updated" : "connector:auto_report_created", reportMonth: data.reportMonth, recordId: report.id, aiRunId: run.id }, ownerId);
+  return { id: run.id, reportId: report.id, reportMonth: data.reportMonth, existing: false, updated };
 }
 
 async function processDueConnectorSources() {
@@ -2656,6 +2709,9 @@ async function listGa4Properties(ownerId) {
 async function selectGa4Property(ownerId, payload) {
   const propertyId = String(payload.propertyId || "").replace(/^properties\//, "");
   if (!/^\d+$/.test(propertyId)) throw new Error("GA4_PROPERTY_INVALID");
+  const properties = await listGa4Properties(ownerId);
+  const selected = properties.find((item) => item.propertyId === propertyId);
+  if (!selected) throw new Error("GA4_PROPERTY_NOT_ACCESSIBLE");
   const db = await readDb();
   const credential = db.connector_credentials.find((item) => item.ownerId === ownerId && item.provider === "ga4" && item.status === "connected");
   if (!credential) throw new Error("CONNECTOR_NOT_CONNECTED");
@@ -2666,9 +2722,9 @@ async function selectGa4Property(ownerId, payload) {
     provider: "ga4",
     credentialId: credential.id,
     externalAccountId: propertyId,
-    accountId: String(payload.accountId || ""),
-    accountName: String(payload.accountName || ""),
-    displayName: String(payload.propertyName || `GA4 ${propertyId}`),
+    accountId: selected.accountId,
+    accountName: selected.accountName,
+    displayName: selected.propertyName || `GA4 ${propertyId}`,
     status: "connected",
     syncCadence: payload.syncCadence || "daily",
     autoReportEnabled: payload.autoReportEnabled !== false,

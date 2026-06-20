@@ -2135,6 +2135,7 @@ function renderConnectorAuditTrail() {
     "connector:disconnected": ["中斷連線", "Disconnected"],
     "connector:sync_completed": ["同步完成", "Sync completed"],
     "connector:auto_report_created": ["自動月報已建立", "Automatic report created"],
+    "connector:auto_report_updated": ["自動月報已更新", "Automatic report updated"],
     "connector:auto_report_quota_exceeded": ["AI 月報額度不足", "AI report quota exceeded"],
   };
   if (!state.connectorAudits.length) {

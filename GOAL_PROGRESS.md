@@ -39,7 +39,7 @@ Initial delivery order:
 - [x] Google PKCE, short-lived hashed state, replay protection, and authorization-code exchange.
 - [x] AES-256-GCM connector token vault with tenant-bound additional authenticated data.
 - [x] Tenant-scoped connection status and disconnect lifecycle; account exports redact all OAuth and token material.
-- [x] Connector security, GA4, Google Ads, Meta Ads, incremental scheduling, reauthorization, quota backoff, reconciliation, audit trail, unified reporting, and auto-report smoke expanded to 73 assertions.
+- [x] Connector security, GA4, Google Ads, Meta Ads, incremental scheduling, reauthorization, quota backoff, reconciliation, audit trail, unified reporting, and auto-report smoke expanded to 77 assertions.
 - [x] GA4 account/property discovery, Property selection, token refresh, paginated Data API synchronization, quota retry, and tenant-scoped UI.
 - [x] PostgreSQL schema v4 connector indexes and normalized GA4 KPI storage.
 - [x] GA4 first release deployed at `https://app.virtualtrendworks.com`; production database validation and 54/54 operational smoke passed.
@@ -52,6 +52,7 @@ Initial delivery order:
 - [x] Unified KPI model avoids GA4/ad-platform outcome double counting and exposes tenant-scoped report data.
 - [x] Daily/weekly/monthly connector scheduling, 90-day initial backfill, two-day rolling attribution refresh, worker locks, exponential quota backoff, reauthorization state, and sync observability UI.
 - [x] Connector worker creates one reusable AI run and report draft per tenant/month while enforcing the account's AI quota.
+- [x] Data-fingerprint refresh updates that monthly AI draft when synchronized KPI data changes, skips unchanged data without consuming AI quota, preserves delivered reports as immutable revisions, and sends only paid-channel best/weakest candidates to AI.
 - [x] Daily GitHub Actions worker triggers both report schedules and connector synchronization and surfaces connector job/failure counts in operational logs.
 - [x] Reconciliation API and UI expose provider coverage, freshness, canonical KPI policy, attribution-difference warnings, and a credential-safe connector audit trail.
 - [x] Public readiness now distinguishes manual imports from full direct-connector readiness and reports missing environment gates plus pinned provider API versions.

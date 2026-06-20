@@ -89,8 +89,9 @@ const tokenServer = http.createServer((req, res) => {
       }
       res.writeHead(200, { "content-type": "application/json" });
       if (!requestUrl.searchParams.get("after")) {
+        const revisedSpend = metaInsightsCalls >= 10 ? "7600.50" : metaInsightsCalls >= 6 ? "7100.50" : "6500.50";
         return res.end(JSON.stringify({
-          data: [{ date_start: "2026-06-01", date_stop: "2026-06-01", campaign_id: "501", campaign_name: "Meta Prospecting", spend: "6500.50", impressions: "120000", clicks: "2400", actions: [{ action_type: "omni_purchase", value: "32" }, { action_type: "link_click", value: "2400" }], action_values: [{ action_type: "omni_purchase", value: "148000" }] }],
+          data: [{ date_start: "2026-06-01", date_stop: "2026-06-01", campaign_id: "501", campaign_name: "Meta Prospecting", spend: revisedSpend, impressions: "120000", clicks: "2400", actions: [{ action_type: "omni_purchase", value: "32" }, { action_type: "link_click", value: "2400" }], action_values: [{ action_type: "omni_purchase", value: "148000" }] }],
           paging: { next: `${tokenBaseUrl}/meta/act_3333333333/insights?after=page-2` },
         }));
       }
@@ -215,6 +216,7 @@ async function run() {
   const ga4Properties = await call("/api/connectors/ga4/properties", { headers: tenantA.headers });
   const foreignGa4Properties = await call("/api/connectors/ga4/properties", { headers: tenantB.headers });
   const invalidGa4Property = await call("/api/connectors/ga4/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ propertyId: "invalid" }) });
+  const inaccessibleGa4Property = await call("/api/connectors/ga4/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ propertyId: "999999" }) });
   const ga4Source = await call("/api/connectors/ga4/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify(ga4Properties.item[0]) });
   const foreignGa4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
   const invalidDateGa4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-30", endDate: "2026-06-01" }) });
@@ -250,6 +252,25 @@ async function run() {
   fs.writeFileSync(refreshDbPath, JSON.stringify(dueDb, null, 2));
   const autoWorker = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
   const autoWorkerAgain = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
+  const refreshReportDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
+  const refreshReportSource = refreshReportDb.data_sources.find((item) => item.id === metaSource.item.id && item.ownerId === tenantA.user.id);
+  refreshReportSource.nextSyncAt = "2020-01-01T00:00:00.000Z";
+  fs.writeFileSync(refreshDbPath, JSON.stringify(refreshReportDb, null, 2));
+  const autoWorkerRefresh = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
+  const unchangedReportDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
+  const unchangedReportSource = unchangedReportDb.data_sources.find((item) => item.id === metaSource.item.id && item.ownerId === tenantA.user.id);
+  const usageCountAfterRefresh = unchangedReportDb.usage_events.filter((item) => item.ownerId === tenantA.user.id && item.feature === "ai_report").length;
+  unchangedReportSource.nextSyncAt = "2020-01-01T00:00:00.000Z";
+  fs.writeFileSync(refreshDbPath, JSON.stringify(unchangedReportDb, null, 2));
+  const autoWorkerUnchanged = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
+  const deliveredReportDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
+  const usageCountAfterUnchanged = deliveredReportDb.usage_events.filter((item) => item.ownerId === tenantA.user.id && item.feature === "ai_report").length;
+  const deliveredReportSource = deliveredReportDb.data_sources.find((item) => item.id === metaSource.item.id && item.ownerId === tenantA.user.id);
+  const deliveredReport = deliveredReportDb.reports.find((item) => item.ownerId === tenantA.user.id && item.automationKey === "connectors:2026-06");
+  deliveredReport.status = "delivered";
+  deliveredReportSource.nextSyncAt = "2020-01-01T00:00:00.000Z";
+  fs.writeFileSync(refreshDbPath, JSON.stringify(deliveredReportDb, null, 2));
+  const autoWorkerRevision = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
   const autoRunsA = await call("/api/ai-runs", { headers: tenantA.headers });
   const autoReportsA = await call("/api/reports", { headers: tenantA.headers });
   const finalSyncStatusA = await call("/api/connectors/sync-status", { headers: tenantA.headers });
@@ -295,6 +316,7 @@ async function run() {
   assert(ga4Properties.response.ok && ga4Properties.item.length === 1 && ga4Properties.item[0].propertyId === "123456", "GA4 account summaries expose selectable properties without tokens");
   assert(foreignGa4Properties.response.status === 409, "tenant without a GA4 connection cannot discover another tenant's properties");
   assert(invalidGa4Property.response.status === 400 && invalidGa4Property.body.code === "GA4_PROPERTY_INVALID", "invalid GA4 property identifiers are rejected");
+  assert(inaccessibleGa4Property.response.status === 400 && inaccessibleGa4Property.body.code === "GA4_PROPERTY_NOT_ACCESSIBLE", "GA4 properties outside the authorized account are rejected");
   assert(ga4Source.response.status === 201 && ga4Source.item.ownerId === tenantA.user.id && ga4Source.item.externalAccountId === "123456", "selected GA4 property becomes a tenant-owned data source");
   assert(foreignGa4Sync.response.status === 404 && foreignGa4Sync.body.code === "DATA_SOURCE_NOT_FOUND", "tenant cannot sync another tenant's GA4 source");
   assert(invalidDateGa4Sync.response.status === 400 && invalidDateGa4Sync.body.code === "SYNC_DATE_RANGE_INVALID", "GA4 sync rejects invalid date ranges");
@@ -328,10 +350,13 @@ async function run() {
   assert(initialSyncStatusA.response.ok && initialSyncStatusA.item.sources.length === 3 && initialSyncStatusA.item.jobs.every((item) => [ga4Source.item.id, metaSource.item.id].includes(item.sourceId)), "sync observability exposes only the tenant's connector sources and jobs");
   assert(autoWorker.response.ok && autoWorker.item.connectorProcessed === 2 && autoWorker.item.connectorJobIds.length === 1 && autoWorker.item.connectorAiRunIds.length === 1 && autoWorker.item.connectorFailures.length === 1 && autoWorker.item.connectorFailures[0].code === "CONNECTOR_RATE_LIMITED", "worker completes healthy incremental syncs, records persistent quota failures, and creates one automated AI report per tenant-month");
   assert(autoWorkerAgain.response.ok && autoWorkerAgain.item.connectorProcessed === 0 && autoWorkerAgain.item.connectorAiRunIds.length === 0, "worker lock and next-run scheduling prevent duplicate connector processing and duplicate AI reports");
-  assert(autoRunsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.mode === "connector-fallback") && autoReportsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.generatedBy === "connector-worker"), "automated connector output persists as a tenant-owned AI run and reusable report draft");
+  assert(autoWorkerRefresh.response.ok && autoWorkerRefresh.item.connectorProcessed === 1 && autoWorkerRefresh.item.connectorAiRunIds.length === 1, "changed synchronized data refreshes the automated monthly report");
+  assert(autoWorkerUnchanged.response.ok && autoWorkerUnchanged.item.connectorProcessed === 1 && autoWorkerUnchanged.item.connectorAiRunIds.length === 0 && usageCountAfterUnchanged === usageCountAfterRefresh, "unchanged synchronized data reuses the monthly report without consuming AI quota");
+  assert(autoWorkerRevision.response.ok && autoWorkerRevision.item.connectorProcessed === 1 && autoWorkerRevision.item.connectorAiRunIds.length === 1 && autoReportsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.status === "delivered" && item.metrics.spend === 9400.5) && autoReportsA.item.some((item) => item.parentAutomationKey === "connectors:2026-06" && item.status === "draft" && item.metrics.spend === 9900.5), "new synchronized data creates a draft revision without changing a delivered report");
+  assert(autoRunsA.item.filter((item) => item.automationKey === "connectors:2026-06").length === 1 && autoRunsA.item.some((item) => item.mode === "connector-fallback" && item.dataFingerprint && item.weakChannel?.channel === "Meta Ads") && autoReportsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.generatedBy === "connector-worker" && item.metrics.spend === 9400.5), "automated connector output updates one reusable tenant-owned AI run and report draft with the latest data");
   assert(finalSyncStatusA.item.sources.some((item) => item.id === metaSource.item.id && item.status === "synced" && new Date(item.nextSyncAt) > new Date() && item.consecutiveFailures === 0), "successful incremental sync advances the next run and clears retry state");
   assert(finalSyncStatusA.item.sources.some((item) => item.id === failingMetaSource.item.id && item.status === "error" && item.lastErrorCode === "CONNECTOR_RATE_LIMITED" && item.consecutiveFailures === 1 && new Date(item.nextSyncAt) > new Date()), "persistent quota failures enter exponential backoff with observable retry state");
-  assert(finalSyncStatusA.item.audits.some((item) => item.action === "connector:sync_completed") && finalSyncStatusA.item.audits.some((item) => item.action === "connector:auto_report_created") && finalSyncStatusA.item.audits.every((item) => !JSON.stringify(item).includes("token")), "connector audit timeline is tenant-scoped and exposes no credential material");
+  assert(finalSyncStatusA.item.audits.some((item) => item.action === "connector:sync_completed") && finalSyncStatusA.item.audits.some((item) => item.action === "connector:auto_report_created") && finalSyncStatusA.item.audits.some((item) => item.action === "connector:auto_report_updated") && finalSyncStatusA.item.audits.every((item) => !JSON.stringify(item).includes("token")), "connector audit timeline includes automatic report refreshes, remains tenant-scoped, and exposes no credential material");
   assert(reconciliationA.response.ok && reconciliationA.item.policy.preventsDoubleCounting === true && reconciliationA.item.policy.outcomeMetrics === "GA4" && reconciliationA.item.warnings.includes("CONVERSION_ATTRIBUTION_DIFFERENCE") && reconciliationA.item.providers.find((item) => item.provider === "meta_ads").coveredDays === 2, "reconciliation explains canonical KPI policy, date coverage, and attribution differences");
   assert(reconciliationB.response.ok && reconciliationB.item.policy.outcomeMetrics === "Ad platforms fallback" && reconciliationB.item.providers.find((item) => item.provider === "google_ads").rowCount === 2 && reconciliationB.item.providers.find((item) => item.provider === "meta_ads").rowCount === 0, "reconciliation remains tenant-scoped and falls back when GA4 is absent");
   const incrementalUrl = new URL(tokenRequests.filter((item) => item.url.includes("/meta/act_3333333333/insights") && !item.url.includes("after=")).at(-1).url, tokenBaseUrl);
