@@ -39,11 +39,12 @@ Initial delivery order:
 - [x] Google PKCE, short-lived hashed state, replay protection, and authorization-code exchange.
 - [x] AES-256-GCM connector token vault with tenant-bound additional authenticated data.
 - [x] Tenant-scoped connection status and disconnect lifecycle; account exports redact all OAuth and token material.
-- [x] Connector security, GA4, and Google Ads synchronization smoke expanded to 47 assertions.
+- [x] Connector security, GA4, Google Ads, and Meta Ads synchronization smoke expanded to 58 assertions.
 - [x] GA4 account/property discovery, Property selection, token refresh, paginated Data API synchronization, quota retry, and tenant-scoped UI.
 - [x] PostgreSQL schema v4 connector indexes and normalized GA4 KPI storage.
 - [x] GA4 first release deployed at `https://app.virtualtrendworks.com`; production database validation and 54/54 operational smoke passed.
 - [x] Google Ads API v24 customer discovery, MCC/client selection, `login-customer-id`, GAQL `searchStream`, transient retry, tenant-scoped UI, and normalized campaign KPI storage.
 - [ ] Configure production Google OAuth client, Google Ads developer token, and connector encryption key; complete a real client-account authorization and reconciliation run.
-- [ ] Meta ad-account discovery and Insights API synchronization.
+- [x] Meta Graph API v25 long-lived token exchange, app-secret proof, paginated ad-account selection, daily campaign Insights synchronization, retry handling, tenant-scoped UI, and normalized KPI storage.
+- [ ] Configure the production Meta app and complete App Review / Business Verification plus a real ad-account reconciliation run.
 - [ ] Unified KPI model, incremental jobs, UI, automated reporting, and production credentials.

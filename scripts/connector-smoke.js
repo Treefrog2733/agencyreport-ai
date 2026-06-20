@@ -16,6 +16,7 @@ fs.copyFileSync(path.join(root, "server.js"), path.join(testRoot, "server.js"));
 const tokenRequests = [];
 let ga4DataCalls = 0;
 let googleAdsDataCalls = 0;
+let metaInsightsCalls = 0;
 const tokenServer = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => { body += chunk.toString(); });
@@ -65,6 +66,36 @@ const tokenServer = http.createServer((req, res) => {
         { segments: { date: "2026-06-02" }, campaign: { id: "902", name: "Performance Max" }, metrics: { costMicros: "20000000", impressions: "3500", clicks: "220", conversions: 21, conversionsValue: 132000 } },
       ] }]));
     }
+    const requestUrl = new URL(req.url, tokenBaseUrl);
+    if (requestUrl.pathname === "/meta/me/adaccounts") {
+      res.writeHead(200, { "content-type": "application/json" });
+      if (!requestUrl.searchParams.get("after")) {
+        return res.end(JSON.stringify({
+          data: [{ id: "act_3333333333", account_id: "3333333333", name: "Meta Client One", account_status: 1, currency: "TWD", timezone_name: "Asia/Taipei", business: { id: "77", name: "Agency Business" } }],
+          paging: { next: `${tokenBaseUrl}/meta/me/adaccounts?after=page-2` },
+        }));
+      }
+      return res.end(JSON.stringify({ data: [{ id: "act_4444444444", account_id: "4444444444", name: "Meta Client Two", account_status: 1, currency: "USD", timezone_name: "America/Los_Angeles" }] }));
+    }
+    if (requestUrl.pathname === "/meta/act_3333333333/insights") {
+      metaInsightsCalls += 1;
+      if (metaInsightsCalls === 1) {
+        res.writeHead(429, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: { message: "rate limited" } }));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      if (!requestUrl.searchParams.get("after")) {
+        return res.end(JSON.stringify({
+          data: [{ date_start: "2026-06-01", date_stop: "2026-06-01", campaign_id: "501", campaign_name: "Meta Prospecting", spend: "6500.50", impressions: "120000", clicks: "2400", actions: [{ action_type: "omni_purchase", value: "32" }, { action_type: "link_click", value: "2400" }], action_values: [{ action_type: "omni_purchase", value: "148000" }] }],
+          paging: { next: `${tokenBaseUrl}/meta/act_3333333333/insights?after=page-2` },
+        }));
+      }
+      return res.end(JSON.stringify({ data: [{ date_start: "2026-06-02", date_stop: "2026-06-02", campaign_id: "502", campaign_name: "Meta Retargeting", spend: "2300", impressions: "38000", clicks: "920", actions: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "18" }], action_values: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "89000" }] }] }));
+    }
+    if (req.url.startsWith("/meta/token") && params.grant_type === "fb_exchange_token") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ access_token: "meta-long-lived-token", token_type: "Bearer", expires_in: 5184000 }));
+    }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({
       access_token: `access-${params.code}`,
@@ -92,13 +123,14 @@ const child = spawn(process.execPath, ["server.js"], {
     GOOGLE_ADS_DEVELOPER_TOKEN: "google-ads-developer-token",
     META_APP_ID: "meta-app-id",
     META_APP_SECRET: "meta-app-secret",
-    META_GRAPH_VERSION: "v23.0",
+    META_GRAPH_VERSION: "v25.0",
     GOOGLE_OAUTH_TOKEN_URL: `${tokenBaseUrl}/google/token`,
     META_OAUTH_TOKEN_URL: `${tokenBaseUrl}/meta/token`,
     GA4_ADMIN_API_URL: `${tokenBaseUrl}/admin`,
     GA4_DATA_API_URL: `${tokenBaseUrl}/data`,
     GOOGLE_ADS_API_URL: `${tokenBaseUrl}/googleads`,
     GOOGLE_ADS_API_VERSION: "v24",
+    META_GRAPH_API_URL: `${tokenBaseUrl}/meta`,
   },
 });
 const csv = "channel,spend,clicks,conversions,revenue\nSearch,100,50,5,500";
@@ -184,6 +216,15 @@ async function run() {
   const googleAdsSync = await call("/api/connectors/google-ads/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: googleAdsSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
   const googleAdsMetricsB = await call(`/api/connectors/metrics?provider=google_ads&sourceId=${encodeURIComponent(googleAdsSource.item.id)}`, { headers: tenantB.headers });
   const googleAdsMetricsA = await call("/api/connectors/metrics?provider=google_ads", { headers: tenantA.headers });
+  const metaAccounts = await call("/api/connectors/meta-ads/accounts", { headers: tenantA.headers });
+  const foreignMetaAccounts = await call("/api/connectors/meta-ads/accounts", { headers: tenantB.headers });
+  const invalidMetaAccount = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ accountId: "invalid" }) });
+  const inaccessibleMetaAccount = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ accountId: "9999999999" }) });
+  const metaSource = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify(metaAccounts.item[0]) });
+  const foreignMetaSync = await call("/api/connectors/meta-ads/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: metaSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const metaSync = await call("/api/connectors/meta-ads/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: metaSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const metaMetricsA = await call(`/api/connectors/metrics?provider=meta_ads&sourceId=${encodeURIComponent(metaSource.item.id)}`, { headers: tenantA.headers });
+  const metaMetricsB = await call("/api/connectors/metrics?provider=meta_ads", { headers: tenantB.headers });
   const exportedA = await call("/api/account/export", { headers: tenantA.headers });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
   const serializedDb = JSON.stringify(db);
@@ -214,6 +255,7 @@ async function run() {
   assert(replayedGa4Callback.response.status === 400 && replayedGa4Callback.body.code === "CONNECTOR_OAUTH_STATE_REPLAYED", "OAuth state cannot be replayed");
   assert(tokenRequests.some((item) => item.url.includes("google") && item.params.code_verifier && item.params.grant_type === "authorization_code"), "Google token exchange verifies PKCE");
   assert(tokenRequests.some((item) => item.url.includes("google") && item.params.grant_type === "refresh_token" && item.params.refresh_token === "refresh-ga4-code"), "expired Google access tokens refresh automatically without exposing the refresh token");
+  assert(tokenRequests.some((item) => item.url.includes("meta/token") && item.params.grant_type === "fb_exchange_token" && item.params.fb_exchange_token === "access-meta-code"), "Meta short-lived authorization token is exchanged for a long-lived server token");
   assert(db.connector_credentials.length === 3 && db.connector_credentials.every((item) => item.accessTokenEncrypted?.algorithm === "aes-256-gcm"), "connector tokens are encrypted and tenant-owned");
   assert(!serializedDb.includes("access-ga4-code") && !serializedDb.includes("refresh-ga4-code") && !serializedDb.includes("access-meta-code") && !serializedDb.includes("access-google-ads-code"), "access and refresh tokens never persist in plaintext");
   assert(connectionsA.item.length === 2 && connectionsB.item.length === 1 && connectionsA.item.every((item) => !JSON.stringify(item).includes("Encrypted")), "connection status is tenant-scoped and never exposes token envelopes");
@@ -238,6 +280,17 @@ async function run() {
   assert(googleAdsMetricsA.item.length === 0, "Google Ads normalized metrics remain tenant-isolated");
   assert(tokenRequests.some((item) => item.url.includes("customers:listAccessibleCustomers") && item.headers["developer-token"] === "google-ads-developer-token"), "Google Ads requests include the developer token");
   assert(tokenRequests.some((item) => item.url.includes("2222222222/googleAds:searchStream") && item.headers["login-customer-id"] === "1111111111" && item.body.includes("metrics.cost_micros")), "Google Ads report requests preserve manager context and use GAQL KPI fields");
+  assert(metaAccounts.response.ok && metaAccounts.item.length === 2 && metaAccounts.item[0].accountId === "3333333333", "Meta account discovery follows trusted Graph pagination and exposes selectable ad accounts");
+  assert(foreignMetaAccounts.response.status === 409, "tenant without a Meta connection cannot discover another tenant's ad accounts");
+  assert(invalidMetaAccount.response.status === 400 && invalidMetaAccount.body.code === "META_AD_ACCOUNT_INVALID", "invalid Meta ad account identifiers are rejected");
+  assert(inaccessibleMetaAccount.response.status === 400 && inaccessibleMetaAccount.body.code === "META_AD_ACCOUNT_NOT_ACCESSIBLE", "Meta ad accounts outside the authorized account list are rejected");
+  assert(metaSource.response.status === 201 && metaSource.item.ownerId === tenantA.user.id && metaSource.item.externalAccountId === "3333333333" && metaSource.item.businessId === "77", "selected Meta ad account becomes a tenant-owned data source");
+  assert(foreignMetaSync.response.status === 404 && foreignMetaSync.body.code === "DATA_SOURCE_NOT_FOUND", "tenant cannot sync another tenant's Meta Ads source");
+  assert(metaSync.response.ok && metaSync.item.job.status === "completed" && metaSync.item.job.attempts === 3 && metaSync.item.metrics.length === 2, "Meta Insights sync retries rate limits, follows pagination, and records completion");
+  assert(metaMetricsA.item.length === 2 && metaMetricsA.item.some((item) => item.campaignName === "Meta Prospecting" && item.spend === 6500.5 && item.clicks === 2400 && item.conversions === 32 && item.revenue === 148000), "Meta action and action-value rows normalize into the shared campaign KPI model without double counting clicks");
+  assert(metaMetricsB.item.length === 0, "Meta normalized metrics remain tenant-isolated");
+  assert(tokenRequests.some((item) => item.url.includes("/meta/me/adaccounts") && item.url.includes("appsecret_proof=")) && tokenRequests.some((item) => item.url.includes("/meta/act_3333333333/insights") && item.url.includes("time_increment=1")), "Meta Graph calls use app-secret proof and daily campaign-level Insights parameters");
+  assert(tokenRequests.filter((item) => item.url.startsWith("/meta/") && !item.url.startsWith("/meta/token")).every((item) => !item.url.includes("access_token=") && item.headers.authorization === "Bearer meta-long-lived-token"), "Meta access tokens stay out of URLs and travel only in authorization headers");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => { child.kill(); tokenServer.close(); });

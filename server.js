@@ -42,11 +42,12 @@ const googleOAuthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GO
 const googleOAuthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ADS_CLIENT_SECRET || "";
 const metaAppId = process.env.META_APP_ID || "";
 const metaAppSecret = process.env.META_APP_SECRET || "";
-const metaGraphVersion = process.env.META_GRAPH_VERSION || "v23.0";
+const metaGraphVersion = process.env.META_GRAPH_VERSION || "v25.0";
 const googleOAuthAuthorizationEndpoint = process.env.GOOGLE_OAUTH_AUTHORIZATION_URL || "https://accounts.google.com/o/oauth2/v2/auth";
 const googleOAuthTokenEndpoint = process.env.GOOGLE_OAUTH_TOKEN_URL || "https://oauth2.googleapis.com/token";
 const metaOAuthAuthorizationEndpoint = process.env.META_OAUTH_AUTHORIZATION_URL || `https://www.facebook.com/${metaGraphVersion}/dialog/oauth`;
 const metaOAuthTokenEndpoint = process.env.META_OAUTH_TOKEN_URL || `https://graph.facebook.com/${metaGraphVersion}/oauth/access_token`;
+const metaGraphApiBaseUrl = (process.env.META_GRAPH_API_URL || `https://graph.facebook.com/${metaGraphVersion}`).replace(/\/$/, "");
 const ga4AdminApiBaseUrl = (process.env.GA4_ADMIN_API_URL || "https://analyticsadmin.googleapis.com/v1beta").replace(/\/$/, "");
 const ga4DataApiBaseUrl = (process.env.GA4_DATA_API_URL || "https://analyticsdata.googleapis.com/v1beta").replace(/\/$/, "");
 const googleAdsApiVersion = process.env.GOOGLE_ADS_API_VERSION || "v24";
@@ -1793,8 +1794,25 @@ async function exchangeConnectorAuthorizationCode(provider, code, rawState) {
       body,
       signal: AbortSignal.timeout(15000),
     });
-    const tokenPayload = await response.json().catch(() => ({}));
+    let tokenPayload = await response.json().catch(() => ({}));
     if (!response.ok || !tokenPayload.access_token) throw new Error(`CONNECTOR_TOKEN_EXCHANGE_FAILED:${response.status}`);
+    if (config.provider === "meta_ads") {
+      const longLivedBody = new URLSearchParams({
+        grant_type: "fb_exchange_token",
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        fb_exchange_token: tokenPayload.access_token,
+      });
+      const longLivedResponse = await fetch(config.tokenEndpoint, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
+        body: longLivedBody,
+        signal: AbortSignal.timeout(15000),
+      });
+      const longLivedPayload = await longLivedResponse.json().catch(() => ({}));
+      if (!longLivedResponse.ok || !longLivedPayload.access_token) throw new Error(`CONNECTOR_TOKEN_EXCHANGE_FAILED:${longLivedResponse.status}`);
+      tokenPayload = { ...tokenPayload, ...longLivedPayload, refresh_token: null };
+    }
     const credential = await storeConnectorCredential(state, tokenPayload);
     await finishConnectorOAuthState(state.id, "used", { credentialId: credential.id });
     return { ownerId: state.ownerId, provider: state.provider, credentialId: credential.id, status: "connected" };
@@ -2099,6 +2117,180 @@ async function syncGoogleAdsSource(ownerId, payload) {
     const code = String(error.message || "SYNC_FAILED").split(":")[0];
     await upsertOwnedRecord("sync_jobs", { id: job.id, status: "failed", errorCode: code, failedAt: new Date().toISOString() }, ownerId);
     if (code === "CONNECTOR_REAUTH_REQUIRED") await updateConnectorCredential(ownerId, "google_ads", { status: "needs_reauth", lastErrorCode: "GOOGLE_ADS_AUTH_EXPIRED" });
+    throw error;
+  }
+}
+
+function metaAdAccountId(value) {
+  return String(value || "").replace(/^act_/, "");
+}
+
+function metaAppSecretProof(token) {
+  if (!metaAppSecret) throw new Error("META_APP_SECRET_REQUIRED");
+  return crypto.createHmac("sha256", metaAppSecret).update(token).digest("hex");
+}
+
+function metaApiUrl(pathname, token, params = {}) {
+  const target = new URL(`${metaGraphApiBaseUrl}/${String(pathname || "").replace(/^\//, "")}`);
+  target.searchParams.set("appsecret_proof", metaAppSecretProof(token));
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") target.searchParams.set(key, String(value));
+  });
+  return target;
+}
+
+function trustedMetaPagingUrl(rawUrl, token) {
+  const target = new URL(String(rawUrl || ""));
+  const expected = new URL(metaGraphApiBaseUrl);
+  if (target.protocol !== "https:" && expected.protocol === "https:") throw new Error("META_PAGING_URL_INVALID");
+  if (target.origin !== expected.origin || !target.pathname.startsWith(`${expected.pathname}/`)) throw new Error("META_PAGING_URL_INVALID");
+  target.searchParams.delete("access_token");
+  target.searchParams.set("appsecret_proof", metaAppSecretProof(token));
+  return target;
+}
+
+async function listMetaAdAccounts(ownerId) {
+  const { token } = await connectorAccessToken(ownerId, "meta_ads");
+  try {
+    const accounts = [];
+    let target = metaApiUrl("me/adaccounts", token, {
+      fields: "id,account_id,name,account_status,currency,timezone_name,business{id,name}",
+      limit: "100",
+    });
+    for (let page = 0; page < 20; page += 1) {
+      const result = await fetchConnectorJson(target.toString(), { headers: { accept: "application/json", authorization: `Bearer ${token}` } });
+      accounts.push(...(result.body.data || []).map((item) => ({
+        accountId: metaAdAccountId(item.account_id || item.id),
+        name: item.name || `Meta Ads ${metaAdAccountId(item.account_id || item.id)}`,
+        status: Number(item.account_status || 0),
+        currencyCode: item.currency || "",
+        timeZone: item.timezone_name || "",
+        businessId: String(item.business?.id || ""),
+        businessName: item.business?.name || "",
+      })).filter((item) => /^\d+$/.test(item.accountId)));
+      if (!result.body.paging?.next) break;
+      target = trustedMetaPagingUrl(result.body.paging.next, token);
+      if (page === 19) throw new Error("META_ACCOUNT_RESULT_TOO_LARGE");
+    }
+    const unique = new Map();
+    accounts.forEach((item) => { if (!unique.has(item.accountId)) unique.set(item.accountId, item); });
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (String(error.message || "").split(":")[0] === "CONNECTOR_REAUTH_REQUIRED") {
+      await updateConnectorCredential(ownerId, "meta_ads", { status: "needs_reauth", lastErrorCode: "META_AUTH_EXPIRED" });
+    }
+    throw error;
+  }
+}
+
+async function selectMetaAdAccount(ownerId, payload) {
+  const accountId = metaAdAccountId(payload.accountId);
+  if (!/^\d+$/.test(accountId)) throw new Error("META_AD_ACCOUNT_INVALID");
+  const accounts = await listMetaAdAccounts(ownerId);
+  const selected = accounts.find((item) => item.accountId === accountId);
+  if (!selected) throw new Error("META_AD_ACCOUNT_NOT_ACCESSIBLE");
+  const db = await readDb();
+  const credential = db.connector_credentials.find((item) => item.ownerId === ownerId && item.provider === "meta_ads" && item.status === "connected");
+  if (!credential) throw new Error("CONNECTOR_NOT_CONNECTED");
+  const existing = db.data_sources.find((item) => item.ownerId === ownerId && normalizeConnectorType(item.type) === "meta_ads" && item.externalAccountId === accountId);
+  return upsertOwnedRecord("data_sources", {
+    id: existing?.id,
+    type: "meta_ads",
+    provider: "meta_ads",
+    credentialId: credential.id,
+    externalAccountId: accountId,
+    businessId: selected.businessId,
+    businessName: selected.businessName,
+    displayName: selected.name,
+    currencyCode: selected.currencyCode,
+    timeZone: selected.timeZone,
+    accountStatus: selected.status,
+    status: "connected",
+    syncCadence: payload.syncCadence || "daily",
+  }, ownerId);
+}
+
+function metaActionValue(entries, priorities) {
+  const values = Array.isArray(entries) ? entries : [];
+  for (const actionType of priorities) {
+    const item = values.find((entry) => entry.action_type === actionType);
+    if (item) return Number(item.value || 0);
+  }
+  return 0;
+}
+
+function normalizeMetaInsights(items, source, ownerId) {
+  const conversionTypes = ["omni_purchase", "offsite_conversion.fb_pixel_purchase", "purchase", "onsite_conversion.purchase", "lead"];
+  const valueTypes = ["omni_purchase", "offsite_conversion.fb_pixel_purchase", "purchase", "onsite_conversion.purchase"];
+  return items.map((item) => withId({
+    ownerId,
+    sourceId: source.id,
+    provider: "meta_ads",
+    externalAccountId: source.externalAccountId,
+    date: String(item.date_start || ""),
+    channel: "Meta Ads",
+    campaignId: String(item.campaign_id || "") || null,
+    campaignName: item.campaign_name || null,
+    spend: Number(item.spend || 0),
+    impressions: Number(item.impressions || 0),
+    clicks: Number(item.clicks || 0),
+    conversions: metaActionValue(item.actions, conversionTypes),
+    revenue: metaActionValue(item.action_values, valueTypes),
+    sessions: 0,
+    users: 0,
+    sourceUpdatedAt: new Date().toISOString(),
+  })).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+}
+
+async function syncMetaAdsSource(ownerId, payload) {
+  const { startDate, endDate } = validateSyncDateRange(payload);
+  const db = await readDb();
+  const source = db.data_sources.find((item) => item.id === payload.sourceId && item.ownerId === ownerId && normalizeConnectorType(item.type) === "meta_ads");
+  if (!source) throw new Error("DATA_SOURCE_NOT_FOUND");
+  const job = await createRecord("sync_jobs", {
+    provider: "meta_ads", sourceId: source.id, externalAccountId: source.externalAccountId,
+    startDate, endDate, status: "running", startedAt: new Date().toISOString(), attempts: 0,
+  }, ownerId);
+  try {
+    const { token } = await connectorAccessToken(ownerId, "meta_ads");
+    const insights = [];
+    let totalAttempts = 0;
+    let target = metaApiUrl(`act_${source.externalAccountId}/insights`, token, {
+      fields: "date_start,date_stop,campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+      time_range: JSON.stringify({ since: startDate, until: endDate }),
+      time_increment: "1",
+      level: "campaign",
+      limit: "500",
+    });
+    for (let page = 0; page < 100; page += 1) {
+      const result = await fetchConnectorJson(target.toString(), { headers: { accept: "application/json", authorization: `Bearer ${token}` } });
+      totalAttempts += result.attempts;
+      insights.push(...(result.body.data || []));
+      if (!result.body.paging?.next) break;
+      target = trustedMetaPagingUrl(result.body.paging.next, token);
+      if (page === 99) throw new Error("META_INSIGHTS_RESULT_TOO_LARGE");
+    }
+    const rows = normalizeMetaInsights(insights, source, ownerId);
+    const operation = writeQueue.then(async () => {
+      const latest = await readDb();
+      latest.normalized_metrics = (Array.isArray(latest.normalized_metrics) ? latest.normalized_metrics : [])
+        .filter((item) => item.ownerId !== ownerId || item.sourceId !== source.id || item.date < startDate || item.date > endDate);
+      latest.normalized_metrics.push(...rows);
+      const jobIndex = latest.sync_jobs.findIndex((item) => item.id === job.id && item.ownerId === ownerId);
+      latest.sync_jobs[jobIndex] = { ...latest.sync_jobs[jobIndex], status: "completed", attempts: totalAttempts, rowCount: rows.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const sourceIndex = latest.data_sources.findIndex((item) => item.id === source.id && item.ownerId === ownerId);
+      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      latest.data_syncs.push(withId({ ownerId, sourceId: source.id, provider: "meta_ads", status: "synced", startDate, endDate, rowCount: rows.length, attempts: totalAttempts, syncedAt: new Date().toISOString() }));
+      latest.audit_logs.push(withId({ action: "connector:sync_completed", ownerId, provider: "meta_ads", recordId: job.id, rowCount: rows.length }));
+      await writeDb(latest);
+      return latest.sync_jobs[jobIndex];
+    });
+    writeQueue = operation.catch(() => {});
+    return { job: await operation, metrics: rows };
+  } catch (error) {
+    const code = String(error.message || "SYNC_FAILED").split(":")[0];
+    await upsertOwnedRecord("sync_jobs", { id: job.id, status: "failed", errorCode: code, failedAt: new Date().toISOString() }, ownerId);
+    if (code === "CONNECTOR_REAUTH_REQUIRED") await updateConnectorCredential(ownerId, "meta_ads", { status: "needs_reauth", lastErrorCode: "META_AUTH_EXPIRED" });
     throw error;
   }
 }
@@ -3644,6 +3836,38 @@ async function handleApi(req, res, url) {
       const code = String(error.message || "GOOGLE_ADS_SYNC_FAILED").split(":")[0];
       const status = code === "DATA_SOURCE_NOT_FOUND" ? 404 : code === "SYNC_DATE_RANGE_INVALID" ? 400 : code === "CONNECTOR_REAUTH_REQUIRED" ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 502;
       return json(res, status, { error: "Google Ads synchronization failed", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/meta-ads/accounts" && req.method === "GET") {
+    try {
+      return json(res, 200, { items: await listMetaAdAccounts(req.auth.user.id) });
+    } catch (error) {
+      const code = String(error.message || "META_AD_ACCOUNTS_FAILED").split(":")[0];
+      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code) ? 409 : code === "META_APP_SECRET_REQUIRED" ? 503 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 502;
+      return json(res, status, { error: "Meta ad accounts could not be loaded", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/meta-ads/select" && req.method === "POST") {
+    try {
+      const item = await selectMetaAdAccount(req.auth.user.id, await readBody(req));
+      return json(res, 201, { item });
+    } catch (error) {
+      const code = String(error.message || "META_AD_ACCOUNT_SELECT_FAILED").split(":")[0];
+      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code) ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 400;
+      return json(res, status, { error: "Meta ad account could not be selected", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/meta-ads/sync" && req.method === "POST") {
+    try {
+      const item = await syncMetaAdsSource(req.auth.user.id, await readBody(req));
+      return json(res, 200, { item });
+    } catch (error) {
+      const code = String(error.message || "META_ADS_SYNC_FAILED").split(":")[0];
+      const status = code === "DATA_SOURCE_NOT_FOUND" ? 404 : code === "SYNC_DATE_RANGE_INVALID" ? 400 : code === "CONNECTOR_REAUTH_REQUIRED" ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 502;
+      return json(res, status, { error: "Meta Ads synchronization failed", code });
     }
   }
 

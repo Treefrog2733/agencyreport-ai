@@ -165,7 +165,7 @@ GOOGLE_ADS_DEVELOPER_TOKEN=
 GOOGLE_ADS_API_VERSION=v24
 META_APP_ID=
 META_APP_SECRET=
-META_GRAPH_VERSION=v23.0
+META_GRAPH_VERSION=v25.0
 ```
 
 ## API Areas
@@ -225,7 +225,10 @@ Data connectors:
 - `GET /api/connectors/google-ads/customers`
 - `POST /api/connectors/google-ads/select`
 - `POST /api/connectors/google-ads/sync`
-- `GET /api/connectors/metrics?provider=ga4|google_ads&sourceId=...`
+- `GET /api/connectors/meta-ads/accounts`
+- `POST /api/connectors/meta-ads/select`
+- `POST /api/connectors/meta-ads/sync`
+- `GET /api/connectors/metrics?provider=ga4|google_ads|meta_ads&sourceId=...`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
 - `POST /api/data-sources/sync`
@@ -233,6 +236,8 @@ Data connectors:
 OAuth connector secrets use a dedicated `CONNECTOR_ENCRYPTION_KEY` (minimum 32 characters). Google authorization uses PKCE, an offline refresh token, and a one-time state whose raw value is never stored. Meta authorization uses the same short-lived hashed-state contract. Account exports redact OAuth state, PKCE verifiers, access tokens, refresh tokens, and provider payloads.
 
 Google Ads defaults to API `v24` and can be updated with `GOOGLE_ADS_API_VERSION` without changing application code. Customer discovery expands accessible manager accounts into client accounts, stores both the reporting Customer ID and manager `login-customer-id`, and rejects manager accounts as report data sources. Synchronization uses GAQL `searchStream` and normalizes cost micros, impressions, clicks, conversions, and conversion value into the shared tenant-owned KPI collection.
+
+Meta Ads defaults to Graph API `v25.0`. OAuth authorization tokens are exchanged for long-lived tokens, every server-side Graph request includes an HMAC `appsecret_proof`, and paging URLs are restricted to the configured Graph API origin and version path. Insights synchronization requests daily campaign data and normalizes spend, impressions, clicks, prioritized purchase/lead conversions, and purchase value without summing unrelated action types.
 
 ## OpenAI Report Flow
 

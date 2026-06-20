@@ -45,6 +45,8 @@ const state = {
   ga4Source: null,
   googleAdsCustomers: [],
   googleAdsSource: null,
+  metaAdAccounts: [],
+  metaAdsSource: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -481,6 +483,10 @@ function translateStaticWorkspace() {
   apply("#loadGoogleAdsCustomersBtn", "載入廣告帳戶", "Load ad accounts");
   apply("#selectGoogleAdsCustomerBtn", "使用此帳戶", "Use this account");
   apply("#syncGoogleAdsBtn", "立即同步", "Sync now");
+  apply("#metaAdAccountLabel", "Meta Ads 廣告帳戶", "Meta Ads account");
+  apply("#loadMetaAdAccountsBtn", "載入廣告帳戶", "Load ad accounts");
+  apply("#selectMetaAdAccountBtn", "使用此帳戶", "Use this account");
+  apply("#syncMetaAdsBtn", "立即同步", "Sync now");
   renderConnectorSettings();
   apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
   apply("#cancelDeleteAccountBtn", "取消", "Cancel");
@@ -2033,7 +2039,7 @@ function renderConnectorSettings() {
       </div>
       <div class="connector-row-actions">
         <span class="connector-state ${connected ? "" : "disconnected"}">${connected ? (zh ? "已連接" : "Connected") : (zh ? "未連接" : "Disconnected")}</span>
-        ${connected && ["ga4", "google_ads"].includes(provider) ? `<button class="ghost" type="button" data-connector-action="manage" data-provider="${provider}">${zh ? "管理" : "Manage"}</button>` : ""}
+        ${connected && ["ga4", "google_ads", "meta_ads"].includes(provider) ? `<button class="ghost" type="button" data-connector-action="manage" data-provider="${provider}">${zh ? "管理" : "Manage"}</button>` : ""}
         <button class="${connected ? "ghost" : "primary"}" type="button" data-connector-action="${connected ? "disconnect" : "connect"}" data-provider="${provider}" ${canConnect ? "" : "disabled"}>${connected ? (zh ? "中斷連線" : "Disconnect") : authorizationReady ? (zh ? "連接" : "Connect") : (zh ? "設定中" : "Setting up")}</button>
       </div>
     </div>`;
@@ -2044,6 +2050,9 @@ function renderConnectorSettings() {
   const googleAdsConnected = state.connectorConnections.some((item) => item.provider === "google_ads" && item.status === "connected");
   if (!googleAdsConnected) $("#googleAdsCustomerPanel").hidden = true;
   if ($("#syncGoogleAdsBtn")) $("#syncGoogleAdsBtn").disabled = !state.googleAdsSource;
+  const metaAdsConnected = state.connectorConnections.some((item) => item.provider === "meta_ads" && item.status === "connected");
+  if (!metaAdsConnected) $("#metaAdAccountPanel").hidden = true;
+  if ($("#syncMetaAdsBtn")) $("#syncMetaAdsBtn").disabled = !state.metaAdsSource;
 }
 
 async function loadConnectorConnections() {
@@ -2053,6 +2062,7 @@ async function loadConnectorConnections() {
     state.connectorConnections = Array.isArray(connections) ? connections : [];
     state.ga4Source = (Array.isArray(sources) ? sources : []).find((item) => item.type === "ga4") || null;
     state.googleAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "google_ads") || null;
+    state.metaAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "meta_ads") || null;
     renderConnectorSettings();
   } catch (error) {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load connections" : "無法載入串接狀態", error.message);
@@ -2083,6 +2093,11 @@ async function disconnectConnectorUi(provider) {
       state.googleAdsSource = null;
       state.googleAdsCustomers = [];
       $("#googleAdsCustomerPanel").hidden = true;
+    }
+    if (provider === "meta_ads") {
+      state.metaAdsSource = null;
+      state.metaAdAccounts = [];
+      $("#metaAdAccountPanel").hidden = true;
     }
     await loadConnectorConnections();
     setStatus("#connectorStatus", "ok", state.lang === "en" ? "Connection removed" : "已中斷連線", connectorLabels[provider]?.[state.lang === "en" ? "en" : "zh"] || provider);
@@ -2168,6 +2183,43 @@ async function selectGoogleAdsCustomerUi() {
   }
 }
 
+async function loadMetaAdAccounts() {
+  $("#metaAdAccountPanel").hidden = false;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Loading Meta ad accounts..." : "正在載入 Meta Ads 廣告帳戶...");
+  try {
+    state.metaAdAccounts = await api("/api/connectors/meta-ads/accounts");
+    const select = $("#metaAdAccountSelect");
+    select.replaceChildren();
+    state.metaAdAccounts.forEach((item, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `${item.name} (${item.accountId})${item.businessName ? ` - ${item.businessName}` : ""}`;
+      select.append(option);
+    });
+    if (!state.metaAdAccounts.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = state.lang === "en" ? "No accessible ad accounts" : "沒有可存取的廣告帳戶";
+      select.append(option);
+    }
+    setStatus("#connectorStatus", state.metaAdAccounts.length ? "ok" : "warn", state.lang === "en" ? `${state.metaAdAccounts.length} accounts loaded` : `已載入 ${state.metaAdAccounts.length} 個帳戶`);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load Meta ad accounts" : "無法載入 Meta Ads 廣告帳戶", error.message);
+  }
+}
+
+async function selectMetaAdAccountUi() {
+  const selected = state.metaAdAccounts[Number($("#metaAdAccountSelect").value)];
+  if (!selected) return setStatus("#connectorStatus", "warn", state.lang === "en" ? "Choose a Meta ad account" : "請選擇 Meta Ads 廣告帳戶");
+  try {
+    state.metaAdsSource = await api("/api/connectors/meta-ads/select", { method: "POST", body: JSON.stringify(selected) });
+    $("#syncMetaAdsBtn").disabled = false;
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Meta ad account selected" : "已選擇 Meta Ads 帳戶", selected.name);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to select Meta ad account" : "無法選擇 Meta Ads 帳戶", error.message);
+  }
+}
+
 function reportMonthRange() {
   const month = $("#reportMonth")?.value || new Date().toISOString().slice(0, 7);
   const [year, monthNumber] = month.split("-").map(Number);
@@ -2204,6 +2256,22 @@ async function syncGoogleAdsUi() {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "Google Ads synchronization failed" : "Google Ads 同步失敗", error.message);
   } finally {
     button.disabled = !state.googleAdsSource;
+  }
+}
+
+async function syncMetaAdsUi() {
+  if (!state.metaAdsSource) return;
+  const button = $("#syncMetaAdsBtn");
+  button.disabled = true;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Synchronizing Meta Ads data..." : "正在同步 Meta Ads 資料...");
+  try {
+    const item = await api("/api/connectors/meta-ads/sync", { method: "POST", body: JSON.stringify({ sourceId: state.metaAdsSource.id, ...reportMonthRange() }) });
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Meta Ads synchronization complete" : "Meta Ads 同步完成", state.lang === "en" ? `${item.job.rowCount} normalized rows, ${item.job.attempts} attempt(s).` : `${item.job.rowCount} 筆標準資料，嘗試 ${item.job.attempts} 次。`);
+    await loadConnectorConnections();
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Meta Ads synchronization failed" : "Meta Ads 同步失敗", error.message);
+  } finally {
+    button.disabled = !state.metaAdsSource;
   }
 }
 
@@ -2309,6 +2377,7 @@ function setupEvents() {
     if (button.dataset.connectorAction === "disconnect") disconnectConnectorUi(provider);
     if (button.dataset.connectorAction === "manage" && provider === "ga4") loadGa4Properties();
     if (button.dataset.connectorAction === "manage" && provider === "google_ads") loadGoogleAdsCustomers();
+    if (button.dataset.connectorAction === "manage" && provider === "meta_ads") loadMetaAdAccounts();
   });
   $("#loadGa4PropertiesBtn")?.addEventListener("click", loadGa4Properties);
   $("#selectGa4PropertyBtn")?.addEventListener("click", selectGa4PropertyUi);
@@ -2316,6 +2385,9 @@ function setupEvents() {
   $("#loadGoogleAdsCustomersBtn")?.addEventListener("click", loadGoogleAdsCustomers);
   $("#selectGoogleAdsCustomerBtn")?.addEventListener("click", selectGoogleAdsCustomerUi);
   $("#syncGoogleAdsBtn")?.addEventListener("click", syncGoogleAdsUi);
+  $("#loadMetaAdAccountsBtn")?.addEventListener("click", loadMetaAdAccounts);
+  $("#selectMetaAdAccountBtn")?.addEventListener("click", selectMetaAdAccountUi);
+  $("#syncMetaAdsBtn")?.addEventListener("click", syncMetaAdsUi);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${escapeLibraryText(item)}</strong></div>`).join("") : "";

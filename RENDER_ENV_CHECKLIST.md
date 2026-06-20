@@ -45,7 +45,7 @@ Use this checklist before switching real traffic to `https://app.virtualtrendwor
 | `GOOGLE_ADS_API_VERSION` | `v24` | Update before Google retires the configured version. |
 | `META_APP_ID` | from Meta for Developers | Required for Meta Ads OAuth. |
 | `META_APP_SECRET` | from Meta for Developers | Store only in Render secret env vars. |
-| `META_GRAPH_VERSION` | `v23.0` | Pin and review before Graph API version retirement. |
+| `META_GRAPH_VERSION` | `v25.0` | Pin and review before Graph API version retirement. |
 
 Register these exact OAuth redirect URIs with the providers:
 
