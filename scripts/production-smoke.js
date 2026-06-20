@@ -131,6 +131,9 @@ async function run() {
   ));
   if (health.body.payment?.mode !== "live-ready") {
     results.push(check(Array.isArray(health.body.payment?.missing) && health.body.payment.missing.length > 0, "payment diagnostics list missing settings", JSON.stringify(health.body.payment || {})));
+    results.push(check(health.body.payment?.checkoutEnabled === false, "unconfigured production checkout is disabled", JSON.stringify(health.body.payment || {})));
+  } else {
+    results.push(check(health.body.payment?.checkoutEnabled === true, "configured production checkout is enabled", JSON.stringify(health.body.payment || {})));
   }
 
   const readiness = await fetchJson(`${baseUrl}/api/readiness`);
