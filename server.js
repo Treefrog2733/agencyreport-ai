@@ -10,6 +10,7 @@ loadLocalEnv();
 const dataDir = path.join(root, "data");
 const dbPath = path.join(dataDir, "db.json");
 const port = Number(process.env.PORT || 4173);
+const googleAnalyticsMeasurementId = "G-8T8GJ06MQP";
 const databaseUrl = process.env.DATABASE_URL || "";
 const aiProvider = (process.env.AI_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "fallback")).toLowerCase();
 const aiApiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || "";
@@ -136,7 +137,7 @@ const contentTypes = {
   ".jpeg": "image/jpeg",
 };
 
-const publicStaticFiles = new Set(["/index.html", "/app.js", "/styles.css"]);
+const publicStaticFiles = new Set(["/index.html", "/app.js", "/styles.css", "/gtag-init.js"]);
 const rateBuckets = new Map();
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 120);
@@ -195,7 +196,7 @@ function securityHeaders(extra = {}) {
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "cross-origin-resource-policy": "same-origin",
     "strict-transport-security": "max-age=31536000; includeSubDomains",
-    "content-security-policy": "default-src 'self'; script-src 'self' 'sha256-gd3ETQp5xbW48zuUjQhuf83+5fNZSKFUhUVGEdImfuo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'sha256-gd3ETQp5xbW48zuUjQhuf83+5fNZSKFUhUVGEdImfuo=' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google-analytics.com https://*.google-analytics.com; font-src 'self' data:; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw",
     ...extra,
   };
 }
@@ -203,7 +204,7 @@ function securityHeaders(extra = {}) {
 function interactivePageHeaders(nonce, extra = {}) {
   const scriptPolicy = nonce ? `'self' 'nonce-${nonce}'` : "'self'";
   return securityHeaders({
-    "content-security-policy": `default-src 'self'; script-src ${scriptPolicy}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw`,
+    "content-security-policy": `default-src 'self'; script-src ${scriptPolicy} https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google-analytics.com https://*.google-analytics.com; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw`,
     ...extra,
   });
 }
@@ -562,6 +563,7 @@ function legacyLegalHtml(language = "zh") {
   return `<!doctype html>
 <html lang="zh-Hant">
 <head>
+  ${googleTagHead()}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AgencyReport AI Legal Notice</title>
@@ -624,6 +626,7 @@ function legacyLegalEnglishHtml() {
   return `<!doctype html>
 <html lang="en">
 <head>
+  ${googleTagHead()}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AgencyReport AI Terms and Privacy Policy</title>
@@ -1043,6 +1046,18 @@ function missingStripeSettings() {
   if (!stripeCancelUrl) missing.push("STRIPE_CANCEL_URL");
   if (!stripeWebhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
   return missing;
+}
+
+function googleTagHead() {
+  const measurementId = escapeHtml(googleAnalyticsMeasurementId);
+  return `<!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script>
+  <script src="/gtag-init.js"></script>`;
+}
+
+function injectGoogleTag(html) {
+  if (!html || html.includes("googletagmanager.com/gtag/js")) return html;
+  return html.replace("<head>", `<head>\n  ${googleTagHead()}`);
 }
 
 function mockPaymentsAllowed() {
@@ -4628,12 +4643,12 @@ async function serveStatic(req, res, url) {
   }
   if (url.pathname === "/legal") {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
-    return res.end(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh"));
+    return res.end(injectGoogleTag(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh")));
   }
   if (url.pathname.startsWith("/billing/quote/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const nonce = crypto.randomBytes(18).toString("base64");
-    const html = await quoteHtml(token, nonce);
+    const html = injectGoogleTag(await quoteHtml(token, nonce));
     if (html) {
       res.writeHead(200, interactivePageHeaders(nonce, { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
@@ -4644,7 +4659,7 @@ async function serveStatic(req, res, url) {
   if (url.pathname.startsWith("/billing/ecpay/checkout/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
     const nonce = crypto.randomBytes(18).toString("base64");
-    const html = await ecpayCheckoutHtml(token, nonce);
+    const html = injectGoogleTag(await ecpayCheckoutHtml(token, nonce));
     if (html) {
       res.writeHead(200, interactivePageHeaders(nonce, { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
@@ -4653,13 +4668,13 @@ async function serveStatic(req, res, url) {
     return res.end("Checkout not found");
   }
   if (url.pathname === "/billing/ecpay/result") {
-    const html = await ecpayResultHtml(url);
+    const html = injectGoogleTag(await ecpayResultHtml(url));
     res.writeHead(200, interactivePageHeaders("", { "content-type": "text/html;charset=utf-8" }));
     return res.end(html);
   }
   if (url.pathname.startsWith("/billing/invoice/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
-    const html = await invoiceHtml(token);
+    const html = injectGoogleTag(await invoiceHtml(token));
     if (html) {
       res.writeHead(200, interactivePageHeaders("", { "content-type": "text/html;charset=utf-8" }));
       return res.end(html);
@@ -4671,7 +4686,7 @@ async function serveStatic(req, res, url) {
     const isDownload = url.pathname.endsWith("/download");
     const parts = url.pathname.split("/").filter(Boolean);
     const token = decodeURIComponent(parts[2] || "");
-    const html = await clientReportHtml(token);
+    const html = injectGoogleTag(await clientReportHtml(token));
     if (html) {
       const headers = { "content-type": "text/html;charset=utf-8" };
       if (isDownload) {

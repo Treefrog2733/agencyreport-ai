@@ -36,12 +36,13 @@ function assert(condition, message) {
 
 async function run() {
   await waitForServer();
-  const [zhResponse, enResponse, apiResponse] = await Promise.all([
+  const [zhResponse, enResponse, apiResponse, tagInitResponse] = await Promise.all([
     fetch(`${baseUrl}/legal`),
     fetch(`${baseUrl}/legal?lang=en`),
     fetch(`${baseUrl}/api/legal`),
+    fetch(`${baseUrl}/gtag-init.js`),
   ]);
-  const [zh, en, api] = await Promise.all([zhResponse.text(), enResponse.text(), apiResponse.json()]);
+  const [zh, en, api, tagInit] = await Promise.all([zhResponse.text(), enResponse.text(), apiResponse.json(), tagInitResponse.text()]);
   assert(zhResponse.ok && /<html lang="zh-Hant">/.test(zh), "Traditional Chinese legal page responds");
   assert(enResponse.ok && /<html lang="en">/.test(en), "English legal page responds");
   assert(api.item?.version === expectedVersion, "legal API exposes the expected version");
@@ -57,6 +58,14 @@ async function run() {
     assert(!/[\uFFFD\uF386\uEE6A]/.test(html), `${label} page has no known mojibake`);
   });
   assert(Boolean(zhResponse.headers.get("content-security-policy")), "legal page sends CSP");
+  [zh, en].forEach((html, index) => {
+    const label = index ? "English" : "Chinese";
+    assert((html.match(/googletagmanager\.com\/gtag\/js/g) || []).length === 1, `${label} page loads one Google tag`);
+  });
+  assert(tagInitResponse.ok && tagInit.includes("G-8T8GJ06MQP"), "Google tag initializer is publicly available");
+  const csp = zhResponse.headers.get("content-security-policy") || "";
+  assert(csp.includes("https://www.googletagmanager.com"), "CSP allows Google Tag Manager scripts");
+  assert(csp.includes("https://www.google-analytics.com"), "CSP allows Google Analytics collection");
   assert(zhResponse.headers.get("x-frame-options") === "DENY", "legal page blocks framing");
 }
 
