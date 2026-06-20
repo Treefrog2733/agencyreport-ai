@@ -34,6 +34,25 @@ Use this checklist before switching real traffic to `https://app.virtualtrendwor
 | `ECPAY_ORDER_RESULT_URL` | `https://app.virtualtrendworks.com/billing/ecpay/result` | Browser result page after payment. |
 | `ECPAY_CLIENT_BACK_URL` | `https://app.virtualtrendworks.com` | Customer back link. |
 
+## Automated Data Connectors
+
+| Key | Example | Notes |
+| --- | --- | --- |
+| `CONNECTOR_ENCRYPTION_KEY` | 32+ random characters | Dedicated AES-256-GCM key. Keep separate from backup and worker secrets. |
+| `GOOGLE_OAUTH_CLIENT_ID` | `...apps.googleusercontent.com` | OAuth web client used by both GA4 and Google Ads. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | from Google Cloud | Store only in Render secret env vars. |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | from Google Ads API Center | Must have the required production access level. |
+| `GOOGLE_ADS_API_VERSION` | `v24` | Update before Google retires the configured version. |
+| `META_APP_ID` | from Meta for Developers | Required for Meta Ads OAuth. |
+| `META_APP_SECRET` | from Meta for Developers | Store only in Render secret env vars. |
+| `META_GRAPH_VERSION` | `v23.0` | Pin and review before Graph API version retirement. |
+
+Register these exact OAuth redirect URIs with the providers:
+
+- `https://app.virtualtrendworks.com/api/connectors/oauth/callback/ga4`
+- `https://app.virtualtrendworks.com/api/connectors/oauth/callback/google_ads`
+- `https://app.virtualtrendworks.com/api/connectors/oauth/callback/meta_ads`
+
 ## GitHub Secrets
 
 | Secret | Value |

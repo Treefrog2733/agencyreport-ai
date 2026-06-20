@@ -44,6 +44,10 @@ services:
         value: https://github.com/Treefrog2733/agencyreport-ai/actions/workflows/database-backup.yml
       - key: MONITORING_URL
         value: https://github.com/Treefrog2733/agencyreport-ai/actions/workflows/production-smoke.yml
+      - key: GOOGLE_ADS_API_VERSION
+        value: v24
+      - key: META_GRAPH_VERSION
+        value: v23.0
       - key: DATABASE_URL
         sync: false
       - key: OPENAI_API_KEY
@@ -53,6 +57,18 @@ services:
       - key: EMAIL_FROM
         sync: false
       - key: WORKER_SECRET
+        sync: false
+      - key: CONNECTOR_ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_ADS_DEVELOPER_TOKEN
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
         sync: false
       - key: ECPAY_MERCHANT_ID
         sync: false

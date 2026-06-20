@@ -49,9 +49,12 @@ const metaOAuthAuthorizationEndpoint = process.env.META_OAUTH_AUTHORIZATION_URL 
 const metaOAuthTokenEndpoint = process.env.META_OAUTH_TOKEN_URL || `https://graph.facebook.com/${metaGraphVersion}/oauth/access_token`;
 const ga4AdminApiBaseUrl = (process.env.GA4_ADMIN_API_URL || "https://analyticsadmin.googleapis.com/v1beta").replace(/\/$/, "");
 const ga4DataApiBaseUrl = (process.env.GA4_DATA_API_URL || "https://analyticsdata.googleapis.com/v1beta").replace(/\/$/, "");
+const googleAdsApiVersion = process.env.GOOGLE_ADS_API_VERSION || "v24";
+const googleAdsApiBaseUrl = (process.env.GOOGLE_ADS_API_URL || `https://googleads.googleapis.com/${googleAdsApiVersion}`).replace(/\/$/, "");
+const googleAdsDeveloperToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN || "";
 const connectorEnv = {
   google_sheets: Boolean(process.env.GOOGLE_SHEETS_API_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
-  google_ads: Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN && googleOAuthClientId && googleOAuthClientSecret && connectorEncryptionSecret.length >= 32),
+  google_ads: Boolean(googleAdsDeveloperToken && googleOAuthClientId && googleOAuthClientSecret && connectorEncryptionSecret.length >= 32),
   meta_ads: Boolean(metaAppId && metaAppSecret && connectorEncryptionSecret.length >= 32),
   ga4: Boolean(googleOAuthClientId && googleOAuthClientSecret && connectorEncryptionSecret.length >= 32),
   search_console: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS),
@@ -1906,16 +1909,198 @@ async function fetchConnectorJson(url, options = {}) {
       const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
       const body = await response.json().catch(() => ({}));
       if (response.ok) return { body, attempts: attempt };
-      if (response.status === 401 || response.status === 403) throw new Error(`CONNECTOR_AUTH_FAILED:${response.status}`);
+      if (response.status === 401) throw new Error("CONNECTOR_REAUTH_REQUIRED");
+      if (response.status === 403) throw new Error("CONNECTOR_PERMISSION_DENIED");
       if (response.status !== 429 && response.status < 500) throw new Error(`CONNECTOR_API_FAILED:${response.status}`);
       lastError = new Error(response.status === 429 ? "CONNECTOR_RATE_LIMITED" : `CONNECTOR_API_RETRYABLE:${response.status}`);
     } catch (error) {
-      if (String(error.message || "").startsWith("CONNECTOR_AUTH_FAILED") || String(error.message || "").startsWith("CONNECTOR_API_FAILED")) throw error;
+      if (["CONNECTOR_REAUTH_REQUIRED", "CONNECTOR_PERMISSION_DENIED"].includes(String(error.message || "").split(":")[0]) || String(error.message || "").startsWith("CONNECTOR_API_FAILED")) throw error;
       lastError = error;
     }
     if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
   }
   throw lastError || new Error("CONNECTOR_API_FAILED");
+}
+
+function googleAdsCustomerId(value) {
+  return String(value || "").replace(/^customers\//, "").replace(/-/g, "");
+}
+
+function googleAdsHeaders(token, loginCustomerId = "") {
+  if (!googleAdsDeveloperToken) throw new Error("GOOGLE_ADS_DEVELOPER_TOKEN_REQUIRED");
+  const headers = {
+    authorization: `Bearer ${token}`,
+    "developer-token": googleAdsDeveloperToken,
+    accept: "application/json",
+    "content-type": "application/json",
+  };
+  const loginId = googleAdsCustomerId(loginCustomerId);
+  if (loginId) headers["login-customer-id"] = loginId;
+  return headers;
+}
+
+async function listGoogleAdsCustomers(ownerId) {
+  const { token } = await connectorAccessToken(ownerId, "google_ads");
+  try {
+    const accessible = await fetchConnectorJson(`${googleAdsApiBaseUrl}/customers:listAccessibleCustomers`, {
+      headers: googleAdsHeaders(token),
+    });
+    const rootIds = (accessible.body.resourceNames || []).map(googleAdsCustomerId).filter((item) => /^\d+$/.test(item)).slice(0, 50);
+    const discovered = [];
+    for (const loginCustomerId of rootIds) {
+      const query = [
+        "SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.manager,",
+        "customer_client.level, customer_client.status, customer_client.currency_code, customer_client.time_zone",
+        "FROM customer_client WHERE customer_client.level <= 1",
+      ].join(" ");
+      try {
+        let pageToken = "";
+        let found = false;
+        for (let page = 0; page < 20; page += 1) {
+          const result = await fetchConnectorJson(`${googleAdsApiBaseUrl}/customers/${loginCustomerId}/googleAds:search`, {
+            method: "POST",
+            headers: googleAdsHeaders(token, loginCustomerId),
+            body: JSON.stringify({ query, pageSize: 10000, ...(pageToken ? { pageToken } : {}) }),
+          });
+          for (const row of result.body.results || []) {
+            const client = row.customerClient || {};
+            const customerId = googleAdsCustomerId(client.clientCustomer);
+            if (!/^\d+$/.test(customerId)) continue;
+            found = true;
+            discovered.push({
+              customerId,
+              loginCustomerId,
+              name: client.descriptiveName || `Google Ads ${customerId}`,
+              manager: Boolean(client.manager),
+              level: Number(client.level || 0),
+              status: client.status || "UNKNOWN",
+              currencyCode: client.currencyCode || "",
+              timeZone: client.timeZone || "",
+            });
+          }
+          pageToken = result.body.nextPageToken || "";
+          if (!pageToken) break;
+          if (page === 19) throw new Error("GOOGLE_ADS_CUSTOMER_RESULT_TOO_LARGE");
+        }
+        if (!found) discovered.push({ customerId: loginCustomerId, loginCustomerId, name: `Google Ads ${loginCustomerId}`, manager: false, level: 0, status: "UNKNOWN", currencyCode: "", timeZone: "" });
+      } catch (error) {
+        const code = String(error.message || "").split(":")[0];
+        if (["CONNECTOR_REAUTH_REQUIRED", "CONNECTOR_PERMISSION_DENIED"].includes(code)) throw error;
+        discovered.push({ customerId: loginCustomerId, loginCustomerId, name: `Google Ads ${loginCustomerId}`, manager: false, level: 0, status: "UNKNOWN", currencyCode: "", timeZone: "", metadataUnavailable: true });
+      }
+    }
+    const unique = new Map();
+    discovered.forEach((item) => {
+      const key = `${item.loginCustomerId}:${item.customerId}`;
+      if (!unique.has(key)) unique.set(key, item);
+    });
+    return [...unique.values()].sort((a, b) => Number(a.level) - Number(b.level) || a.name.localeCompare(b.name));
+  } catch (error) {
+    if (String(error.message || "").split(":")[0] === "CONNECTOR_REAUTH_REQUIRED") {
+      await updateConnectorCredential(ownerId, "google_ads", { status: "needs_reauth", lastErrorCode: "GOOGLE_ADS_AUTH_EXPIRED" });
+    }
+    throw error;
+  }
+}
+
+async function selectGoogleAdsCustomer(ownerId, payload) {
+  const customerId = googleAdsCustomerId(payload.customerId);
+  const loginCustomerId = googleAdsCustomerId(payload.loginCustomerId || customerId);
+  if (!/^\d+$/.test(customerId) || !/^\d+$/.test(loginCustomerId)) throw new Error("GOOGLE_ADS_CUSTOMER_INVALID");
+  const customers = await listGoogleAdsCustomers(ownerId);
+  const selected = customers.find((item) => item.customerId === customerId && item.loginCustomerId === loginCustomerId);
+  if (!selected) throw new Error("GOOGLE_ADS_CUSTOMER_NOT_ACCESSIBLE");
+  if (selected.manager) throw new Error("GOOGLE_ADS_MANAGER_NOT_REPORTABLE");
+  const db = await readDb();
+  const credential = db.connector_credentials.find((item) => item.ownerId === ownerId && item.provider === "google_ads" && item.status === "connected");
+  if (!credential) throw new Error("CONNECTOR_NOT_CONNECTED");
+  const existing = db.data_sources.find((item) => item.ownerId === ownerId && normalizeConnectorType(item.type) === "google_ads" && item.externalAccountId === customerId && item.loginCustomerId === loginCustomerId);
+  return upsertOwnedRecord("data_sources", {
+    id: existing?.id,
+    type: "google_ads",
+    provider: "google_ads",
+    credentialId: credential.id,
+    externalAccountId: customerId,
+    loginCustomerId,
+    displayName: selected.name,
+    currencyCode: selected.currencyCode,
+    timeZone: selected.timeZone,
+    status: "connected",
+    syncCadence: payload.syncCadence || "daily",
+  }, ownerId);
+}
+
+function normalizeGoogleAdsReport(batches, source, ownerId) {
+  const rows = (Array.isArray(batches) ? batches : [batches]).flatMap((batch) => batch?.results || []);
+  return rows.map((row) => {
+    const metrics = row.metrics || {};
+    const campaign = row.campaign || {};
+    return withId({
+      ownerId,
+      sourceId: source.id,
+      provider: "google_ads",
+      externalAccountId: source.externalAccountId,
+      date: String(row.segments?.date || ""),
+      channel: "Google Ads",
+      campaignId: String(campaign.id || "") || null,
+      campaignName: campaign.name || null,
+      spend: Number(metrics.costMicros || 0) / 1_000_000,
+      impressions: Number(metrics.impressions || 0),
+      clicks: Number(metrics.clicks || 0),
+      conversions: Number(metrics.conversions || 0),
+      revenue: Number(metrics.conversionsValue || 0),
+      sessions: 0,
+      users: 0,
+      sourceUpdatedAt: new Date().toISOString(),
+    });
+  }).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+}
+
+async function syncGoogleAdsSource(ownerId, payload) {
+  const { startDate, endDate } = validateSyncDateRange(payload);
+  const db = await readDb();
+  const source = db.data_sources.find((item) => item.id === payload.sourceId && item.ownerId === ownerId && normalizeConnectorType(item.type) === "google_ads");
+  if (!source) throw new Error("DATA_SOURCE_NOT_FOUND");
+  const job = await createRecord("sync_jobs", {
+    provider: "google_ads", sourceId: source.id, externalAccountId: source.externalAccountId,
+    startDate, endDate, status: "running", startedAt: new Date().toISOString(), attempts: 0,
+  }, ownerId);
+  try {
+    const { token } = await connectorAccessToken(ownerId, "google_ads");
+    const query = [
+      "SELECT segments.date, campaign.id, campaign.name, metrics.cost_micros, metrics.impressions,",
+      "metrics.clicks, metrics.conversions, metrics.conversions_value FROM campaign",
+      `WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'`,
+      "ORDER BY segments.date ASC, campaign.id ASC",
+    ].join(" ");
+    const result = await fetchConnectorJson(`${googleAdsApiBaseUrl}/customers/${source.externalAccountId}/googleAds:searchStream`, {
+      method: "POST",
+      headers: googleAdsHeaders(token, source.loginCustomerId),
+      body: JSON.stringify({ query }),
+    });
+    const rows = normalizeGoogleAdsReport(result.body, source, ownerId);
+    const operation = writeQueue.then(async () => {
+      const latest = await readDb();
+      latest.normalized_metrics = (Array.isArray(latest.normalized_metrics) ? latest.normalized_metrics : [])
+        .filter((item) => item.ownerId !== ownerId || item.sourceId !== source.id || item.date < startDate || item.date > endDate);
+      latest.normalized_metrics.push(...rows);
+      const jobIndex = latest.sync_jobs.findIndex((item) => item.id === job.id && item.ownerId === ownerId);
+      latest.sync_jobs[jobIndex] = { ...latest.sync_jobs[jobIndex], status: "completed", attempts: result.attempts, rowCount: rows.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const sourceIndex = latest.data_sources.findIndex((item) => item.id === source.id && item.ownerId === ownerId);
+      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      latest.data_syncs.push(withId({ ownerId, sourceId: source.id, provider: "google_ads", status: "synced", startDate, endDate, rowCount: rows.length, attempts: result.attempts, syncedAt: new Date().toISOString() }));
+      latest.audit_logs.push(withId({ action: "connector:sync_completed", ownerId, provider: "google_ads", recordId: job.id, rowCount: rows.length }));
+      await writeDb(latest);
+      return latest.sync_jobs[jobIndex];
+    });
+    writeQueue = operation.catch(() => {});
+    return { job: await operation, metrics: rows };
+  } catch (error) {
+    const code = String(error.message || "SYNC_FAILED").split(":")[0];
+    await upsertOwnedRecord("sync_jobs", { id: job.id, status: "failed", errorCode: code, failedAt: new Date().toISOString() }, ownerId);
+    if (code === "CONNECTOR_REAUTH_REQUIRED") await updateConnectorCredential(ownerId, "google_ads", { status: "needs_reauth", lastErrorCode: "GOOGLE_ADS_AUTH_EXPIRED" });
+    throw error;
+  }
 }
 
 async function listGa4Properties(ownerId) {
@@ -3427,6 +3612,38 @@ async function handleApi(req, res, url) {
       const code = String(error.message || "GA4_SYNC_FAILED").split(":")[0];
       const status = code === "DATA_SOURCE_NOT_FOUND" ? 404 : code === "SYNC_DATE_RANGE_INVALID" ? 400 : code === "CONNECTOR_REAUTH_REQUIRED" ? 409 : 502;
       return json(res, status, { error: "GA4 synchronization failed", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/google-ads/customers" && req.method === "GET") {
+    try {
+      return json(res, 200, { items: await listGoogleAdsCustomers(req.auth.user.id) });
+    } catch (error) {
+      const code = String(error.message || "GOOGLE_ADS_CUSTOMERS_FAILED").split(":")[0];
+      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code) ? 409 : code === "GOOGLE_ADS_DEVELOPER_TOKEN_REQUIRED" ? 503 : 502;
+      return json(res, status, { error: "Google Ads customers could not be loaded", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/google-ads/select" && req.method === "POST") {
+    try {
+      const item = await selectGoogleAdsCustomer(req.auth.user.id, await readBody(req));
+      return json(res, 201, { item });
+    } catch (error) {
+      const code = String(error.message || "GOOGLE_ADS_CUSTOMER_SELECT_FAILED").split(":")[0];
+      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code) ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 400;
+      return json(res, status, { error: "Google Ads customer could not be selected", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/google-ads/sync" && req.method === "POST") {
+    try {
+      const item = await syncGoogleAdsSource(req.auth.user.id, await readBody(req));
+      return json(res, 200, { item });
+    } catch (error) {
+      const code = String(error.message || "GOOGLE_ADS_SYNC_FAILED").split(":")[0];
+      const status = code === "DATA_SOURCE_NOT_FOUND" ? 404 : code === "SYNC_DATE_RANGE_INVALID" ? 400 : code === "CONNECTOR_REAUTH_REQUIRED" ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 502;
+      return json(res, status, { error: "Google Ads synchronization failed", code });
     }
   }
 

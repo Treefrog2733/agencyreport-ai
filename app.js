@@ -43,6 +43,8 @@ const state = {
   connectorAvailability: {},
   ga4Properties: [],
   ga4Source: null,
+  googleAdsCustomers: [],
+  googleAdsSource: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -475,6 +477,10 @@ function translateStaticWorkspace() {
   apply("#loadGa4PropertiesBtn", "載入 Properties", "Load properties");
   apply("#selectGa4PropertyBtn", "使用此 Property", "Use this property");
   apply("#syncGa4Btn", "立即同步", "Sync now");
+  apply("#googleAdsCustomerLabel", "Google Ads 廣告帳戶", "Google Ads account");
+  apply("#loadGoogleAdsCustomersBtn", "載入廣告帳戶", "Load ad accounts");
+  apply("#selectGoogleAdsCustomerBtn", "使用此帳戶", "Use this account");
+  apply("#syncGoogleAdsBtn", "立即同步", "Sync now");
   renderConnectorSettings();
   apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
   apply("#cancelDeleteAccountBtn", "取消", "Cancel");
@@ -2027,7 +2033,7 @@ function renderConnectorSettings() {
       </div>
       <div class="connector-row-actions">
         <span class="connector-state ${connected ? "" : "disconnected"}">${connected ? (zh ? "已連接" : "Connected") : (zh ? "未連接" : "Disconnected")}</span>
-        ${connected && provider === "ga4" ? `<button class="ghost" type="button" data-connector-action="manage" data-provider="${provider}">${zh ? "管理" : "Manage"}</button>` : ""}
+        ${connected && ["ga4", "google_ads"].includes(provider) ? `<button class="ghost" type="button" data-connector-action="manage" data-provider="${provider}">${zh ? "管理" : "Manage"}</button>` : ""}
         <button class="${connected ? "ghost" : "primary"}" type="button" data-connector-action="${connected ? "disconnect" : "connect"}" data-provider="${provider}" ${canConnect ? "" : "disabled"}>${connected ? (zh ? "中斷連線" : "Disconnect") : authorizationReady ? (zh ? "連接" : "Connect") : (zh ? "設定中" : "Setting up")}</button>
       </div>
     </div>`;
@@ -2035,6 +2041,9 @@ function renderConnectorSettings() {
   const ga4Connected = state.connectorConnections.some((item) => item.provider === "ga4" && item.status === "connected");
   if (!ga4Connected) $("#ga4PropertyPanel").hidden = true;
   if ($("#syncGa4Btn")) $("#syncGa4Btn").disabled = !state.ga4Source;
+  const googleAdsConnected = state.connectorConnections.some((item) => item.provider === "google_ads" && item.status === "connected");
+  if (!googleAdsConnected) $("#googleAdsCustomerPanel").hidden = true;
+  if ($("#syncGoogleAdsBtn")) $("#syncGoogleAdsBtn").disabled = !state.googleAdsSource;
 }
 
 async function loadConnectorConnections() {
@@ -2043,6 +2052,7 @@ async function loadConnectorConnections() {
     const [connections, sources] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources")]);
     state.connectorConnections = Array.isArray(connections) ? connections : [];
     state.ga4Source = (Array.isArray(sources) ? sources : []).find((item) => item.type === "ga4") || null;
+    state.googleAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "google_ads") || null;
     renderConnectorSettings();
   } catch (error) {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load connections" : "無法載入串接狀態", error.message);
@@ -2068,6 +2078,11 @@ async function disconnectConnectorUi(provider) {
       state.ga4Source = null;
       state.ga4Properties = [];
       $("#ga4PropertyPanel").hidden = true;
+    }
+    if (provider === "google_ads") {
+      state.googleAdsSource = null;
+      state.googleAdsCustomers = [];
+      $("#googleAdsCustomerPanel").hidden = true;
     }
     await loadConnectorConnections();
     setStatus("#connectorStatus", "ok", state.lang === "en" ? "Connection removed" : "已中斷連線", connectorLabels[provider]?.[state.lang === "en" ? "en" : "zh"] || provider);
@@ -2113,6 +2128,46 @@ async function selectGa4PropertyUi() {
   }
 }
 
+async function loadGoogleAdsCustomers() {
+  $("#googleAdsCustomerPanel").hidden = false;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Loading Google Ads accounts..." : "正在載入 Google Ads 廣告帳戶...");
+  try {
+    state.googleAdsCustomers = await api("/api/connectors/google-ads/customers");
+    const select = $("#googleAdsCustomerSelect");
+    select.replaceChildren();
+    state.googleAdsCustomers.forEach((item, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.disabled = item.manager;
+      option.textContent = `${item.name} (${item.customerId})${item.manager ? " [MCC]" : ""}`;
+      select.append(option);
+    });
+    const firstReportable = state.googleAdsCustomers.findIndex((item) => !item.manager);
+    if (firstReportable >= 0) select.value = String(firstReportable);
+    if (!state.googleAdsCustomers.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = state.lang === "en" ? "No accessible ad accounts" : "沒有可存取的廣告帳戶";
+      select.append(option);
+    }
+    setStatus("#connectorStatus", state.googleAdsCustomers.length ? "ok" : "warn", state.lang === "en" ? `${state.googleAdsCustomers.length} accounts loaded` : `已載入 ${state.googleAdsCustomers.length} 個帳戶`);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load Google Ads accounts" : "無法載入 Google Ads 廣告帳戶", error.message);
+  }
+}
+
+async function selectGoogleAdsCustomerUi() {
+  const selected = state.googleAdsCustomers[Number($("#googleAdsCustomerSelect").value)];
+  if (!selected || selected.manager) return setStatus("#connectorStatus", "warn", state.lang === "en" ? "Choose a client ad account" : "請選擇非 MCC 的投放帳戶");
+  try {
+    state.googleAdsSource = await api("/api/connectors/google-ads/select", { method: "POST", body: JSON.stringify(selected) });
+    $("#syncGoogleAdsBtn").disabled = false;
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Google Ads account selected" : "已選擇 Google Ads 帳戶", selected.name);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to select Google Ads account" : "無法選擇 Google Ads 帳戶", error.message);
+  }
+}
+
 function reportMonthRange() {
   const month = $("#reportMonth")?.value || new Date().toISOString().slice(0, 7);
   const [year, monthNumber] = month.split("-").map(Number);
@@ -2133,6 +2188,22 @@ async function syncGa4Ui() {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "GA4 synchronization failed" : "GA4 同步失敗", error.message);
   } finally {
     button.disabled = !state.ga4Source;
+  }
+}
+
+async function syncGoogleAdsUi() {
+  if (!state.googleAdsSource) return;
+  const button = $("#syncGoogleAdsBtn");
+  button.disabled = true;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Synchronizing Google Ads data..." : "正在同步 Google Ads 資料...");
+  try {
+    const item = await api("/api/connectors/google-ads/sync", { method: "POST", body: JSON.stringify({ sourceId: state.googleAdsSource.id, ...reportMonthRange() }) });
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Google Ads synchronization complete" : "Google Ads 同步完成", state.lang === "en" ? `${item.job.rowCount} normalized rows, ${item.job.attempts} attempt(s).` : `${item.job.rowCount} 筆標準資料，嘗試 ${item.job.attempts} 次。`);
+    await loadConnectorConnections();
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Google Ads synchronization failed" : "Google Ads 同步失敗", error.message);
+  } finally {
+    button.disabled = !state.googleAdsSource;
   }
 }
 
@@ -2237,10 +2308,14 @@ function setupEvents() {
     if (button.dataset.connectorAction === "connect") startConnectorOAuth(provider);
     if (button.dataset.connectorAction === "disconnect") disconnectConnectorUi(provider);
     if (button.dataset.connectorAction === "manage" && provider === "ga4") loadGa4Properties();
+    if (button.dataset.connectorAction === "manage" && provider === "google_ads") loadGoogleAdsCustomers();
   });
   $("#loadGa4PropertiesBtn")?.addEventListener("click", loadGa4Properties);
   $("#selectGa4PropertyBtn")?.addEventListener("click", selectGa4PropertyUi);
   $("#syncGa4Btn")?.addEventListener("click", syncGa4Ui);
+  $("#loadGoogleAdsCustomersBtn")?.addEventListener("click", loadGoogleAdsCustomers);
+  $("#selectGoogleAdsCustomerBtn")?.addEventListener("click", selectGoogleAdsCustomerUi);
+  $("#syncGoogleAdsBtn")?.addEventListener("click", syncGoogleAdsUi);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${escapeLibraryText(item)}</strong></div>`).join("") : "";

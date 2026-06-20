@@ -15,12 +15,13 @@ const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agencyreport-connector-"
 fs.copyFileSync(path.join(root, "server.js"), path.join(testRoot, "server.js"));
 const tokenRequests = [];
 let ga4DataCalls = 0;
+let googleAdsDataCalls = 0;
 const tokenServer = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => { body += chunk.toString(); });
   req.on("end", () => {
     const params = Object.fromEntries(new URLSearchParams(body));
-    tokenRequests.push({ url: req.url, params });
+    tokenRequests.push({ url: req.url, params, headers: req.headers, body });
     if (req.url.startsWith("/admin/accountSummaries")) {
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify({ accountSummaries: [{ account: "accounts/42", displayName: "Agency Account", propertySummaries: [{ property: "properties/123456", displayName: "Client GA4" }] }] }));
@@ -40,6 +41,29 @@ const tokenServer = http.createServer((req, res) => {
           { dimensionValues: [{ value: "20260601" }, { value: "Paid Search" }], metricValues: [{ value: "80" }, { value: "70" }, { value: "12" }, { value: "6800" }] },
         ],
       }));
+    }
+    if (req.url === "/googleads/customers:listAccessibleCustomers") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ resourceNames: ["customers/1111111111"] }));
+    }
+    if (req.url === "/googleads/customers/1111111111/googleAds:search") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ results: [
+        { customerClient: { clientCustomer: "customers/1111111111", descriptiveName: "Agency MCC", manager: true, level: "0", status: "ENABLED", currencyCode: "TWD", timeZone: "Asia/Taipei" } },
+        { customerClient: { clientCustomer: "customers/2222222222", descriptiveName: "Client Ads", manager: false, level: "1", status: "ENABLED", currencyCode: "TWD", timeZone: "Asia/Taipei" } },
+      ] }));
+    }
+    if (req.url === "/googleads/customers/2222222222/googleAds:searchStream") {
+      googleAdsDataCalls += 1;
+      if (googleAdsDataCalls === 1) {
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: { message: "temporary backend failure" } }));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify([{ results: [
+        { segments: { date: "2026-06-01" }, campaign: { id: "901", name: "Brand Search" }, metrics: { costMicros: "12345000", impressions: "2000", clicks: "160", conversions: 14.5, conversionsValue: 87000 } },
+        { segments: { date: "2026-06-02" }, campaign: { id: "902", name: "Performance Max" }, metrics: { costMicros: "20000000", impressions: "3500", clicks: "220", conversions: 21, conversionsValue: 132000 } },
+      ] }]));
     }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({
@@ -73,6 +97,8 @@ const child = spawn(process.execPath, ["server.js"], {
     META_OAUTH_TOKEN_URL: `${tokenBaseUrl}/meta/token`,
     GA4_ADMIN_API_URL: `${tokenBaseUrl}/admin`,
     GA4_DATA_API_URL: `${tokenBaseUrl}/data`,
+    GOOGLE_ADS_API_URL: `${tokenBaseUrl}/googleads`,
+    GOOGLE_ADS_API_VERSION: "v24",
   },
 });
 const csv = "channel,spend,clicks,conversions,revenue\nSearch,100,50,5,500";
@@ -148,6 +174,16 @@ async function run() {
   const ga4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
   const metricsA = await call(`/api/connectors/metrics?provider=ga4&sourceId=${encodeURIComponent(ga4Source.item.id)}`, { headers: tenantA.headers });
   const metricsB = await call("/api/connectors/metrics?provider=ga4", { headers: tenantB.headers });
+  const googleAdsCustomers = await call("/api/connectors/google-ads/customers", { headers: tenantB.headers });
+  const foreignGoogleAdsCustomers = await call("/api/connectors/google-ads/customers", { headers: tenantA.headers });
+  const invalidGoogleAdsCustomer = await call("/api/connectors/google-ads/select", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ customerId: "bad", loginCustomerId: "1111111111" }) });
+  const managerGoogleAdsCustomer = await call("/api/connectors/google-ads/select", { method: "POST", headers: tenantB.headers, body: JSON.stringify(googleAdsCustomers.item[0]) });
+  const adsClient = googleAdsCustomers.item.find((item) => item.customerId === "2222222222");
+  const googleAdsSource = await call("/api/connectors/google-ads/select", { method: "POST", headers: tenantB.headers, body: JSON.stringify(adsClient) });
+  const foreignGoogleAdsSync = await call("/api/connectors/google-ads/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: googleAdsSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const googleAdsSync = await call("/api/connectors/google-ads/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: googleAdsSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const googleAdsMetricsB = await call(`/api/connectors/metrics?provider=google_ads&sourceId=${encodeURIComponent(googleAdsSource.item.id)}`, { headers: tenantB.headers });
+  const googleAdsMetricsA = await call("/api/connectors/metrics?provider=google_ads", { headers: tenantA.headers });
   const exportedA = await call("/api/account/export", { headers: tenantA.headers });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
   const serializedDb = JSON.stringify(db);
@@ -191,6 +227,17 @@ async function run() {
   assert(ga4Sync.response.ok && ga4Sync.item.job.status === "completed" && ga4Sync.item.job.attempts === 2 && ga4Sync.item.metrics.length === 2, "GA4 Data API sync retries quota responses and records completion");
   assert(metricsA.item.length === 2 && metricsA.item.some((item) => item.channel === "Paid Search" && item.sessions === 80 && item.conversions === 12 && item.revenue === 6800), "GA4 rows normalize into the shared KPI model");
   assert(metricsB.item.length === 0, "normalized connector metrics are tenant-isolated");
+  assert(googleAdsCustomers.response.ok && googleAdsCustomers.item.length === 2 && googleAdsCustomers.item.some((item) => item.customerId === "2222222222" && item.loginCustomerId === "1111111111"), "Google Ads discovery expands an accessible manager into selectable client accounts");
+  assert(foreignGoogleAdsCustomers.response.status === 409, "tenant without a Google Ads connection cannot discover another tenant's customers");
+  assert(invalidGoogleAdsCustomer.response.status === 400 && invalidGoogleAdsCustomer.body.code === "GOOGLE_ADS_CUSTOMER_INVALID", "invalid Google Ads customer identifiers are rejected");
+  assert(managerGoogleAdsCustomer.response.status === 400 && managerGoogleAdsCustomer.body.code === "GOOGLE_ADS_MANAGER_NOT_REPORTABLE", "manager accounts cannot be selected as report data sources");
+  assert(googleAdsSource.response.status === 201 && googleAdsSource.item.ownerId === tenantB.user.id && googleAdsSource.item.externalAccountId === "2222222222" && googleAdsSource.item.loginCustomerId === "1111111111", "selected Google Ads client becomes a tenant-owned data source with its manager context");
+  assert(foreignGoogleAdsSync.response.status === 404 && foreignGoogleAdsSync.body.code === "DATA_SOURCE_NOT_FOUND", "tenant cannot sync another tenant's Google Ads source");
+  assert(googleAdsSync.response.ok && googleAdsSync.item.job.status === "completed" && googleAdsSync.item.job.attempts === 2 && googleAdsSync.item.metrics.length === 2, "Google Ads searchStream retries transient failures and records completion");
+  assert(googleAdsMetricsB.item.length === 2 && googleAdsMetricsB.item.some((item) => item.campaignName === "Brand Search" && item.spend === 12.345 && item.clicks === 160 && item.conversions === 14.5 && item.revenue === 87000), "Google Ads rows normalize cost micros and campaign KPIs into the shared model");
+  assert(googleAdsMetricsA.item.length === 0, "Google Ads normalized metrics remain tenant-isolated");
+  assert(tokenRequests.some((item) => item.url.includes("customers:listAccessibleCustomers") && item.headers["developer-token"] === "google-ads-developer-token"), "Google Ads requests include the developer token");
+  assert(tokenRequests.some((item) => item.url.includes("2222222222/googleAds:searchStream") && item.headers["login-customer-id"] === "1111111111" && item.body.includes("metrics.cost_micros")), "Google Ads report requests preserve manager context and use GAQL KPI fields");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => { child.kill(); tokenServer.close(); });

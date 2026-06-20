@@ -158,12 +158,14 @@ BACKUP_POLICY_URL=
 BACKUP_ENCRYPTION_KEY=long-random-secret
 GOOGLE_SHEETS_API_KEY=
 GOOGLE_SERVICE_ACCOUNT_JSON=
+CONNECTOR_ENCRYPTION_KEY=at-least-32-random-characters
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
 GOOGLE_ADS_DEVELOPER_TOKEN=
-GOOGLE_ADS_CLIENT_ID=
-GOOGLE_ADS_CLIENT_SECRET=
-META_ACCESS_TOKEN=
+GOOGLE_ADS_API_VERSION=v24
 META_APP_ID=
-GA4_PROPERTY_ID=
+META_APP_SECRET=
+META_GRAPH_VERSION=v23.0
 ```
 
 ## API Areas
@@ -220,12 +222,17 @@ Data connectors:
 - `GET /api/connectors/ga4/properties`
 - `POST /api/connectors/ga4/select`
 - `POST /api/connectors/ga4/sync`
-- `GET /api/connectors/metrics?provider=ga4&sourceId=...`
+- `GET /api/connectors/google-ads/customers`
+- `POST /api/connectors/google-ads/select`
+- `POST /api/connectors/google-ads/sync`
+- `GET /api/connectors/metrics?provider=ga4|google_ads&sourceId=...`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
 - `POST /api/data-sources/sync`
 
 OAuth connector secrets use a dedicated `CONNECTOR_ENCRYPTION_KEY` (minimum 32 characters). Google authorization uses PKCE, an offline refresh token, and a one-time state whose raw value is never stored. Meta authorization uses the same short-lived hashed-state contract. Account exports redact OAuth state, PKCE verifiers, access tokens, refresh tokens, and provider payloads.
+
+Google Ads defaults to API `v24` and can be updated with `GOOGLE_ADS_API_VERSION` without changing application code. Customer discovery expands accessible manager accounts into client accounts, stores both the reporting Customer ID and manager `login-customer-id`, and rejects manager accounts as report data sources. Synchronization uses GAQL `searchStream` and normalizes cost micros, impressions, clicks, conversions, and conversion value into the shared tenant-owned KPI collection.
 
 ## OpenAI Report Flow
 

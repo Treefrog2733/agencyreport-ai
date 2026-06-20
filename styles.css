@@ -13554,7 +13554,8 @@ html.public-landing .upgrade-plan button:disabled {
   background: rgba(148, 163, 184, 0.14);
 }
 
-.ga4-property-panel {
+.ga4-property-panel,
+.connector-resource-panel {
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -13563,13 +13564,15 @@ html.public-landing .upgrade-plan button:disabled {
   background: rgba(20, 184, 166, 0.055);
 }
 
-.ga4-property-panel[hidden] {
+.ga4-property-panel[hidden],
+.connector-resource-panel[hidden] {
   display: none !important;
 }
 
 html.theme-light:not(.public-landing) .connector-row-copy strong,
 html.theme-light:not(.public-landing) .connector-settings-head h3,
-html.theme-light:not(.public-landing) .ga4-property-panel label {
+html.theme-light:not(.public-landing) .ga4-property-panel label,
+html.theme-light:not(.public-landing) .connector-resource-panel label {
   color: #0f172a;
 }
 
