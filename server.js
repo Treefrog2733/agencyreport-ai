@@ -1010,6 +1010,18 @@ function missingStripeSettings() {
   return missing;
 }
 
+function mockPaymentsAllowed() {
+  if (process.env.ALLOW_MOCK_PAYMENTS === "true") return true;
+  if (process.env.NODE_ENV === "production") return false;
+  if (!appBaseUrl) return true;
+  try {
+    const hostname = new URL(appBaseUrl).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function paymentStatus() {
   const stripeReady = Boolean(stripeSecretKey && stripeSuccessUrl && stripeCancelUrl);
   const ecpayReady = Boolean(ecpayMerchantId && ecpayHashKey && ecpayHashIv && ecpayReturnUrl && ecpayOrderResultUrl);
@@ -1023,6 +1035,7 @@ function paymentStatus() {
     mode: liveReady ? "live-ready" : paymentProvider === "mock" ? "mock" : "needs_credentials",
     launchGate: liveReady ? "ready" : "post-launch-review",
     webhookReady: paymentProvider === "stripe" ? Boolean(stripeWebhookSecret) : paymentProvider === "ecpay" ? ecpayReady : false,
+    checkoutEnabled: liveReady || mockPaymentsAllowed(),
     checkoutUrl: paymentProvider === "ecpay" ? ecpayCheckoutUrl : undefined,
     missing,
   };
@@ -2796,6 +2809,13 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === "/api/billing/checkout" && req.method === "POST") {
+    const status = paymentStatus();
+    if (!status.checkoutEnabled) {
+      return json(res, 503, {
+        error: "Paid checkout is temporarily unavailable while payment provider approval is in progress",
+        code: "PAYMENT_NOT_AVAILABLE",
+      });
+    }
     const payload = await readBody(req);
     const currency = payload.currency || "TWD";
     const plan = payload.plan || "starter";

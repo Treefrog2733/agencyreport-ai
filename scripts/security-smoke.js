@@ -22,6 +22,7 @@ const child = spawn(process.execPath, ["server.js"], {
     RESEND_API_KEY: "",
     WORKER_SECRET: "security-smoke-worker-secret",
     NODE_ENV: "test",
+    APP_BASE_URL: "https://public-payment-review.example.test",
   },
 });
 
@@ -88,6 +89,12 @@ async function run() {
   const revokedResponse = await fetch(`http://127.0.0.1:${port}/api/reports`, { headers: authA });
   const newLogin = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ email: emailA, password: "NewSecurityPassword123!" }) });
   const newAuthA = { authorization: `Bearer ${newLogin.token}` };
+  const unavailableCheckoutResponse = await fetch(`http://127.0.0.1:${port}/api/billing/checkout`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...newAuthA },
+    body: JSON.stringify({ plan: "starter", currency: "TWD", accountEmail: emailA }),
+  });
+  const unavailableCheckoutBody = await unavailableCheckoutResponse.json().catch(() => ({}));
   const exported = await request("/api/account/export", { headers: newAuthA });
   const badDeleteResponse = await fetch(`http://127.0.0.1:${port}/api/account`, {
     method: "DELETE",
@@ -133,6 +140,7 @@ async function run() {
     accountDeleteRevokesSession: deletedSessionResponse.status === 401,
     accountDeletePreservesOtherTenant: survivingTenantResponse.status === 200 && db.auth_users.some((user) => user.id === tenantB.user.id),
     deletionAuditIsAnonymous: Boolean(deletionAudit?.subjectHash) && !deletionAudit.ownerId && !deletionAudit.userId && !deletionAudit.email,
+    publicReviewSiteBlocksMockCheckout: unavailableCheckoutResponse.status === 503 && unavailableCheckoutBody.code === "PAYMENT_NOT_AVAILABLE",
   };
   Object.entries(checks).forEach(([name, ok]) => console.log(`${ok ? "OK" : "FAIL"} ${name}`));
   if (Object.values(checks).some((ok) => !ok)) process.exitCode = 1;

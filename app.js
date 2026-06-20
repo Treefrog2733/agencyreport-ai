@@ -38,6 +38,7 @@ const state = {
   clients: [],
   deliveries: [],
   invoices: [],
+  payment: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -350,7 +351,7 @@ function applyLanguage(lang = state.lang) {
   });
   syncDockLanguageLabels();
   translateStaticWorkspace();
-  renderUpgradePlans();
+  updatePaymentAvailability();
   if (state.metrics) renderReport();
 }
 
@@ -1448,6 +1449,7 @@ function renderUpgradePlans() {
     agency: [zh ? "代理商版" : "Agency", ["50 AI reports", "Multi-client workspace", "Branded reports", "Payment records"]],
     professional: [zh ? "專業版" : "Professional", ["150 AI reports", "Client portal", "Email drafts", "White label"]],
   };
+  const checkoutEnabled = state.payment?.checkoutEnabled !== false;
   $("#upgradePlans").innerHTML = Object.entries(plans).map(([key, [name, features]]) => {
     const plan = planLimits[key];
     const currency = $("#currency")?.value || "TWD";
@@ -1458,10 +1460,37 @@ function renderUpgradePlans() {
       <h3>${name}</h3>
       <div class="upgrade-price">${price}<small>${cycle === "annual" ? "/yr" : (zh ? "/月" : "/mo")}</small></div>
       <ul class="upgrade-feature-list">${features.map((f) => `<li><span></span>${f}</li>`).join("")}</ul>
-      <button type="button" data-upgrade-plan="${key}">${zh ? "選擇方案" : "Choose plan"}</button>
+      <button type="button" data-upgrade-plan="${key}" ${checkoutEnabled ? "" : "disabled"}>${checkoutEnabled ? (zh ? "選擇方案" : "Choose plan") : (zh ? "收款審核中" : "Checkout pending")}</button>
     </article>`;
   }).join("");
-  setText("#upgradeStatus", zh ? "選擇方案後建立付款草稿。" : "Choose a plan to create a checkout draft.");
+  setText("#upgradeStatus", checkoutEnabled
+    ? (zh ? "選擇方案後前往安全付款頁。" : "Choose a plan to continue to secure checkout.")
+    : (zh ? "綠界正式收款審核中，目前不會建立付款單。" : "ECPay production review is in progress. No payment will be created."));
+}
+
+function updatePaymentAvailability() {
+  const enabled = state.payment?.checkoutEnabled !== false;
+  const button = $("#createCheckoutBtn");
+  if (button) {
+    button.disabled = !enabled;
+    button.textContent = enabled
+      ? (state.lang === "en" ? "Continue to payment" : "前往付款")
+      : (state.lang === "en" ? "Checkout pending" : "收款審核中");
+  }
+  setText("#checkoutStatus", enabled
+    ? (state.lang === "en" ? "Available" : "可付款")
+    : (state.lang === "en" ? "Under review" : "審核中"));
+  renderUpgradePlans();
+}
+
+async function refreshPaymentAvailability() {
+  try {
+    const health = await api("/api/health");
+    state.payment = health.payment || { checkoutEnabled: false };
+  } catch {
+    state.payment = { checkoutEnabled: false };
+  }
+  updatePaymentAvailability();
 }
 
 function openUpgradeModal() {
@@ -1488,6 +1517,10 @@ function openLimitExceededUpgrade(error) {
 }
 
 async function chooseUpgradePlan(plan) {
+  if (state.payment?.checkoutEnabled === false) {
+    setStatus("#upgradeStatus", "warn", state.lang === "en" ? "Checkout is under review" : "正式收款審核中", state.lang === "en" ? "No payment has been created." : "目前不會建立付款單或扣款。");
+    return;
+  }
   $("#planSelect").value = plan;
   const payload = {
     plan,
@@ -2097,6 +2130,7 @@ function init() {
   applyTheme(state.theme);
   applyLanguage(state.lang);
   renderWorkspace();
+  refreshPaymentAvailability();
   restoreSession().then(processAuthActionLinks);
 }
 
