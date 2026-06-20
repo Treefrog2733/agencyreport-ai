@@ -9,7 +9,7 @@ Status: blocked only by external ECPay production approval and credentials.
 Verified complete:
 
 - Multi-tenant ownership isolation, account export/deletion, XSS protection, CSP, hashed sessions, and password reset revocation.
-- PostgreSQL schema v3 on Supabase with normalized tenant records, indexes, constraints, monitoring, encrypted backup, and restore drill.
+- PostgreSQL schema v4 on Supabase with normalized tenant records, connector indexes, constraints, monitoring, encrypted backup, and restore drill.
 - Production deployment at `https://app.virtualtrendworks.com`, verified Resend sender domain, live OpenAI generation, worker automation, and bilingual UI.
 - Production smoke coverage passed 54/54; unconfigured production checkout is explicitly disabled and cannot create mock payments.
 - ECPay signature, callback, amount, duplicate event, trusted payment, and refund reconciliation flows pass automated stage tests.
@@ -42,6 +42,7 @@ Initial delivery order:
 - [x] Connector security and GA4 synchronization smoke expanded to 35 assertions.
 - [x] GA4 account/property discovery, Property selection, token refresh, paginated Data API synchronization, quota retry, and tenant-scoped UI.
 - [x] PostgreSQL schema v4 connector indexes and normalized GA4 KPI storage.
+- [x] GA4 first release deployed at `https://app.virtualtrendworks.com`; production database validation and 54/54 operational smoke passed.
 - [ ] Google Ads customer discovery and GAQL synchronization.
 - [ ] Meta ad-account discovery and Insights API synchronization.
 - [ ] Unified KPI model, incremental jobs, UI, automated reporting, and production credentials.
