@@ -564,7 +564,7 @@ function syncDockLanguageLabels() {
 function setAuthState(auth) {
   state.auth = auth;
   if (auth?.token) localStorage.setItem("agencyReportAuthToken", auth.token);
-  else if (auth) localStorage.removeItem("agencyReportAuthToken");
+  else if (!auth) localStorage.removeItem("agencyReportAuthToken");
   const isAuthed = Boolean(state.auth);
   loadScopedWorkspaceState();
   document.documentElement.classList.toggle("public-landing", !isAuthed);

@@ -117,6 +117,7 @@ async function run() {
   const exportedUser = exported.collections?.auth_users?.[0] || {};
   const exportedSessions = exported.collections?.auth_sessions || [];
   const deletionAudit = db.audit_logs.find((item) => item.action === "account:deleted");
+  const appSource = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const checks = {
     tenantASeesOwnReport: reportsA.length === 1,
     tenantBCannotSeeTenantA: reportsB.length === 0,
@@ -127,6 +128,8 @@ async function run() {
     sessionCookieIsHttpOnly: /HttpOnly/i.test(sessionCookie) && /SameSite=Lax/i.test(sessionCookie),
     sessionCookieAuthenticates: cookieMeResponse.status === 200,
     authenticatedResponsesAreNotCached: /no-store/i.test(cookieMeResponse.headers.get("cache-control") || ""),
+    frontendSessionRestoreKeepsBearerToken: appSource.includes('else if (!auth) localStorage.removeItem("agencyReportAuthToken")')
+      && !appSource.includes('else if (auth) localStorage.removeItem("agencyReportAuthToken")'),
     legalConsentIsVersioned: exported.collections?.consents?.length === 1
       && db.consents.length === 1
       && [...exported.collections.consents, ...db.consents].every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),
