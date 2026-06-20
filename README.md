@@ -214,9 +214,14 @@ Billing:
 
 Data connectors:
 
+- `POST /api/connectors/oauth/start`
+- `GET /api/connectors/connections`
+- `DELETE /api/connectors/connections?provider=ga4|google_ads|meta_ads`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
 - `POST /api/data-sources/sync`
+
+OAuth connector secrets use a dedicated `CONNECTOR_ENCRYPTION_KEY` (minimum 32 characters). Google authorization uses PKCE, an offline refresh token, and a one-time state whose raw value is never stored. Meta authorization uses the same short-lived hashed-state contract. Account exports redact OAuth state, PKCE verifiers, access tokens, refresh tokens, and provider payloads.
 
 ## OpenAI Report Flow
 

@@ -32,3 +32,15 @@ Initial delivery order:
 3. Google Ads API connector.
 4. Meta Marketing API connector.
 5. Unified KPI normalization, scheduled sync, AI report integration, UI, tests, and production rollout.
+
+### Connector goal progress
+
+- [x] Shared OAuth start and callback contract for GA4, Google Ads, and Meta Ads.
+- [x] Google PKCE, short-lived hashed state, replay protection, and authorization-code exchange.
+- [x] AES-256-GCM connector token vault with tenant-bound additional authenticated data.
+- [x] Tenant-scoped connection status and disconnect lifecycle; account exports redact all OAuth and token material.
+- [x] Connector security smoke expanded to 25 assertions.
+- [ ] GA4 account/property discovery and Data API synchronization.
+- [ ] Google Ads customer discovery and GAQL synchronization.
+- [ ] Meta ad-account discovery and Insights API synchronization.
+- [ ] Unified KPI model, incremental jobs, UI, automated reporting, and production credentials.

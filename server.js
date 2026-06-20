@@ -37,6 +37,16 @@ const ecpayCheckoutUrl = process.env.ECPAY_CHECKOUT_URL || (ecpayMode === "stage
 const ecpayReturnUrl = process.env.ECPAY_RETURN_URL || (appBaseUrl ? `${appBaseUrl}/api/billing/ecpay/return` : "");
 const ecpayOrderResultUrl = process.env.ECPAY_ORDER_RESULT_URL || (appBaseUrl ? `${appBaseUrl}/billing/ecpay/result` : "");
 const ecpayClientBackUrl = process.env.ECPAY_CLIENT_BACK_URL || appBaseUrl || "";
+const connectorEncryptionSecret = process.env.CONNECTOR_ENCRYPTION_KEY || "";
+const googleOAuthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_ADS_CLIENT_ID || "";
+const googleOAuthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ADS_CLIENT_SECRET || "";
+const metaAppId = process.env.META_APP_ID || "";
+const metaAppSecret = process.env.META_APP_SECRET || "";
+const metaGraphVersion = process.env.META_GRAPH_VERSION || "v23.0";
+const googleOAuthAuthorizationEndpoint = process.env.GOOGLE_OAUTH_AUTHORIZATION_URL || "https://accounts.google.com/o/oauth2/v2/auth";
+const googleOAuthTokenEndpoint = process.env.GOOGLE_OAUTH_TOKEN_URL || "https://oauth2.googleapis.com/token";
+const metaOAuthAuthorizationEndpoint = process.env.META_OAUTH_AUTHORIZATION_URL || `https://www.facebook.com/${metaGraphVersion}/dialog/oauth`;
+const metaOAuthTokenEndpoint = process.env.META_OAUTH_TOKEN_URL || `https://graph.facebook.com/${metaGraphVersion}/oauth/access_token`;
 const connectorEnv = {
   google_sheets: Boolean(process.env.GOOGLE_SHEETS_API_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
   google_ads: Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN && process.env.GOOGLE_ADS_CLIENT_ID && process.env.GOOGLE_ADS_CLIENT_SECRET),
@@ -83,6 +93,10 @@ const emptyDb = {
   leads: [],
   data_sources: [],
   data_syncs: [],
+  connector_credentials: [],
+  oauth_states: [],
+  sync_jobs: [],
+  normalized_metrics: [],
   consents: [],
   reports: [],
   ai_runs: [],
@@ -1550,11 +1564,272 @@ function nextScheduleRun(schedule, from = new Date()) {
   return next.toISOString();
 }
 
+function connectorEncryptionReady() {
+  return connectorEncryptionSecret.length >= 32;
+}
+
+function connectorEncryptionKey() {
+  if (!connectorEncryptionReady()) throw new Error("CONNECTOR_ENCRYPTION_KEY_REQUIRED");
+  return crypto.createHash("sha256").update(connectorEncryptionSecret).digest();
+}
+
+function encryptConnectorValue(value, context) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", connectorEncryptionKey(), iv);
+  cipher.setAAD(Buffer.from(String(context || "connector")));
+  const encrypted = Buffer.concat([cipher.update(String(value || ""), "utf8"), cipher.final()]);
+  return {
+    version: 1,
+    algorithm: "aes-256-gcm",
+    iv: iv.toString("base64url"),
+    tag: cipher.getAuthTag().toString("base64url"),
+    ciphertext: encrypted.toString("base64url"),
+  };
+}
+
+function decryptConnectorValue(envelope, context) {
+  if (!envelope || envelope.version !== 1 || envelope.algorithm !== "aes-256-gcm") throw new Error("CONNECTOR_SECRET_INVALID");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", connectorEncryptionKey(), Buffer.from(envelope.iv, "base64url"));
+  decipher.setAAD(Buffer.from(String(context || "connector")));
+  decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function connectorOAuthConfig(type) {
+  const normalized = normalizeConnectorType(type);
+  const redirectUri = appBaseUrl ? `${appBaseUrl}/api/connectors/oauth/callback/${encodeURIComponent(normalized)}` : "";
+  if (["ga4", "google_ads"].includes(normalized)) {
+    return {
+      provider: normalized,
+      authorizationEndpoint: googleOAuthAuthorizationEndpoint,
+      tokenEndpoint: googleOAuthTokenEndpoint,
+      clientId: googleOAuthClientId,
+      clientSecret: googleOAuthClientSecret,
+      redirectUri,
+      scopes: normalized === "ga4"
+        ? ["https://www.googleapis.com/auth/analytics.readonly"]
+        : ["https://www.googleapis.com/auth/adwords"],
+      pkce: true,
+    };
+  }
+  if (normalized === "meta_ads") {
+    return {
+      provider: normalized,
+      authorizationEndpoint: metaOAuthAuthorizationEndpoint,
+      tokenEndpoint: metaOAuthTokenEndpoint,
+      clientId: metaAppId,
+      clientSecret: metaAppSecret,
+      redirectUri,
+      scopes: ["ads_read", "business_management"],
+      pkce: false,
+    };
+  }
+  throw new Error("CONNECTOR_PROVIDER_UNSUPPORTED");
+}
+
+async function createConnectorOAuthAuthorization(ownerId, type) {
+  const config = connectorOAuthConfig(type);
+  if (!connectorEncryptionReady()) throw new Error("CONNECTOR_ENCRYPTION_KEY_REQUIRED");
+  if (!appBaseUrl || !config.clientId || !config.clientSecret) throw new Error("CONNECTOR_OAUTH_NOT_CONFIGURED");
+  const state = crypto.randomBytes(32).toString("base64url");
+  const stateHash = hashSessionToken(state);
+  const verifier = crypto.randomBytes(48).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const context = `${ownerId}:${config.provider}:oauth-state`;
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const now = new Date();
+    db.oauth_states = (Array.isArray(db.oauth_states) ? db.oauth_states : [])
+      .filter((item) => item.ownerId !== ownerId || item.provider !== config.provider || new Date(item.expiresAt) > now);
+    db.oauth_states.push(withId({
+      ownerId,
+      provider: config.provider,
+      stateHash,
+      pkceVerifierEncrypted: encryptConnectorValue(verifier, context),
+      redirectUri: config.redirectUri,
+      status: "pending",
+      expiresAt,
+    }));
+    db.audit_logs.push(withId({ action: "connector:oauth_started", ownerId, provider: config.provider }));
+    await writeDb(db);
+  });
+  writeQueue = operation.catch(() => {});
+  await operation;
+
+  const authorizationUrl = new URL(config.authorizationEndpoint);
+  authorizationUrl.searchParams.set("client_id", config.clientId);
+  authorizationUrl.searchParams.set("redirect_uri", config.redirectUri);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("scope", config.scopes.join(" "));
+  authorizationUrl.searchParams.set("state", state);
+  if (config.pkce) {
+    authorizationUrl.searchParams.set("code_challenge", challenge);
+    authorizationUrl.searchParams.set("code_challenge_method", "S256");
+    authorizationUrl.searchParams.set("access_type", "offline");
+    authorizationUrl.searchParams.set("prompt", "consent");
+    authorizationUrl.searchParams.set("include_granted_scopes", "true");
+  }
+  return { provider: config.provider, authorizationUrl: authorizationUrl.toString(), expiresAt };
+}
+
+async function claimConnectorOAuthState(provider, rawState) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const stateHash = hashSessionToken(rawState);
+    const index = db.oauth_states.findIndex((item) => item.provider === provider && item.stateHash === stateHash);
+    if (index < 0) throw new Error("CONNECTOR_OAUTH_STATE_INVALID");
+    const state = db.oauth_states[index];
+    if (state.status !== "pending") throw new Error("CONNECTOR_OAUTH_STATE_REPLAYED");
+    if (!state.expiresAt || new Date(state.expiresAt) <= new Date()) throw new Error("CONNECTOR_OAUTH_STATE_EXPIRED");
+    const context = `${state.ownerId}:${state.provider}:oauth-state`;
+    const verifier = decryptConnectorValue(state.pkceVerifierEncrypted, context);
+    db.oauth_states[index] = { ...state, status: "processing", claimedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await writeDb(db);
+    return { ...state, verifier };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function finishConnectorOAuthState(stateId, status, details = {}) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const index = db.oauth_states.findIndex((item) => item.id === stateId);
+    if (index >= 0) {
+      db.oauth_states[index] = {
+        ...db.oauth_states[index],
+        status,
+        ...definedFields(details),
+        pkceVerifierEncrypted: null,
+        completedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await writeDb(db);
+    }
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function storeConnectorCredential(state, tokenPayload) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    db.connector_credentials = Array.isArray(db.connector_credentials) ? db.connector_credentials : [];
+    const now = new Date().toISOString();
+    const context = `${state.ownerId}:${state.provider}:credential`;
+    const existingIndex = db.connector_credentials.findIndex((item) => item.ownerId === state.ownerId && item.provider === state.provider);
+    const expiresIn = Number(tokenPayload.expires_in || 0);
+    const credential = {
+      ...(existingIndex >= 0 ? db.connector_credentials[existingIndex] : {}),
+      ownerId: state.ownerId,
+      provider: state.provider,
+      status: "connected",
+      tokenType: tokenPayload.token_type || "Bearer",
+      scopes: String(tokenPayload.scope || "").split(/[ ,]+/).filter(Boolean),
+      accessTokenEncrypted: encryptConnectorValue(tokenPayload.access_token, context),
+      refreshTokenEncrypted: tokenPayload.refresh_token
+        ? encryptConnectorValue(tokenPayload.refresh_token, context)
+        : existingIndex >= 0 ? db.connector_credentials[existingIndex].refreshTokenEncrypted || null : null,
+      providerPayloadEncrypted: encryptConnectorValue(JSON.stringify({
+        idToken: tokenPayload.id_token || null,
+        refreshTokenExpiresIn: tokenPayload.refresh_token_expires_in || null,
+      }), context),
+      expiresAt: expiresIn > 0 ? new Date(Date.now() + expiresIn * 1000).toISOString() : null,
+      connectedAt: existingIndex >= 0 ? db.connector_credentials[existingIndex].connectedAt : now,
+      updatedAt: now,
+    };
+    if (existingIndex >= 0) db.connector_credentials[existingIndex] = credential;
+    else db.connector_credentials.push(withId(credential));
+    const stored = existingIndex >= 0 ? db.connector_credentials[existingIndex] : db.connector_credentials[db.connector_credentials.length - 1];
+    db.audit_logs.push(withId({ action: "connector:oauth_connected", ownerId: state.ownerId, provider: state.provider, recordId: stored.id }));
+    await writeDb(db);
+    return stored;
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function exchangeConnectorAuthorizationCode(provider, code, rawState) {
+  const config = connectorOAuthConfig(provider);
+  const state = await claimConnectorOAuthState(config.provider, rawState);
+  try {
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code,
+      redirect_uri: state.redirectUri,
+    });
+    if (config.pkce) {
+      body.set("grant_type", "authorization_code");
+      body.set("code_verifier", state.verifier);
+    }
+    const response = await fetch(config.tokenEndpoint, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(15000),
+    });
+    const tokenPayload = await response.json().catch(() => ({}));
+    if (!response.ok || !tokenPayload.access_token) throw new Error(`CONNECTOR_TOKEN_EXCHANGE_FAILED:${response.status}`);
+    const credential = await storeConnectorCredential(state, tokenPayload);
+    await finishConnectorOAuthState(state.id, "used", { credentialId: credential.id });
+    return { ownerId: state.ownerId, provider: state.provider, credentialId: credential.id, status: "connected" };
+  } catch (error) {
+    await finishConnectorOAuthState(state.id, "failed", { errorCode: String(error.message || "CONNECTOR_TOKEN_EXCHANGE_FAILED").split(":")[0] });
+    throw error;
+  }
+}
+
+function publicConnectorCredential(item) {
+  return {
+    id: item.id,
+    provider: item.provider,
+    status: item.status,
+    tokenType: item.tokenType,
+    scopes: item.scopes || [],
+    expiresAt: item.expiresAt || null,
+    connectedAt: item.connectedAt || null,
+    updatedAt: item.updatedAt || null,
+  };
+}
+
+async function disconnectConnector(ownerId, provider) {
+  const normalized = normalizeConnectorType(provider);
+  if (!["ga4", "google_ads", "meta_ads"].includes(normalized)) throw new Error("CONNECTOR_PROVIDER_UNSUPPORTED");
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const credentials = Array.isArray(db.connector_credentials) ? db.connector_credentials : [];
+    const removed = credentials.filter((item) => item.ownerId === ownerId && item.provider === normalized);
+    db.connector_credentials = credentials.filter((item) => item.ownerId !== ownerId || item.provider !== normalized);
+    db.data_sources = (Array.isArray(db.data_sources) ? db.data_sources : []).map((item) => (
+      item.ownerId === ownerId && normalizeConnectorType(item.type) === normalized
+        ? { ...item, status: "disconnected", disconnectedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        : item
+    ));
+    db.sync_jobs = (Array.isArray(db.sync_jobs) ? db.sync_jobs : []).map((item) => (
+      item.ownerId === ownerId && item.provider === normalized && ["queued", "retrying"].includes(item.status)
+        ? { ...item, status: "canceled", canceledAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        : item
+    ));
+    if (removed.length) {
+      db.audit_logs.push(withId({ action: "connector:disconnected", ownerId, provider: normalized, recordId: removed[0].id }));
+      await writeDb(db);
+    }
+    return { provider: normalized, disconnected: removed.length > 0 };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
 function connectorStatus(type) {
   const normalized = normalizeConnectorType(type);
   if (normalized === "manual_csv") return { status: "ready", mode: "manual", provider: normalized };
   if (normalized === "google_sheets") return { status: connectorEnv.google_sheets ? "live-ready" : "csv-url-ready", mode: connectorEnv.google_sheets ? "api" : "public_csv", provider: normalized };
-  if (connectorEnv[normalized]) return { status: "live-ready", mode: "api", provider: normalized };
+  if (connectorEnv[normalized]) return { status: "oauth-ready", mode: "oauth", provider: normalized };
   return { status: "needs_credentials", mode: "mock", provider: normalized };
 }
 
@@ -1643,7 +1918,7 @@ async function testDataConnector(payload) {
     const validation = validateReportCsv(text);
     return { ...base, ok: validation.ok, rowCount: validation.rowCount, headers: validation.headers, csv: validation.ok ? text : undefined, message: validation.ok ? "Google Sheets CSV was imported securely." : "The sheet is reachable but does not contain report-ready columns." };
   }
-  if (base.status === "live-ready") return { ...base, ok: true, rowCount: 0, message: `${type} credentials are configured.` };
+  if (base.status === "oauth-ready") return { ...base, ok: false, rowCount: 0, message: `${type} OAuth is configured; authorize an account before the first sync.` };
   return { ...base, ok: false, rowCount: 0, message: `${type} credentials are not configured yet.` };
 }
 
@@ -2330,6 +2605,15 @@ function sanitizedAccountRecord(collection, item) {
     delete copy.token;
     delete copy.tokenHash;
   }
+  if (collection === "oauth_states") {
+    delete copy.stateHash;
+    delete copy.pkceVerifierEncrypted;
+  }
+  if (collection === "connector_credentials") {
+    delete copy.accessTokenEncrypted;
+    delete copy.refreshTokenEncrypted;
+    delete copy.providerPayloadEncrypted;
+  }
   return copy;
 }
 
@@ -2769,6 +3053,31 @@ async function handleApi(req, res, url) {
     return event;
   }
 
+  const connectorCallback = url.pathname.match(/^\/api\/connectors\/oauth\/callback\/(ga4|google_ads|meta_ads)$/);
+  if (connectorCallback && req.method === "GET") {
+    const provider = connectorCallback[1];
+    const code = url.searchParams.get("code") || "";
+    const state = url.searchParams.get("state") || "";
+    if (!code || !state) return json(res, 400, { error: "OAuth callback is missing code or state", code: "CONNECTOR_OAUTH_CALLBACK_INVALID" });
+    try {
+      await exchangeConnectorAuthorizationCode(provider, code, state);
+      const destination = `${appBaseUrl || "/"}${appBaseUrl ? "/" : ""}?connector=${encodeURIComponent(provider)}&status=connected`;
+      res.writeHead(302, securityHeaders({ location: destination, "cache-control": "no-store" }));
+      return res.end();
+    } catch (error) {
+      const rawCode = String(error.message || "CONNECTOR_OAUTH_CALLBACK_FAILED").split(":")[0];
+      const known = new Set([
+        "CONNECTOR_PROVIDER_UNSUPPORTED",
+        "CONNECTOR_OAUTH_STATE_INVALID",
+        "CONNECTOR_OAUTH_STATE_REPLAYED",
+        "CONNECTOR_OAUTH_STATE_EXPIRED",
+        "CONNECTOR_TOKEN_EXCHANGE_FAILED",
+        "CONNECTOR_SECRET_INVALID",
+      ]);
+      return json(res, 400, { error: "Connector authorization failed", code: known.has(rawCode) ? rawCode : "CONNECTOR_OAUTH_CALLBACK_FAILED" });
+    }
+  }
+
   const isPublicWrite =
     (url.pathname === "/api/leads" && req.method === "POST") ||
     (url.pathname === "/api/portal-submissions" && req.method === "POST") ||
@@ -2805,6 +3114,40 @@ async function handleApi(req, res, url) {
         error: invalidPassword ? "Password is incorrect" : invalidConfirmation ? "Type DELETE to confirm account deletion" : "Account deletion failed",
         code: error.message || "ACCOUNT_DELETE_FAILED",
       });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/oauth/start" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const item = await createConnectorOAuthAuthorization(req.auth.user.id, payload.provider || payload.type);
+      return json(res, 201, { item });
+    } catch (error) {
+      const known = new Set([
+        "CONNECTOR_PROVIDER_UNSUPPORTED",
+        "CONNECTOR_ENCRYPTION_KEY_REQUIRED",
+        "CONNECTOR_OAUTH_NOT_CONFIGURED",
+      ]);
+      const code = known.has(error.message) ? error.message : "CONNECTOR_OAUTH_START_FAILED";
+      const status = code === "CONNECTOR_PROVIDER_UNSUPPORTED" ? 400 : 503;
+      return json(res, status, { error: "Connector authorization could not be started", code });
+    }
+  }
+
+  if (url.pathname === "/api/connectors/connections" && req.method === "GET") {
+    const db = await readDb();
+    const items = (Array.isArray(db.connector_credentials) ? db.connector_credentials : [])
+      .filter((item) => item.ownerId === req.auth.user.id)
+      .map(publicConnectorCredential);
+    return json(res, 200, { items });
+  }
+
+  if (url.pathname === "/api/connectors/connections" && req.method === "DELETE") {
+    try {
+      const item = await disconnectConnector(req.auth.user.id, url.searchParams.get("provider") || "");
+      return json(res, 200, { item });
+    } catch (error) {
+      return json(res, 400, { error: "Connector could not be disconnected", code: error.message === "CONNECTOR_PROVIDER_UNSUPPORTED" ? error.message : "CONNECTOR_DISCONNECT_FAILED" });
     }
   }
 
