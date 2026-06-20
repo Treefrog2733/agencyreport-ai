@@ -49,6 +49,8 @@ const state = {
   metaAdsSource: null,
   connectorSources: [],
   connectorSyncJobs: [],
+  connectorAudits: [],
+  connectorReconciliation: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -492,6 +494,8 @@ function translateStaticWorkspace() {
   apply("#connectorSyncTitle", "自動同步狀態", "Automatic sync status");
   apply("#connectorSyncCopy", "查看每個資料源的最近執行結果、下次排程與錯誤。", "Review the latest result, next schedule, and errors for every data source.");
   apply("#refreshConnectorStatusBtn", "更新狀態", "Refresh status");
+  apply("#connectorReconcileTitle", "資料對帳", "Data reconciliation");
+  apply("#connectorAuditTitle", "串接稽核紀錄", "Connector audit trail");
   renderConnectorSettings();
   apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
   apply("#cancelDeleteAccountBtn", "取消", "Cancel");
@@ -2075,9 +2079,7 @@ function renderConnectorSyncStatus() {
   const zh = state.lang !== "en";
   if (!state.connectorSources.length) {
     list.innerHTML = `<p class="empty-state">${zh ? "連接並選擇資料來源後，會在這裡顯示自動同步紀錄。" : "Connect and select a data source to see automatic sync activity here."}</p>`;
-    return;
-  }
-  list.innerHTML = state.connectorSources.map((source) => {
+  } else list.innerHTML = state.connectorSources.map((source) => {
     const latestJob = state.connectorSyncJobs.find((item) => item.sourceId === source.id);
     const last = source.lastSyncedAt ? new Date(source.lastSyncedAt).toLocaleString(zh ? "zh-TW" : "en-US") : (zh ? "尚未同步" : "Not synced yet");
     const next = source.nextSyncAt ? new Date(source.nextSyncAt).toLocaleString(zh ? "zh-TW" : "en-US") : "-";
@@ -2092,18 +2094,68 @@ function renderConnectorSyncStatus() {
       <button class="ghost" type="button" data-sync-source-id="${escapeLibraryText(source.id)}" ${source.status === "syncing" || source.status === "needs_reauth" ? "disabled" : ""}>${zh ? "重試同步" : "Sync now"}</button>
     </article>`;
   }).join("");
+  renderConnectorReconciliation();
+  renderConnectorAuditTrail();
+}
+
+function renderConnectorReconciliation() {
+  const target = $("#connectorReconcileSummary");
+  if (!target) return;
+  const zh = state.lang !== "en";
+  const item = state.connectorReconciliation;
+  if (!item?.reportMonth) {
+    target.innerHTML = `<p class="empty-state">${zh ? "同步資料後會顯示跨平台對帳結果。" : "Cross-platform reconciliation appears after data is synchronized."}</p>`;
+    return;
+  }
+  const warningLabels = {
+    NO_DATA: ["本月沒有資料", "No data for this month"],
+    CONVERSION_ATTRIBUTION_DIFFERENCE: ["GA4 與廣告平台的轉換歸因差異超過 20%", "GA4 and ad-platform conversions differ by over 20%"],
+    REVENUE_ATTRIBUTION_DIFFERENCE: ["GA4 與廣告平台的營收歸因差異超過 20%", "GA4 and ad-platform revenue differ by over 20%"],
+  };
+  const warnings = (item.warnings || []).map((code) => warningLabels[code]?.[zh ? 0 : 1] || code.replaceAll("_", " "));
+  const total = item.canonicalTotals || {};
+  const format = (value, digits = 0) => Number(value || 0).toLocaleString(zh ? "zh-TW" : "en-US", { maximumFractionDigits: digits });
+  target.innerHTML = `<div class="connector-reconcile-overview">
+    <div><span>${zh ? "月份" : "Month"}</span><strong>${escapeLibraryText(item.reportMonth)}</strong></div>
+    <div><span>ROAS</span><strong>${format(total.roas, 2)}x</strong></div>
+    <div><span>${zh ? "廣告花費" : "Ad spend"}</span><strong>${format(total.spend, 2)}</strong></div>
+    <div><span>${zh ? "轉換" : "Conversions"}</span><strong>${format(total.conversions, 2)}</strong></div>
+  </div>
+  <div class="connector-provider-coverage">${(item.providers || []).map((provider) => `<span class="${provider.rowCount ? "ready" : ""}">${escapeLibraryText(connectorLabels[provider.provider]?.[zh ? "zh" : "en"] || provider.provider)} · ${provider.rowCount} ${zh ? "筆" : "rows"} · ${provider.coveredDays} ${zh ? "天" : "days"}</span>`).join("")}</div>
+  ${warnings.length ? `<ul class="connector-reconcile-warnings">${warnings.map((warning) => `<li>${escapeLibraryText(warning)}</li>`).join("")}</ul>` : `<p class="connector-reconcile-ok">${zh ? "資料覆蓋與歸因差異目前沒有需要處理的警示。" : "No data coverage or attribution warnings require attention."}</p>`}`;
+}
+
+function renderConnectorAuditTrail() {
+  const target = $("#connectorAuditList");
+  if (!target) return;
+  const zh = state.lang !== "en";
+  const actionLabels = {
+    "connector:oauth_started": ["開始授權", "Authorization started"],
+    "connector:oauth_connected": ["授權完成", "Authorization connected"],
+    "connector:disconnected": ["中斷連線", "Disconnected"],
+    "connector:sync_completed": ["同步完成", "Sync completed"],
+    "connector:auto_report_created": ["自動月報已建立", "Automatic report created"],
+    "connector:auto_report_quota_exceeded": ["AI 月報額度不足", "AI report quota exceeded"],
+  };
+  if (!state.connectorAudits.length) {
+    target.innerHTML = `<p class="empty-state">${zh ? "尚無串接活動。" : "No connector activity yet."}</p>`;
+    return;
+  }
+  target.innerHTML = state.connectorAudits.slice(0, 8).map((event) => `<div class="connector-audit-item"><span>${escapeLibraryText(actionLabels[event.action]?.[zh ? 0 : 1] || event.action)}</span><small>${event.provider ? `${escapeLibraryText(connectorLabels[event.provider]?.[zh ? "zh" : "en"] || event.provider)} · ` : ""}${event.createdAt ? escapeLibraryText(new Date(event.createdAt).toLocaleString(zh ? "zh-TW" : "en-US")) : ""}</small></div>`).join("");
 }
 
 async function loadConnectorConnections() {
   if (!authToken()) return;
   try {
-    const [connections, sources, syncStatus] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources"), api("/api/connectors/sync-status")]);
+    const [connections, sources, syncStatus, reconciliation] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources"), api("/api/connectors/sync-status"), api(`/api/connectors/reconciliation?month=${encodeURIComponent($("#reportMonth")?.value || "")}`)]);
     state.connectorConnections = Array.isArray(connections) ? connections : [];
     state.ga4Source = (Array.isArray(sources) ? sources : []).find((item) => item.type === "ga4") || null;
     state.googleAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "google_ads") || null;
     state.metaAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "meta_ads") || null;
     state.connectorSources = Array.isArray(syncStatus?.sources) ? syncStatus.sources : [];
     state.connectorSyncJobs = Array.isArray(syncStatus?.jobs) ? syncStatus.jobs : [];
+    state.connectorAudits = Array.isArray(syncStatus?.audits) ? syncStatus.audits : [];
+    state.connectorReconciliation = reconciliation || null;
     renderConnectorSettings();
   } catch (error) {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load connections" : "無法載入串接狀態", error.message);

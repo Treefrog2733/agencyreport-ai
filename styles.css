@@ -13639,6 +13639,96 @@ html.public-landing .upgrade-plan button:disabled {
   overflow-wrap: anywhere;
 }
 
+.connector-reconcile-block,
+.connector-audit-block {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.connector-reconcile-block h5,
+.connector-audit-block h5 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.connector-reconcile-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.connector-reconcile-overview > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.connector-reconcile-overview span,
+.connector-audit-item small {
+  color: var(--muted);
+}
+
+.connector-provider-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.connector-provider-coverage span {
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.connector-provider-coverage span.ready {
+  border-color: rgba(45, 212, 191, 0.28);
+  color: var(--text);
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.connector-reconcile-warnings {
+  margin: 0;
+  padding-left: 20px;
+  color: #fbbf24;
+}
+
+.connector-reconcile-ok {
+  margin: 0;
+  color: #5eead4;
+}
+
+html.theme-light:not(.public-landing) .connector-reconcile-warnings {
+  color: #92400e;
+}
+
+html.theme-light:not(.public-landing) .connector-reconcile-ok {
+  color: #0f766e;
+}
+
+#connectorAuditList {
+  display: grid;
+  gap: 6px;
+}
+
+.connector-audit-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.connector-audit-item:last-child {
+  border-bottom: 0;
+}
+
 .connector-sync-item dd {
   margin-top: 3px;
   font-weight: 700;
@@ -13672,6 +13762,14 @@ html.theme-light:not(.public-landing) .connector-resource-panel label {
 
   .connector-sync-item dl {
     grid-template-columns: 1fr;
+  }
+
+  .connector-reconcile-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connector-audit-item {
+    display: grid;
   }
 }
 

@@ -24,6 +24,10 @@ const tokenServer = http.createServer((req, res) => {
     const params = Object.fromEntries(new URLSearchParams(body));
     tokenRequests.push({ url: req.url, params, headers: req.headers, body });
     if (req.url.startsWith("/admin/accountSummaries")) {
+      if (String(req.headers.authorization || "").includes("access-reauth-code")) {
+        res.writeHead(401, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: { message: "token expired" } }));
+      }
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify({ accountSummaries: [{ account: "accounts/42", displayName: "Agency Account", propertySummaries: [{ property: "properties/123456", displayName: "Client GA4" }] }] }));
     }
@@ -171,6 +175,8 @@ async function run() {
   await waitForServer();
   const tenantA = await createTenant("connector-a");
   const tenantB = await createTenant("connector-b");
+  const tenantC = await createTenant("connector-reauth");
+  const deploymentHealth = await call("/api/health");
   const valid = await call("/api/data-sources/test", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ type: "csv", csv }) });
   const invalid = await call("/api/data-sources/test", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ type: "csv", csv: "name,value\nA,1" }) });
   const localUrl = await call("/api/data-sources/test", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ type: "sheets", url: "http://127.0.0.1/private" }) });
@@ -186,14 +192,19 @@ async function run() {
   const ga4OAuth = await call("/api/connectors/oauth/start", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ provider: "ga4" }) });
   const metaOAuth = await call("/api/connectors/oauth/start", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ provider: "meta_ads" }) });
   const googleAdsOAuth = await call("/api/connectors/oauth/start", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ provider: "google_ads" }) });
+  const reauthGa4OAuth = await call("/api/connectors/oauth/start", { method: "POST", headers: tenantC.headers, body: JSON.stringify({ provider: "ga4" }) });
   const ga4Url = new URL(ga4OAuth.item.authorizationUrl);
   const metaUrl = new URL(metaOAuth.item.authorizationUrl);
   const googleAdsUrl = new URL(googleAdsOAuth.item.authorizationUrl);
-  const rawStates = [ga4Url.searchParams.get("state"), metaUrl.searchParams.get("state"), googleAdsUrl.searchParams.get("state")];
+  const reauthGa4Url = new URL(reauthGa4OAuth.item.authorizationUrl);
+  const rawStates = [ga4Url.searchParams.get("state"), metaUrl.searchParams.get("state"), googleAdsUrl.searchParams.get("state"), reauthGa4Url.searchParams.get("state")];
   const ga4Callback = await fetch(`${baseUrl}/api/connectors/oauth/callback/ga4?code=ga4-code&state=${encodeURIComponent(rawStates[0])}`, { redirect: "manual" });
   const replayedGa4Callback = await call(`/api/connectors/oauth/callback/ga4?code=ga4-code-replay&state=${encodeURIComponent(rawStates[0])}`);
   const metaCallback = await fetch(`${baseUrl}/api/connectors/oauth/callback/meta_ads?code=meta-code&state=${encodeURIComponent(rawStates[1])}`, { redirect: "manual" });
   const googleAdsCallback = await fetch(`${baseUrl}/api/connectors/oauth/callback/google_ads?code=google-ads-code&state=${encodeURIComponent(rawStates[2])}`, { redirect: "manual" });
+  const reauthGa4Callback = await fetch(`${baseUrl}/api/connectors/oauth/callback/ga4?code=reauth-code&state=${encodeURIComponent(rawStates[3])}`, { redirect: "manual" });
+  const reauthGa4Properties = await call("/api/connectors/ga4/properties", { headers: tenantC.headers });
+  const connectionsC = await call("/api/connectors/connections", { headers: tenantC.headers });
   const refreshDbPath = path.join(testRoot, "data", "db.json");
   const refreshDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
   const expiringGa4Credential = refreshDb.connector_credentials.find((item) => item.ownerId === tenantA.user.id && item.provider === "ga4");
@@ -242,6 +253,8 @@ async function run() {
   const autoRunsA = await call("/api/ai-runs", { headers: tenantA.headers });
   const autoReportsA = await call("/api/reports", { headers: tenantA.headers });
   const finalSyncStatusA = await call("/api/connectors/sync-status", { headers: tenantA.headers });
+  const reconciliationA = await call("/api/connectors/reconciliation?month=2026-06", { headers: tenantA.headers });
+  const reconciliationB = await call("/api/connectors/reconciliation?month=2026-06", { headers: tenantB.headers });
   const exportedA = await call("/api/account/export", { headers: tenantA.headers });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
   const serializedDb = JSON.stringify(db);
@@ -251,6 +264,7 @@ async function run() {
   const connectionsBAfterDisconnect = await call("/api/connectors/connections", { headers: tenantB.headers });
 
   assert(valid.response.ok && valid.item.rowCount === 1 && valid.item.provider === "manual_csv", "CSV aliases normalize and valid report data passes");
+  assert(deploymentHealth.response.ok && deploymentHealth.item.connectorDeployment.allReady === true && deploymentHealth.item.connectorDeployment.missing.length === 0 && deploymentHealth.item.connectorDeployment.versions.googleAds === "v24" && deploymentHealth.item.connectorDeployment.versions.metaGraph === "v25.0", "connector deployment readiness reports provider versions and complete environment gates without exposing secrets");
   assert(invalid.response.status === 400, "CSV without report columns is rejected");
   assert(localUrl.response.status === 400 && localUrl.body.code === "DATA_SOURCE_INVALID", "localhost URL is rejected before fetch");
   assert(foreignUrl.response.status === 400 && foreignUrl.body.code === "DATA_SOURCE_INVALID", "non-Google URL is rejected before fetch");
@@ -263,18 +277,19 @@ async function run() {
   assert(ga4OAuth.response.status === 201 && ga4Url.hostname === "accounts.google.com" && ga4Url.searchParams.get("code_challenge_method") === "S256", "GA4 OAuth uses Google authorization with PKCE");
   assert(googleAdsOAuth.response.status === 201 && googleAdsUrl.searchParams.get("scope").includes("auth/adwords"), "Google Ads OAuth requests the read/write API scope required by Google Ads");
   assert(metaOAuth.response.status === 201 && metaUrl.hostname === "www.facebook.com" && metaUrl.searchParams.get("scope").includes("ads_read"), "Meta OAuth requests read-only advertising access");
-  assert(db.oauth_states.length === 3 && db.oauth_states.filter((item) => item.ownerId === tenantA.user.id).length === 2 && db.oauth_states.filter((item) => item.ownerId === tenantB.user.id).length === 1, "OAuth state records are tenant-isolated");
+  assert(db.oauth_states.length === 4 && db.oauth_states.filter((item) => item.ownerId === tenantA.user.id).length === 2 && db.oauth_states.filter((item) => item.ownerId === tenantB.user.id).length === 1 && db.oauth_states.filter((item) => item.ownerId === tenantC.user.id).length === 1, "OAuth state records are tenant-isolated");
   assert(rawStates.every((state) => state && !serializedDb.includes(state)) && db.oauth_states.every((item) => item.stateHash && (item.status === "used" ? !item.pkceVerifierEncrypted : item.pkceVerifierEncrypted?.algorithm === "aes-256-gcm")), "raw OAuth states are hashed and PKCE verifiers are encrypted until consumed");
   assert(!serializedExport.includes("stateHash") && !serializedExport.includes("pkceVerifierEncrypted") && !serializedExport.includes("ciphertext"), "account export redacts OAuth secrets");
   assert(ga4Callback.status === 302 && ga4Callback.headers.get("location")?.includes("connector=ga4&status=connected"), "GA4 OAuth callback exchanges the authorization code and redirects safely");
   assert(metaCallback.status === 302 && metaCallback.headers.get("location")?.includes("connector=meta_ads&status=connected"), "Meta OAuth callback exchanges the authorization code and redirects safely");
   assert(googleAdsCallback.status === 302 && googleAdsCallback.headers.get("location")?.includes("connector=google_ads&status=connected"), "Google Ads OAuth callback exchanges the authorization code and redirects safely");
+  assert(reauthGa4Callback.status === 302 && reauthGa4Properties.response.status === 409 && reauthGa4Properties.body.code === "CONNECTOR_REAUTH_REQUIRED" && connectionsC.item[0].status === "needs_reauth", "GA4 API authentication failures persist a reconnect-required connection state");
   assert(replayedGa4Callback.response.status === 400 && replayedGa4Callback.body.code === "CONNECTOR_OAUTH_STATE_REPLAYED", "OAuth state cannot be replayed");
   assert(tokenRequests.some((item) => item.url.includes("google") && item.params.code_verifier && item.params.grant_type === "authorization_code"), "Google token exchange verifies PKCE");
   assert(tokenRequests.some((item) => item.url.includes("google") && item.params.grant_type === "refresh_token" && item.params.refresh_token === "refresh-ga4-code"), "expired Google access tokens refresh automatically without exposing the refresh token");
   assert(tokenRequests.some((item) => item.url.includes("meta/token") && item.params.grant_type === "fb_exchange_token" && item.params.fb_exchange_token === "access-meta-code"), "Meta short-lived authorization token is exchanged for a long-lived server token");
-  assert(db.connector_credentials.length === 3 && db.connector_credentials.every((item) => item.accessTokenEncrypted?.algorithm === "aes-256-gcm"), "connector tokens are encrypted and tenant-owned");
-  assert(!serializedDb.includes("access-ga4-code") && !serializedDb.includes("refresh-ga4-code") && !serializedDb.includes("access-meta-code") && !serializedDb.includes("access-google-ads-code"), "access and refresh tokens never persist in plaintext");
+  assert(db.connector_credentials.length === 4 && db.connector_credentials.every((item) => item.accessTokenEncrypted?.algorithm === "aes-256-gcm"), "connector tokens are encrypted and tenant-owned");
+  assert(!serializedDb.includes("access-ga4-code") && !serializedDb.includes("refresh-ga4-code") && !serializedDb.includes("access-meta-code") && !serializedDb.includes("access-google-ads-code") && !serializedDb.includes("access-reauth-code"), "access and refresh tokens never persist in plaintext");
   assert(connectionsA.item.length === 2 && connectionsB.item.length === 1 && connectionsA.item.every((item) => !JSON.stringify(item).includes("Encrypted")), "connection status is tenant-scoped and never exposes token envelopes");
   assert(disconnectedMeta.response.ok && disconnectedMeta.item.disconnected === true && connectionsAAfterDisconnect.item.length === 1 && connectionsBAfterDisconnect.item.length === 1, "disconnect removes only the selected tenant connection");
   assert(ga4Properties.response.ok && ga4Properties.item.length === 1 && ga4Properties.item[0].propertyId === "123456", "GA4 account summaries expose selectable properties without tokens");
@@ -316,6 +331,19 @@ async function run() {
   assert(autoRunsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.mode === "connector-fallback") && autoReportsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.generatedBy === "connector-worker"), "automated connector output persists as a tenant-owned AI run and reusable report draft");
   assert(finalSyncStatusA.item.sources.some((item) => item.id === metaSource.item.id && item.status === "synced" && new Date(item.nextSyncAt) > new Date() && item.consecutiveFailures === 0), "successful incremental sync advances the next run and clears retry state");
   assert(finalSyncStatusA.item.sources.some((item) => item.id === failingMetaSource.item.id && item.status === "error" && item.lastErrorCode === "CONNECTOR_RATE_LIMITED" && item.consecutiveFailures === 1 && new Date(item.nextSyncAt) > new Date()), "persistent quota failures enter exponential backoff with observable retry state");
+  assert(finalSyncStatusA.item.audits.some((item) => item.action === "connector:sync_completed") && finalSyncStatusA.item.audits.some((item) => item.action === "connector:auto_report_created") && finalSyncStatusA.item.audits.every((item) => !JSON.stringify(item).includes("token")), "connector audit timeline is tenant-scoped and exposes no credential material");
+  assert(reconciliationA.response.ok && reconciliationA.item.policy.preventsDoubleCounting === true && reconciliationA.item.policy.outcomeMetrics === "GA4" && reconciliationA.item.warnings.includes("CONVERSION_ATTRIBUTION_DIFFERENCE") && reconciliationA.item.providers.find((item) => item.provider === "meta_ads").coveredDays === 2, "reconciliation explains canonical KPI policy, date coverage, and attribution differences");
+  assert(reconciliationB.response.ok && reconciliationB.item.policy.outcomeMetrics === "Ad platforms fallback" && reconciliationB.item.providers.find((item) => item.provider === "google_ads").rowCount === 2 && reconciliationB.item.providers.find((item) => item.provider === "meta_ads").rowCount === 0, "reconciliation remains tenant-scoped and falls back when GA4 is absent");
+  const incrementalUrl = new URL(tokenRequests.filter((item) => item.url.includes("/meta/act_3333333333/insights") && !item.url.includes("after=")).at(-1).url, tokenBaseUrl);
+  const incrementalRange = JSON.parse(incrementalUrl.searchParams.get("time_range"));
+  const backfillUrl = new URL(tokenRequests.find((item) => item.url.includes("/meta/act_4444444444/insights")).url, tokenBaseUrl);
+  const backfillRange = JSON.parse(backfillUrl.searchParams.get("time_range"));
+  const backfillDays = Math.round((new Date(backfillRange.until) - new Date(backfillRange.since)) / 86400000);
+  const yesterday = new Date();
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const expectedEndDate = yesterday.toISOString().slice(0, 10);
+  assert(incrementalRange.since === "2026-05-31" && incrementalRange.until === expectedEndDate, "incremental automation refreshes the latest two attribution days through yesterday");
+  assert(backfillDays === 89 && backfillRange.until === expectedEndDate, "a source without history receives a 90-day initial backfill window");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => { child.kill(); tokenServer.close(); });

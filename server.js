@@ -1228,6 +1228,7 @@ async function readinessReport() {
   const ai = aiStatus();
   const backupReady = Boolean(process.env.BACKUP_POLICY_URL || process.env.BACKUP_ENABLED);
   const monitoringReady = Boolean(process.env.SENTRY_DSN || process.env.MONITORING_URL);
+  const connectorDeployment = connectorDeploymentStatus();
   const checks = [
     {
       id: "database",
@@ -1282,11 +1283,11 @@ async function readinessReport() {
     {
       id: "connectors",
       label: "Data connectors",
-      ok: true,
+      ok: connectorDeployment.allReady,
       required: false,
-      detail: connectorEnv.google_ads || connectorEnv.meta_ads || connectorEnv.ga4 || connectorEnv.google_sheets
-        ? "At least one authenticated connector is configured; manual CSV and secure public Google Sheets import are also available."
-        : "Manual CSV and secure public Google Sheets CSV import are ready; direct Ads and Analytics credentials remain optional upgrades.",
+      detail: connectorDeployment.allReady
+        ? `GA4, Google Ads, and Meta Ads OAuth are production-ready (${googleAdsApiVersion}, ${metaGraphVersion}).`
+        : `Direct connectors are not production-ready. Missing: ${connectorDeployment.missing.join(", ")}. Manual CSV and secure public Google Sheets import remain available.`,
     },
     {
       id: "legal",
@@ -2476,6 +2477,73 @@ async function unifiedConnectorReportData(ownerId, reportMonth = "") {
   };
 }
 
+function percentageDifference(left, right) {
+  const a = Number(left || 0);
+  const b = Number(right || 0);
+  const denominator = Math.max(Math.abs(a), Math.abs(b));
+  return denominator ? (Math.abs(a - b) / denominator) * 100 : 0;
+}
+
+async function connectorReconciliation(ownerId, reportMonth = "") {
+  const db = await readDb();
+  const report = await unifiedConnectorReportData(ownerId, reportMonth);
+  const rows = (db.normalized_metrics || []).filter((item) => item.ownerId === ownerId && String(item.date || "").startsWith(report.reportMonth));
+  const sources = (db.data_sources || []).filter((item) => item.ownerId === ownerId && ["ga4", "google_ads", "meta_ads"].includes(normalizeConnectorType(item.type)));
+  const providers = ["ga4", "google_ads", "meta_ads"].map((provider) => {
+    const providerRows = rows.filter((item) => item.provider === provider);
+    const dates = [...new Set(providerRows.map((item) => item.date))].sort();
+    const providerSources = sources.filter((source) => normalizeConnectorType(source.type) === provider);
+    const latestSync = providerSources.map((source) => source.lastSyncedAt).filter(Boolean).sort().at(-1) || null;
+    return {
+      provider,
+      sourceCount: providerSources.length,
+      rowCount: providerRows.length,
+      firstDate: dates[0] || null,
+      lastDate: dates[dates.length - 1] || null,
+      coveredDays: dates.length,
+      lastSyncedAt: latestSync,
+      stale: latestSync ? Date.now() - new Date(latestSync).getTime() > 48 * 60 * 60 * 1000 : providerSources.length > 0,
+      metrics: aggregateNormalizedMetrics(providerRows),
+    };
+  });
+  const analytics = providers.find((item) => item.provider === "ga4");
+  const adsMetrics = aggregateNormalizedMetrics(rows.filter((item) => ["google_ads", "meta_ads"].includes(item.provider)));
+  const warnings = [];
+  if (!report.rowCount) warnings.push("NO_DATA");
+  providers.filter((item) => item.sourceCount && !item.rowCount).forEach((item) => warnings.push(`NO_${item.provider.toUpperCase()}_ROWS`));
+  providers.filter((item) => item.stale).forEach((item) => warnings.push(`STALE_${item.provider.toUpperCase()}`));
+  if (analytics?.rowCount && adsMetrics.conversions) {
+    const difference = percentageDifference(analytics.metrics.conversions, adsMetrics.conversions);
+    if (difference >= 20) warnings.push("CONVERSION_ATTRIBUTION_DIFFERENCE");
+  }
+  if (analytics?.rowCount && adsMetrics.revenue) {
+    const difference = percentageDifference(analytics.metrics.revenue, adsMetrics.revenue);
+    if (difference >= 20) warnings.push("REVENUE_ATTRIBUTION_DIFFERENCE");
+  }
+  return {
+    reportMonth: report.reportMonth,
+    status: warnings.length ? "review" : report.rowCount ? "ready" : "empty",
+    warnings,
+    canonicalTotals: report.totals,
+    providers,
+    attributionComparison: {
+      ga4Conversions: analytics?.metrics.conversions || 0,
+      adPlatformConversions: adsMetrics.conversions,
+      conversionDifferencePercent: percentageDifference(analytics?.metrics.conversions, adsMetrics.conversions),
+      ga4Revenue: analytics?.metrics.revenue || 0,
+      adPlatformRevenue: adsMetrics.revenue,
+      revenueDifferencePercent: percentageDifference(analytics?.metrics.revenue, adsMetrics.revenue),
+      note: "Ad platforms and GA4 use different attribution and identity models; differences are review signals, not automatic errors.",
+    },
+    policy: {
+      deliveryMetrics: "Google Ads + Meta Ads",
+      outcomeMetrics: analytics?.rowCount ? "GA4" : "Ad platforms fallback",
+      preventsDoubleCounting: true,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function createAutomatedConnectorReport(ownerId) {
   const data = await unifiedConnectorReportData(ownerId);
   if (!data.reportMonth || !data.rowCount) return null;
@@ -3136,6 +3204,34 @@ async function recordPaymentEvent(payload) {
   return operation;
 }
 
+function connectorDeploymentStatus() {
+  const requirements = {
+    CONNECTOR_ENCRYPTION_KEY: connectorEncryptionReady(),
+    APP_BASE_URL: Boolean(appBaseUrl),
+    GOOGLE_OAUTH_CLIENT_ID: Boolean(googleOAuthClientId),
+    GOOGLE_OAUTH_CLIENT_SECRET: Boolean(googleOAuthClientSecret),
+    GOOGLE_ADS_DEVELOPER_TOKEN: Boolean(googleAdsDeveloperToken),
+    META_APP_ID: Boolean(metaAppId),
+    META_APP_SECRET: Boolean(metaAppSecret),
+  };
+  return {
+    allReady: connectorEnv.ga4 && connectorEnv.google_ads && connectorEnv.meta_ads,
+    vaultReady: connectorEncryptionReady(),
+    missing: Object.entries(requirements).filter(([, ready]) => !ready).map(([key]) => key),
+    providers: {
+      ga4: connectorStatus("ga4"),
+      googleAds: connectorStatus("google_ads"),
+      metaAds: connectorStatus("meta_ads"),
+    },
+    versions: { googleAds: googleAdsApiVersion, metaGraph: metaGraphVersion },
+    callbacks: appBaseUrl ? {
+      ga4: `${appBaseUrl}/api/connectors/oauth/callback/ga4`,
+      googleAds: `${appBaseUrl}/api/connectors/oauth/callback/google_ads`,
+      metaAds: `${appBaseUrl}/api/connectors/oauth/callback/meta_ads`,
+    } : {},
+  };
+}
+
 async function recordRefundReconciliation(payload, ownerId) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
@@ -3783,6 +3879,7 @@ async function handleApi(req, res, url) {
         ga4: connectorStatus("ga4"),
         searchConsole: connectorStatus("search_console"),
       },
+      connectorDeployment: connectorDeploymentStatus(),
       time: new Date().toISOString(),
     });
   }
@@ -4166,14 +4263,24 @@ async function handleApi(req, res, url) {
     return json(res, 200, { item });
   }
 
+  if (url.pathname === "/api/connectors/reconciliation" && req.method === "GET") {
+    const item = await connectorReconciliation(req.auth.user.id, url.searchParams.get("month") || "");
+    return json(res, 200, { item });
+  }
+
   if (url.pathname === "/api/connectors/sync-status" && req.method === "GET") {
     const db = await readDb();
     const sources = (db.data_sources || []).filter((item) => item.ownerId === req.auth.user.id && ["ga4", "google_ads", "meta_ads"].includes(normalizeConnectorType(item.type)));
     const sourceIds = new Set(sources.map((item) => item.id));
     const jobs = (db.sync_jobs || []).filter((item) => item.ownerId === req.auth.user.id && sourceIds.has(item.sourceId)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 50);
+    const audits = (db.audit_logs || [])
+      .filter((item) => item.ownerId === req.auth.user.id && String(item.action || "").startsWith("connector:"))
+      .sort((a, b) => String(b.createdAt || b.updatedAt).localeCompare(String(a.createdAt || a.updatedAt)))
+      .slice(0, 30);
     return json(res, 200, { item: {
       sources: sources.map((item) => ({ id: item.id, provider: item.provider || item.type, displayName: item.displayName, status: item.status, lastSyncedAt: item.lastSyncedAt || null, nextSyncAt: item.nextSyncAt || null, rowCount: item.rowCount || 0, consecutiveFailures: item.consecutiveFailures || 0, lastErrorCode: item.lastErrorCode || null })),
       jobs: jobs.map((item) => ({ id: item.id, sourceId: item.sourceId, provider: item.provider, status: item.status, startDate: item.startDate, endDate: item.endDate, rowCount: item.rowCount || 0, attempts: item.attempts || 0, errorCode: item.errorCode || null, createdAt: item.createdAt, completedAt: item.completedAt || null })),
+      audits: audits.map((item) => ({ id: item.id, action: item.action, provider: item.provider || null, recordId: item.recordId || null, rowCount: item.rowCount || null, reportMonth: item.reportMonth || null, createdAt: item.createdAt || item.updatedAt || null })),
     } });
   }
 

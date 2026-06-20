@@ -231,6 +231,7 @@ Data connectors:
 - `POST /api/connectors/sync`
 - `GET /api/connectors/sync-status`
 - `GET /api/connectors/report-data?month=YYYY-MM`
+- `GET /api/connectors/reconciliation?month=YYYY-MM`
 - `GET /api/connectors/metrics?provider=ga4|google_ads|meta_ads&sourceId=...`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
@@ -243,6 +244,8 @@ Google Ads defaults to API `v24` and can be updated with `GOOGLE_ADS_API_VERSION
 Meta Ads defaults to Graph API `v25.0`. OAuth authorization tokens are exchanged for long-lived tokens, every server-side Graph request includes an HMAC `appsecret_proof`, and paging URLs are restricted to the configured Graph API origin and version path. Insights synchronization requests daily campaign data and normalizes spend, impressions, clicks, prioritized purchase/lead conversions, and purchase value without summing unrelated action types.
 
 Selected connector sources default to daily automation. The worker performs a 90-day initial backfill, then refreshes the latest two days to absorb delayed conversion attribution. A per-source lock prevents duplicate work; persistent quota or transient failures move to exponential backoff, while authentication failures move the source to `needs_reauth`. Unified report totals use delivery metrics from Google/Meta Ads and outcome metrics from GA4 when both are present, preventing common cross-platform double counting. After synchronization, the worker creates at most one quota-accounted AI run and reusable report draft per tenant and report month.
+
+The reconciliation endpoint and settings UI report per-provider row/date coverage, last synchronization freshness, canonical KPI totals, and GA4-versus-ad-platform attribution differences. Connector audit events expose actions and record IDs only; OAuth state, access tokens, refresh tokens, app secrets, and encrypted envelopes never enter the UI payload. `/api/health` includes `connectorDeployment` with boolean environment gates, pinned API versions, and registered callback URLs but never secret values.
 
 ## OpenAI Report Flow
 
