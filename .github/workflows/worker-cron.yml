@@ -24,11 +24,11 @@ jobs:
             exit 1
           fi
 
-      - name: Trigger scheduled reports
+      - name: Trigger schedules and data connectors
         shell: bash
         run: |
           response="$(curl --fail-with-body --silent --show-error \
             --request POST \
             --header "x-worker-secret: $WORKER_SECRET" \
             "$APP_URL/api/worker/run")"
-          node -e 'const body=JSON.parse(process.argv[1]); const item=body.item||{}; console.log(`Processed ${item.processed||0} schedule(s); AI runs: ${(item.aiRunIds||[]).length}; emails: ${(item.emailJobIds||[]).length}`)' "$response"
+          node -e 'const body=JSON.parse(process.argv[1]); const item=body.item||{}; console.log(`Report schedules: ${item.scheduleProcessed||0}; connector sources: ${item.connectorProcessed||0}; connector jobs: ${(item.connectorJobIds||[]).length}; connector failures: ${(item.connectorFailures||[]).length}; scheduled AI runs: ${(item.aiRunIds||[]).length}; connector AI runs: ${(item.connectorAiRunIds||[]).length}; emails: ${(item.emailJobIds||[]).length}`); if ((item.connectorFailures||[]).length) console.log(JSON.stringify(item.connectorFailures));' "$response"

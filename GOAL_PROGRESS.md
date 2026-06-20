@@ -51,4 +51,5 @@ Initial delivery order:
 - [x] Unified KPI model avoids GA4/ad-platform outcome double counting and exposes tenant-scoped report data.
 - [x] Daily/weekly/monthly connector scheduling, 90-day initial backfill, two-day rolling attribution refresh, worker locks, exponential quota backoff, reauthorization state, and sync observability UI.
 - [x] Connector worker creates one reusable AI run and report draft per tenant/month while enforcing the account's AI quota.
+- [x] Daily GitHub Actions worker triggers both report schedules and connector synchronization and surfaces connector job/failure counts in operational logs.
 - [ ] Configure production provider credentials, complete real-account reconciliation, and monitor the first scheduled production runs.
