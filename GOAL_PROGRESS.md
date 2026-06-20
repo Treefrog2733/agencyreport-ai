@@ -45,7 +45,8 @@ Initial delivery order:
 - [x] GA4 first release deployed at `https://app.virtualtrendworks.com`; production database validation and 54/54 operational smoke passed.
 - [x] Google Ads API v24 customer discovery, MCC/client selection, `login-customer-id`, GAQL `searchStream`, transient retry, tenant-scoped UI, and normalized campaign KPI storage.
 - [x] Google Ads and Meta connector releases deployed at `https://app.virtualtrendworks.com`; current production operational smoke passes 52/52.
-- [ ] Configure production Google OAuth client, Google Ads developer token, and connector encryption key; complete a real client-account authorization and reconciliation run.
+- [x] Production connector encryption key is stored in the ignored local environment, Render, and GitHub Actions; the live API reports `vaultReady: true` without exposing key material.
+- [ ] Configure production Google OAuth client and Google Ads developer token; complete a real client-account authorization and reconciliation run.
 - [x] Meta Graph API v25 long-lived token exchange, app-secret proof, paginated ad-account selection, daily campaign Insights synchronization, retry handling, tenant-scoped UI, and normalized KPI storage.
 - [ ] Configure the production Meta app and complete App Review / Business Verification plus a real ad-account reconciliation run.
 - [x] Unified KPI model avoids GA4/ad-platform outcome double counting and exposes tenant-scoped report data.
