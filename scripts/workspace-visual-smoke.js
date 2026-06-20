@@ -154,6 +154,35 @@ async function main() {
       returnByValue: true,
     });
     await send("Runtime.evaluate", {
+      expression: `window.openUpgradeModal?.()`,
+      awaitPromise: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const landingUpgradeCapture = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    const landingUpgradeFile = path.join(outDir, "landing-upgrade.png");
+    fs.writeFileSync(landingUpgradeFile, Buffer.from(landingUpgradeCapture.data, "base64"));
+    const landingUpgradeStateResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const color = (selector) => getComputedStyle(document.querySelector(selector)).color;
+        const dialog = document.querySelector(".upgrade-dialog");
+        return {
+          visible: document.querySelector("#upgradeModal")?.hidden === false,
+          dialogColor: color(".upgrade-dialog"),
+          titleColor: color(".upgrade-head h2"),
+          planColor: color(".upgrade-plan h3"),
+          priceColor: color(".upgrade-price"),
+          featureColor: color(".upgrade-feature-list li"),
+          statusColor: color(".upgrade-status"),
+          horizontalOverflow: Math.max(0, dialog.scrollWidth - dialog.clientWidth)
+        };
+      })()`,
+      returnByValue: true,
+    });
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector("#upgradeModal").hidden = true`,
+      awaitPromise: true,
+    });
+    await send("Runtime.evaluate", {
       expression: `
         document.documentElement.classList.remove("public-landing");
         document.querySelector("#overviewHome").hidden = true;
@@ -207,7 +236,10 @@ async function main() {
     const libraryTest = libraryTestResult.result?.value || {};
 
     const views = ["overview", "case", "report", "ai", "delivery", "billing", "settings"];
-    const summary = { landing: { file: landingFile, state: landingStateResult.result?.value } };
+    const summary = {
+      landing: { file: landingFile, state: landingStateResult.result?.value },
+      landingUpgrade: { file: landingUpgradeFile, state: landingUpgradeStateResult.result?.value },
+    };
     for (const view of views) {
       await send("Runtime.evaluate", { expression: `window.openWorkspace?.("${view}"); window.scrollTo(0, 0)`, awaitPromise: true });
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -320,6 +352,16 @@ async function main() {
         return !item.state?.visible
           || item.state?.horizontalOverflow > 1
           || (language === "en" && item.state?.cjkLines?.length > 0);
+      }
+      if (view === "landingUpgrade") {
+        const invisibleColors = new Set(["rgb(255, 255, 255)", "rgba(255, 255, 255, 0)"]);
+        return !item.state?.visible
+          || invisibleColors.has(item.state?.titleColor)
+          || invisibleColors.has(item.state?.planColor)
+          || invisibleColors.has(item.state?.priceColor)
+          || invisibleColors.has(item.state?.featureColor)
+          || invisibleColors.has(item.state?.statusColor)
+          || item.state?.horizontalOverflow > 1;
       }
       if (view === "delivery") {
         return item.libraryTest?.items < 1

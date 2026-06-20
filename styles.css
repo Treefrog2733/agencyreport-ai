@@ -13378,80 +13378,98 @@ html.theme-light:not(.public-landing) .ai-attach-button {
 }
 
 /* Keep the upgrade dialog legible in light theme from both landing and workspace entry points. */
-html.theme-light .upgrade-dialog {
+html.theme-light .upgrade-dialog,
+html.public-landing .upgrade-dialog {
   color: #102033;
   border-color: rgba(15, 23, 42, 0.14);
   background: #ffffff;
 }
 
-html.theme-light .upgrade-head .eyebrow {
+html.theme-light .upgrade-head .eyebrow,
+html.public-landing .upgrade-head .eyebrow {
   color: #0f766e;
 }
 
 html.theme-light .upgrade-head h2,
 html.theme-light .upgrade-plan h3,
-html.theme-light .upgrade-price {
+html.theme-light .upgrade-price,
+html.public-landing .upgrade-head h2,
+html.public-landing .upgrade-plan h3,
+html.public-landing .upgrade-price {
   color: #071426;
 }
 
-html.theme-light .upgrade-close {
+html.theme-light .upgrade-close,
+html.public-landing .upgrade-close {
   color: #334155;
   border-color: rgba(15, 23, 42, 0.16);
   background: #ffffff;
 }
 
-html.theme-light .upgrade-close:hover {
+html.theme-light .upgrade-close:hover,
+html.public-landing .upgrade-close:hover {
   color: #0f172a;
   background: #eef2f7;
 }
 
-html.theme-light .upgrade-tabs {
+html.theme-light .upgrade-tabs,
+html.public-landing .upgrade-tabs {
   border-color: rgba(15, 23, 42, 0.1);
   background: #eef2ff;
 }
 
-html.theme-light .upgrade-tabs button {
+html.theme-light .upgrade-tabs button,
+html.public-landing .upgrade-tabs button {
   color: #475569;
 }
 
-html.theme-light .upgrade-tabs button.active {
+html.theme-light .upgrade-tabs button.active,
+html.public-landing .upgrade-tabs button.active {
   color: #ffffff;
   background: #152669;
 }
 
-html.theme-light .upgrade-plan {
+html.theme-light .upgrade-plan,
+html.public-landing .upgrade-plan {
   color: #102033;
   border-color: rgba(15, 23, 42, 0.14);
   background: #ffffff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-html.theme-light .upgrade-plan.featured {
+html.theme-light .upgrade-plan.featured,
+html.public-landing .upgrade-plan.featured {
   border-color: rgba(37, 99, 235, 0.42);
   background: linear-gradient(145deg, #ffffff, #f2fbfb);
   box-shadow: 0 20px 48px rgba(37, 99, 235, 0.12);
 }
 
 html.theme-light .upgrade-price small,
-html.theme-light .upgrade-feature-list li {
+html.theme-light .upgrade-feature-list li,
+html.public-landing .upgrade-price small,
+html.public-landing .upgrade-feature-list li {
   color: #526174;
 }
 
-html.theme-light .upgrade-status {
+html.theme-light .upgrade-status,
+html.public-landing .upgrade-status {
   color: #334155;
   border-color: rgba(15, 118, 110, 0.22);
   background: #f0fdfa;
 }
 
-html.theme-light .upgrade-status strong {
+html.theme-light .upgrade-status strong,
+html.public-landing .upgrade-status strong {
   color: #0f172a;
 }
 
-html.theme-light .upgrade-status span {
+html.theme-light .upgrade-status span,
+html.public-landing .upgrade-status span {
   color: #475569;
 }
 
-html.theme-light .upgrade-plan button:disabled {
+html.theme-light .upgrade-plan button:disabled,
+html.public-landing .upgrade-plan button:disabled {
   color: #64748b;
   background: #e2e8f0;
   box-shadow: none;
