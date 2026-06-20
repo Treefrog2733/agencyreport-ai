@@ -39,8 +39,9 @@ Initial delivery order:
 - [x] Google PKCE, short-lived hashed state, replay protection, and authorization-code exchange.
 - [x] AES-256-GCM connector token vault with tenant-bound additional authenticated data.
 - [x] Tenant-scoped connection status and disconnect lifecycle; account exports redact all OAuth and token material.
-- [x] Connector security smoke expanded to 25 assertions.
-- [ ] GA4 account/property discovery and Data API synchronization.
+- [x] Connector security and GA4 synchronization smoke expanded to 35 assertions.
+- [x] GA4 account/property discovery, Property selection, token refresh, paginated Data API synchronization, quota retry, and tenant-scoped UI.
+- [x] PostgreSQL schema v4 connector indexes and normalized GA4 KPI storage.
 - [ ] Google Ads customer discovery and GAQL synchronization.
 - [ ] Meta ad-account discovery and Insights API synchronization.
 - [ ] Unified KPI model, incremental jobs, UI, automated reporting, and production credentials.

@@ -105,20 +105,36 @@ async function main() {
         count(*) filter (where not jsonb_typeof(payload) = 'object')::int as invalid_payloads
       from agencyreport_records
     `);
+    const requiredConnectorIndexes = [
+      "agencyreport_oauth_state_hash_uidx",
+      "agencyreport_connector_owner_provider_uidx",
+      "agencyreport_source_owner_external_uidx",
+      "agencyreport_sync_jobs_owner_status_idx",
+      "agencyreport_metrics_owner_source_date_idx",
+    ];
+    const indexNames = indexes.rows.map((row) => row.indexname);
+    const schemaVersion = Number(schema.rows[0]?.value || 0);
+    const integrityState = integrity.rows[0];
+    const ok = schemaVersion >= 4
+      && requiredConnectorIndexes.every((name) => indexNames.includes(name))
+      && integrityState.owner_mismatches === 0
+      && integrityState.invalid_payloads === 0;
     console.log(JSON.stringify({
-      ok: true,
+      ok,
       ssl: !isLocal && sslEnabled,
       postgres: version.rows[0].version,
       normalized: true,
       schemaVersion: schema.rows[0]?.value || null,
       recordRows: records.rows.reduce((total, row) => total + row.count, 0),
       collections: records.rows,
-      indexes: indexes.rows.map((row) => row.indexname),
+      indexes: indexNames,
+      missingConnectorIndexes: requiredConnectorIndexes.filter((name) => !indexNames.includes(name)),
       constraints: constraints.rows,
-      integrity: integrity.rows[0],
+      integrity: integrityState,
       storeRows: store.rowCount,
       keys: store.rows.map((row) => ({ key: row.key, updatedAt: row.updated_at })),
     }, null, 2));
+    if (!ok) process.exitCode = 1;
   } catch (error) {
     console.error(JSON.stringify({ ok: false, error: error.message }, null, 2));
     process.exitCode = 1;

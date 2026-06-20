@@ -13475,6 +13475,114 @@ html.public-landing .upgrade-plan button:disabled {
   box-shadow: none;
 }
 
+.connector-settings {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.connector-settings-head h3,
+.connector-settings-head p {
+  margin: 0;
+}
+
+.connector-settings-head p {
+  margin-top: 5px;
+}
+
+.connector-list {
+  display: grid;
+  gap: 10px;
+}
+
+.connector-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.connector-row:last-child {
+  border-bottom: 0;
+}
+
+.connector-row-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.connector-row-copy span,
+.connector-row-copy small {
+  color: var(--muted);
+}
+
+.connector-row-copy strong {
+  font-size: 15px;
+}
+
+.connector-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.connector-row-actions button:disabled {
+  cursor: not-allowed;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: none;
+}
+
+.connector-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.connector-state.disconnected {
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.ga4-property-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 12px;
+  background: rgba(20, 184, 166, 0.055);
+}
+
+.ga4-property-panel[hidden] {
+  display: none !important;
+}
+
+html.theme-light:not(.public-landing) .connector-row-copy strong,
+html.theme-light:not(.public-landing) .connector-settings-head h3,
+html.theme-light:not(.public-landing) .ga4-property-panel label {
+  color: #0f172a;
+}
+
+@media (max-width: 640px) {
+  .connector-row {
+    grid-template-columns: 1fr;
+  }
+
+  .connector-row-actions {
+    justify-content: space-between;
+  }
+}
+
 @media (max-width: 640px) {
   .ai-chat-thread {
     min-height: 320px;

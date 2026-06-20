@@ -14,12 +14,33 @@ const root = path.resolve(__dirname, "..");
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agencyreport-connector-"));
 fs.copyFileSync(path.join(root, "server.js"), path.join(testRoot, "server.js"));
 const tokenRequests = [];
+let ga4DataCalls = 0;
 const tokenServer = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => { body += chunk.toString(); });
   req.on("end", () => {
     const params = Object.fromEntries(new URLSearchParams(body));
     tokenRequests.push({ url: req.url, params });
+    if (req.url.startsWith("/admin/accountSummaries")) {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ accountSummaries: [{ account: "accounts/42", displayName: "Agency Account", propertySummaries: [{ property: "properties/123456", displayName: "Client GA4" }] }] }));
+    }
+    if (req.url.startsWith("/data/properties/123456:runReport")) {
+      ga4DataCalls += 1;
+      if (ga4DataCalls === 1) {
+        res.writeHead(429, { "content-type": "application/json", "retry-after": "0" });
+        return res.end(JSON.stringify({ error: { message: "quota retry" } }));
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify({
+        dimensionHeaders: [{ name: "date" }, { name: "sessionDefaultChannelGroup" }],
+        metricHeaders: [{ name: "sessions" }, { name: "totalUsers" }, { name: "keyEvents" }, { name: "purchaseRevenue" }],
+        rows: [
+          { dimensionValues: [{ value: "20260601" }, { value: "Organic Search" }], metricValues: [{ value: "120" }, { value: "100" }, { value: "8" }, { value: "4200.5" }] },
+          { dimensionValues: [{ value: "20260601" }, { value: "Paid Search" }], metricValues: [{ value: "80" }, { value: "70" }, { value: "12" }, { value: "6800" }] },
+        ],
+      }));
+    }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({
       access_token: `access-${params.code}`,
@@ -50,6 +71,8 @@ const child = spawn(process.execPath, ["server.js"], {
     META_GRAPH_VERSION: "v23.0",
     GOOGLE_OAUTH_TOKEN_URL: `${tokenBaseUrl}/google/token`,
     META_OAUTH_TOKEN_URL: `${tokenBaseUrl}/meta/token`,
+    GA4_ADMIN_API_URL: `${tokenBaseUrl}/admin`,
+    GA4_DATA_API_URL: `${tokenBaseUrl}/data`,
   },
 });
 const csv = "channel,spend,clicks,conversions,revenue\nSearch,100,50,5,500";
@@ -109,8 +132,22 @@ async function run() {
   const replayedGa4Callback = await call(`/api/connectors/oauth/callback/ga4?code=ga4-code-replay&state=${encodeURIComponent(rawStates[0])}`);
   const metaCallback = await fetch(`${baseUrl}/api/connectors/oauth/callback/meta_ads?code=meta-code&state=${encodeURIComponent(rawStates[1])}`, { redirect: "manual" });
   const googleAdsCallback = await fetch(`${baseUrl}/api/connectors/oauth/callback/google_ads?code=google-ads-code&state=${encodeURIComponent(rawStates[2])}`, { redirect: "manual" });
+  const refreshDbPath = path.join(testRoot, "data", "db.json");
+  const refreshDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
+  const expiringGa4Credential = refreshDb.connector_credentials.find((item) => item.ownerId === tenantA.user.id && item.provider === "ga4");
+  expiringGa4Credential.expiresAt = new Date(Date.now() - 60_000).toISOString();
+  fs.writeFileSync(refreshDbPath, JSON.stringify(refreshDb, null, 2));
   const connectionsA = await call("/api/connectors/connections", { headers: tenantA.headers });
   const connectionsB = await call("/api/connectors/connections", { headers: tenantB.headers });
+  const ga4Properties = await call("/api/connectors/ga4/properties", { headers: tenantA.headers });
+  const foreignGa4Properties = await call("/api/connectors/ga4/properties", { headers: tenantB.headers });
+  const invalidGa4Property = await call("/api/connectors/ga4/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ propertyId: "invalid" }) });
+  const ga4Source = await call("/api/connectors/ga4/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify(ga4Properties.item[0]) });
+  const foreignGa4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const invalidDateGa4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-30", endDate: "2026-06-01" }) });
+  const ga4Sync = await call("/api/connectors/ga4/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: ga4Source.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
+  const metricsA = await call(`/api/connectors/metrics?provider=ga4&sourceId=${encodeURIComponent(ga4Source.item.id)}`, { headers: tenantA.headers });
+  const metricsB = await call("/api/connectors/metrics?provider=ga4", { headers: tenantB.headers });
   const exportedA = await call("/api/account/export", { headers: tenantA.headers });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
   const serializedDb = JSON.stringify(db);
@@ -140,10 +177,20 @@ async function run() {
   assert(googleAdsCallback.status === 302 && googleAdsCallback.headers.get("location")?.includes("connector=google_ads&status=connected"), "Google Ads OAuth callback exchanges the authorization code and redirects safely");
   assert(replayedGa4Callback.response.status === 400 && replayedGa4Callback.body.code === "CONNECTOR_OAUTH_STATE_REPLAYED", "OAuth state cannot be replayed");
   assert(tokenRequests.some((item) => item.url.includes("google") && item.params.code_verifier && item.params.grant_type === "authorization_code"), "Google token exchange verifies PKCE");
+  assert(tokenRequests.some((item) => item.url.includes("google") && item.params.grant_type === "refresh_token" && item.params.refresh_token === "refresh-ga4-code"), "expired Google access tokens refresh automatically without exposing the refresh token");
   assert(db.connector_credentials.length === 3 && db.connector_credentials.every((item) => item.accessTokenEncrypted?.algorithm === "aes-256-gcm"), "connector tokens are encrypted and tenant-owned");
   assert(!serializedDb.includes("access-ga4-code") && !serializedDb.includes("refresh-ga4-code") && !serializedDb.includes("access-meta-code") && !serializedDb.includes("access-google-ads-code"), "access and refresh tokens never persist in plaintext");
   assert(connectionsA.item.length === 2 && connectionsB.item.length === 1 && connectionsA.item.every((item) => !JSON.stringify(item).includes("Encrypted")), "connection status is tenant-scoped and never exposes token envelopes");
   assert(disconnectedMeta.response.ok && disconnectedMeta.item.disconnected === true && connectionsAAfterDisconnect.item.length === 1 && connectionsBAfterDisconnect.item.length === 1, "disconnect removes only the selected tenant connection");
+  assert(ga4Properties.response.ok && ga4Properties.item.length === 1 && ga4Properties.item[0].propertyId === "123456", "GA4 account summaries expose selectable properties without tokens");
+  assert(foreignGa4Properties.response.status === 409, "tenant without a GA4 connection cannot discover another tenant's properties");
+  assert(invalidGa4Property.response.status === 400 && invalidGa4Property.body.code === "GA4_PROPERTY_INVALID", "invalid GA4 property identifiers are rejected");
+  assert(ga4Source.response.status === 201 && ga4Source.item.ownerId === tenantA.user.id && ga4Source.item.externalAccountId === "123456", "selected GA4 property becomes a tenant-owned data source");
+  assert(foreignGa4Sync.response.status === 404 && foreignGa4Sync.body.code === "DATA_SOURCE_NOT_FOUND", "tenant cannot sync another tenant's GA4 source");
+  assert(invalidDateGa4Sync.response.status === 400 && invalidDateGa4Sync.body.code === "SYNC_DATE_RANGE_INVALID", "GA4 sync rejects invalid date ranges");
+  assert(ga4Sync.response.ok && ga4Sync.item.job.status === "completed" && ga4Sync.item.job.attempts === 2 && ga4Sync.item.metrics.length === 2, "GA4 Data API sync retries quota responses and records completion");
+  assert(metricsA.item.length === 2 && metricsA.item.some((item) => item.channel === "Paid Search" && item.sessions === 80 && item.conversions === 12 && item.revenue === 6800), "GA4 rows normalize into the shared KPI model");
+  assert(metricsB.item.length === 0, "normalized connector metrics are tenant-isolated");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => { child.kill(); tokenServer.close(); });

@@ -39,6 +39,10 @@ const state = {
   deliveries: [],
   invoices: [],
   payment: null,
+  connectorConnections: [],
+  connectorAvailability: {},
+  ga4Properties: [],
+  ga4Source: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -465,6 +469,13 @@ function translateStaticWorkspace() {
   apply("#deleteAccountCopy", "此操作無法復原。請輸入目前密碼，並在確認欄輸入 DELETE。", "This cannot be undone. Enter your current password and type DELETE in the confirmation field.");
   apply("#deletePasswordLabel", "目前密碼", "Current password");
   apply("#deleteConfirmationLabel", "確認文字", "Confirmation text");
+  apply("#connectorSettingsTitle", "資料串接", "Data connections");
+  apply("#connectorSettingsCopy", "授權廣告與分析平台，讓系統自動同步月報資料。", "Authorize advertising and analytics platforms for automatic report synchronization.");
+  apply("#ga4PropertyLabel", "GA4 Property", "GA4 Property");
+  apply("#loadGa4PropertiesBtn", "載入 Properties", "Load properties");
+  apply("#selectGa4PropertyBtn", "使用此 Property", "Use this property");
+  apply("#syncGa4Btn", "立即同步", "Sync now");
+  renderConnectorSettings();
   apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
   apply("#cancelDeleteAccountBtn", "取消", "Cancel");
 
@@ -545,6 +556,7 @@ function setAuthState(auth) {
     openWorkspace("overview");
     refreshUsage();
     syncReportsFromServer();
+    loadConnectorConnections();
     renderWorkspace();
   }
 }
@@ -688,6 +700,8 @@ async function processAuthActionLinks() {
   const params = new URLSearchParams(location.search);
   const verificationToken = params.get("verify_email");
   const resetToken = params.get("reset_password");
+  const connector = params.get("connector");
+  const connectorStatus = params.get("status");
   if (verificationToken) {
     showAuthGate();
     try {
@@ -705,6 +719,12 @@ async function processAuthActionLinks() {
     $("#authResetPanel").dataset.token = resetToken;
     $("#authResetPassword").focus();
     setStatus("#authStatus", "ok", state.lang === "en" ? "Choose a new password" : "請設定新密碼", state.lang === "en" ? "Use at least 10 characters." : "密碼至少需要 10 個字元。" );
+  }
+  if (connector && connectorStatus === "connected" && state.auth) {
+    await loadConnectorConnections();
+    openWorkspace("settings");
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Connection authorized" : "資料串接授權完成", connectorLabels[connector]?.[state.lang === "en" ? "en" : "zh"] || connector);
+    history.replaceState({}, "", location.pathname);
   }
 }
 
@@ -1487,10 +1507,13 @@ async function refreshPaymentAvailability() {
   try {
     const health = await api("/api/health");
     state.payment = health.payment || { checkoutEnabled: false };
+    state.connectorAvailability = health.connectors || {};
   } catch {
     state.payment = { checkoutEnabled: false };
+    state.connectorAvailability = {};
   }
   updatePaymentAvailability();
+  renderConnectorSettings();
 }
 
 function openUpgradeModal() {
@@ -1980,6 +2003,139 @@ async function testAndImportDataSource({ generate = true } = {}) {
   return result;
 }
 
+const connectorLabels = {
+  ga4: { zh: "Google Analytics 4", en: "Google Analytics 4", detailZh: "網站流量、使用者、事件與營收", detailEn: "Traffic, users, key events, and revenue" },
+  google_ads: { zh: "Google Ads", en: "Google Ads", detailZh: "花費、曝光、點擊、轉換與廣告營收", detailEn: "Spend, impressions, clicks, conversions, and revenue" },
+  meta_ads: { zh: "Meta Ads", en: "Meta Ads", detailZh: "Facebook／Instagram 廣告成效", detailEn: "Facebook and Instagram advertising performance" },
+};
+
+function renderConnectorSettings() {
+  const list = $("#connectorList");
+  if (!list) return;
+  const zh = state.lang !== "en";
+  const availabilityKey = { ga4: "ga4", google_ads: "googleAds", meta_ads: "metaAds" };
+  list.innerHTML = Object.entries(connectorLabels).map(([provider, label]) => {
+    const connection = state.connectorConnections.find((item) => item.provider === provider);
+    const connected = connection?.status === "connected";
+    const authorizationReady = state.connectorAvailability[availabilityKey[provider]]?.authorizationReady === true;
+    const canConnect = connected || authorizationReady;
+    return `<div class="connector-row" data-connector-provider="${provider}">
+      <div class="connector-row-copy">
+        <strong>${escapeLibraryText(zh ? label.zh : label.en)}</strong>
+        <span>${escapeLibraryText(zh ? label.detailZh : label.detailEn)}</span>
+        <small>${connected && connection.connectedAt ? `${zh ? "已連接" : "Connected"} ${escapeLibraryText(new Date(connection.connectedAt).toLocaleDateString(zh ? "zh-TW" : "en-US"))}` : authorizationReady ? (zh ? "可開始授權" : "Ready to authorize") : (zh ? "平台設定中" : "Platform setup in progress")}</small>
+      </div>
+      <div class="connector-row-actions">
+        <span class="connector-state ${connected ? "" : "disconnected"}">${connected ? (zh ? "已連接" : "Connected") : (zh ? "未連接" : "Disconnected")}</span>
+        ${connected && provider === "ga4" ? `<button class="ghost" type="button" data-connector-action="manage" data-provider="${provider}">${zh ? "管理" : "Manage"}</button>` : ""}
+        <button class="${connected ? "ghost" : "primary"}" type="button" data-connector-action="${connected ? "disconnect" : "connect"}" data-provider="${provider}" ${canConnect ? "" : "disabled"}>${connected ? (zh ? "中斷連線" : "Disconnect") : authorizationReady ? (zh ? "連接" : "Connect") : (zh ? "設定中" : "Setting up")}</button>
+      </div>
+    </div>`;
+  }).join("");
+  const ga4Connected = state.connectorConnections.some((item) => item.provider === "ga4" && item.status === "connected");
+  if (!ga4Connected) $("#ga4PropertyPanel").hidden = true;
+  if ($("#syncGa4Btn")) $("#syncGa4Btn").disabled = !state.ga4Source;
+}
+
+async function loadConnectorConnections() {
+  if (!authToken()) return;
+  try {
+    const [connections, sources] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources")]);
+    state.connectorConnections = Array.isArray(connections) ? connections : [];
+    state.ga4Source = (Array.isArray(sources) ? sources : []).find((item) => item.type === "ga4") || null;
+    renderConnectorSettings();
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load connections" : "無法載入串接狀態", error.message);
+  }
+}
+
+async function startConnectorOAuth(provider) {
+  try {
+    setStatus("#connectorStatus", "", state.lang === "en" ? "Preparing secure authorization..." : "正在準備安全授權...");
+    const item = await api("/api/connectors/oauth/start", { method: "POST", body: JSON.stringify({ provider }) });
+    location.assign(item.authorizationUrl);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Authorization is not available" : "目前無法開始授權", error.code === "CONNECTOR_OAUTH_NOT_CONFIGURED" || error.code === "CONNECTOR_ENCRYPTION_KEY_REQUIRED"
+      ? (state.lang === "en" ? "The platform administrator must finish connector credentials first." : "平台尚未完成此資料源的管理員憑證設定。")
+      : error.message);
+  }
+}
+
+async function disconnectConnectorUi(provider) {
+  try {
+    await api(`/api/connectors/connections?provider=${encodeURIComponent(provider)}`, { method: "DELETE" });
+    if (provider === "ga4") {
+      state.ga4Source = null;
+      state.ga4Properties = [];
+      $("#ga4PropertyPanel").hidden = true;
+    }
+    await loadConnectorConnections();
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Connection removed" : "已中斷連線", connectorLabels[provider]?.[state.lang === "en" ? "en" : "zh"] || provider);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to disconnect" : "無法中斷連線", error.message);
+  }
+}
+
+async function loadGa4Properties() {
+  $("#ga4PropertyPanel").hidden = false;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Loading GA4 properties..." : "正在載入 GA4 Properties...");
+  try {
+    state.ga4Properties = await api("/api/connectors/ga4/properties");
+    const select = $("#ga4PropertySelect");
+    select.replaceChildren();
+    state.ga4Properties.forEach((item, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `${item.propertyName} (${item.propertyId})`;
+      select.append(option);
+    });
+    if (!state.ga4Properties.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = state.lang === "en" ? "No accessible properties" : "沒有可存取的 Property";
+      select.append(option);
+    }
+    setStatus("#connectorStatus", state.ga4Properties.length ? "ok" : "warn", state.lang === "en" ? `${state.ga4Properties.length} properties loaded` : `已載入 ${state.ga4Properties.length} 個 Property`);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load GA4 properties" : "無法載入 GA4 Properties", error.message);
+  }
+}
+
+async function selectGa4PropertyUi() {
+  const selected = state.ga4Properties[Number($("#ga4PropertySelect").value)];
+  if (!selected) return setStatus("#connectorStatus", "warn", state.lang === "en" ? "Choose a GA4 property" : "請先選擇 GA4 Property");
+  try {
+    state.ga4Source = await api("/api/connectors/ga4/select", { method: "POST", body: JSON.stringify(selected) });
+    $("#syncGa4Btn").disabled = false;
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "GA4 property selected" : "已選擇 GA4 Property", selected.propertyName);
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to select property" : "無法選擇 Property", error.message);
+  }
+}
+
+function reportMonthRange() {
+  const month = $("#reportMonth")?.value || new Date().toISOString().slice(0, 7);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return { startDate: `${month}-01`, endDate: `${month}-${String(lastDay).padStart(2, "0")}` };
+}
+
+async function syncGa4Ui() {
+  if (!state.ga4Source) return;
+  const button = $("#syncGa4Btn");
+  button.disabled = true;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Synchronizing GA4 data..." : "正在同步 GA4 資料...");
+  try {
+    const item = await api("/api/connectors/ga4/sync", { method: "POST", body: JSON.stringify({ sourceId: state.ga4Source.id, ...reportMonthRange() }) });
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "GA4 synchronization complete" : "GA4 同步完成", state.lang === "en" ? `${item.job.rowCount} normalized rows, ${item.job.attempts} attempt(s).` : `${item.job.rowCount} 筆標準資料，嘗試 ${item.job.attempts} 次。`);
+    await loadConnectorConnections();
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "GA4 synchronization failed" : "GA4 同步失敗", error.message);
+  } finally {
+    button.disabled = !state.ga4Source;
+  }
+}
+
 function syncConsentAudit() {
   const inputs = ["#consentData", "#consentAi", "#consentDelivery"].map((selector) => $(selector)).filter(Boolean);
   const checked = inputs.filter((input) => input.checked).length;
@@ -2074,6 +2230,17 @@ function setupEvents() {
   $("#openDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(true));
   $("#cancelDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(false));
   $("#confirmDeleteAccountBtn")?.addEventListener("click", deleteCurrentAccount);
+  $("#connectorList")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-connector-action]");
+    if (!button) return;
+    const provider = button.dataset.provider;
+    if (button.dataset.connectorAction === "connect") startConnectorOAuth(provider);
+    if (button.dataset.connectorAction === "disconnect") disconnectConnectorUi(provider);
+    if (button.dataset.connectorAction === "manage" && provider === "ga4") loadGa4Properties();
+  });
+  $("#loadGa4PropertiesBtn")?.addEventListener("click", loadGa4Properties);
+  $("#selectGa4PropertyBtn")?.addEventListener("click", selectGa4PropertyUi);
+  $("#syncGa4Btn")?.addEventListener("click", syncGa4Ui);
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${escapeLibraryText(item)}</strong></div>`).join("") : "";

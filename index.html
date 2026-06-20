@@ -508,6 +508,21 @@
         <section class="workspace-dashboard" data-workspace-group="settings" hidden>
           <article class="panel">
             <div class="panel-head"><div><h2>信任與設定</h2><p>管理同意、稽核紀錄與本機資料。</p></div></div>
+            <section class="connector-settings" aria-labelledby="connectorSettingsTitle">
+              <div class="connector-settings-head">
+                <div><h3 id="connectorSettingsTitle">資料串接</h3><p id="connectorSettingsCopy">授權廣告與分析平台，讓系統自動同步月報資料。</p></div>
+              </div>
+              <div class="connector-list" id="connectorList" aria-live="polite"></div>
+              <div class="ga4-property-panel" id="ga4PropertyPanel" hidden>
+                <label><span id="ga4PropertyLabel">GA4 Property</span><select id="ga4PropertySelect"><option value="">請先載入 Property</option></select></label>
+                <div class="button-row">
+                  <button class="ghost" id="loadGa4PropertiesBtn" type="button">載入 Properties</button>
+                  <button class="primary" id="selectGa4PropertyBtn" type="button">使用此 Property</button>
+                  <button class="ghost" id="syncGa4Btn" type="button" disabled>立即同步</button>
+                </div>
+              </div>
+              <div id="connectorStatus" class="status-panel"></div>
+            </section>
             <div class="consent-list">
               <label><input id="consentData" type="checkbox" /> <span data-i18n="consentData">客戶同意資料用於月報分析</span></label>
               <label><input id="consentAi" type="checkbox" /> <span data-i18n="consentAi">客戶同意使用 AI 產生建議</span></label>

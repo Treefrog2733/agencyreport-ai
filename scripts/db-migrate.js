@@ -71,7 +71,7 @@ async function main() {
     }
     await client.query(
       `insert into agencyreport_metadata (key, value, updated_at)
-       values ('schema_version', '3'::jsonb, now()),
+       values ('schema_version', '4'::jsonb, now()),
               ('legacy_migrated_at', to_jsonb(now()), now()),
               ('normalized_updated_at', to_jsonb(now()), now())
        on conflict (key) do update set value = excluded.value, updated_at = now()`

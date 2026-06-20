@@ -47,7 +47,7 @@ Local data/db.json fallback for development
 OpenAI / Resend / ECPay / connector credentials
 ```
 
-Production state is stored in schema-v3 `agencyreport_records` rows, keyed by collection and record ID with explicit owner IDs. Writes use a transactional staging table, differential upserts, and deletion reconciliation so unchanged rows retain their database timestamps. Tenant/report indexes plus unique account-email, session-token-hash, and billing-token indexes enforce common lookup and identity invariants. An owner/payload constraint prevents tenant metadata drift. `agencyreport_metadata` records schema state. The legacy `agencyreport_store` JSONB row is retained only as a migration rollback source; local development can still use `data/db.json`.
+Production state is stored in schema-v4 `agencyreport_records` rows, keyed by collection and record ID with explicit owner IDs. Writes use a transactional staging table, differential upserts, and deletion reconciliation so unchanged rows retain their database timestamps. Tenant/report, OAuth state, connector ownership, source identity, sync-job, and normalized-metric indexes enforce common lookup and identity invariants. An owner/payload constraint prevents tenant metadata drift. `agencyreport_metadata` records schema state. The legacy `agencyreport_store` JSONB row is retained only as a migration rollback source; local development can still use `data/db.json`.
 
 ## Local Development
 
@@ -217,6 +217,10 @@ Data connectors:
 - `POST /api/connectors/oauth/start`
 - `GET /api/connectors/connections`
 - `DELETE /api/connectors/connections?provider=ga4|google_ads|meta_ads`
+- `GET /api/connectors/ga4/properties`
+- `POST /api/connectors/ga4/select`
+- `POST /api/connectors/ga4/sync`
+- `GET /api/connectors/metrics?provider=ga4&sourceId=...`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
 - `POST /api/data-sources/sync`
