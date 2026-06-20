@@ -1,0 +1,34 @@
+# AgencyReport AI Goal Progress
+
+Last updated: 2026-06-20 (Asia/Taipei)
+
+## Previous goal: public registration and production operations
+
+Status: blocked only by external ECPay production approval and credentials.
+
+Verified complete:
+
+- Multi-tenant ownership isolation, account export/deletion, XSS protection, CSP, hashed sessions, and password reset revocation.
+- PostgreSQL schema v3 on Supabase with normalized tenant records, indexes, constraints, monitoring, encrypted backup, and restore drill.
+- Production deployment at `https://app.virtualtrendworks.com`, verified Resend sender domain, live OpenAI generation, worker automation, and bilingual UI.
+- Production smoke coverage passed 54/54; unconfigured production checkout is explicitly disabled and cannot create mock payments.
+- ECPay signature, callback, amount, duplicate event, trusted payment, and refund reconciliation flows pass automated stage tests.
+- Light-theme upgrade modal contrast is verified from both workspace and public landing entry points.
+
+Remaining external gate:
+
+- Obtain ECPay production Merchant ID, HashKey, and HashIV.
+- Configure production environment variables.
+- Complete one low-value real payment, refund, and reconciliation exercise.
+
+## New goal: automated advertising data connectors
+
+Build a production-ready, multi-tenant connector platform for Google Ads, Meta Ads, and GA4, including OAuth authorization, encrypted refresh-token storage, account/property selection, scheduled incremental synchronization, retries and quota handling, normalized KPI data, sync observability, disconnect/reconnect controls, and automatic monthly-report generation from synchronized data.
+
+Initial delivery order:
+
+1. Shared encrypted connector credential and sync-job architecture.
+2. GA4 Data API connector.
+3. Google Ads API connector.
+4. Meta Marketing API connector.
+5. Unified KPI normalization, scheduled sync, AI report integration, UI, tests, and production rollout.
