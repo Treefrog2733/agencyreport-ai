@@ -130,6 +130,8 @@ async function run() {
     authenticatedResponsesAreNotCached: /no-store/i.test(cookieMeResponse.headers.get("cache-control") || ""),
     frontendSessionRestoreKeepsBearerToken: appSource.includes('else if (!auth) localStorage.removeItem("agencyReportAuthToken")')
       && !appSource.includes('else if (auth) localStorage.removeItem("agencyReportAuthToken")'),
+    frontendCookieSessionLoadsProtectedData: !appSource.includes("if (!authToken()) return;")
+      && appSource.match(/if \(!state\.auth && !authToken\(\)\) return;/g)?.length === 3,
     legalConsentIsVersioned: exported.collections?.consents?.length === 1
       && db.consents.length === 1
       && [...exported.collections.consents, ...db.consents].every((item) => item.legalVersion === "legal-2026-06-18" && item.acceptedAt),

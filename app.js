@@ -618,7 +618,7 @@ function cacheReports() {
 }
 
 async function syncReportsFromServer() {
-  if (!authToken()) return;
+  if (!state.auth && !authToken()) return;
   try {
     const items = await api("/api/reports");
     state.reports = Array.isArray(items) ? items : [];
@@ -1446,7 +1446,7 @@ function planDisplayName(plan) {
 }
 
 async function refreshUsage() {
-  if (!authToken()) return;
+  if (!state.auth && !authToken()) return;
   try {
     state.usage = await api("/api/usage");
   } catch {
@@ -2146,7 +2146,7 @@ function renderConnectorAuditTrail() {
 }
 
 async function loadConnectorConnections() {
-  if (!authToken()) return;
+  if (!state.auth && !authToken()) return;
   try {
     const [connections, sources, syncStatus, reconciliation] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources"), api("/api/connectors/sync-status"), api(`/api/connectors/reconciliation?month=${encodeURIComponent($("#reportMonth")?.value || "")}`)]);
     state.connectorConnections = Array.isArray(connections) ? connections : [];
