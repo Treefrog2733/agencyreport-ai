@@ -13569,6 +13569,81 @@ html.public-landing .upgrade-plan button:disabled {
   display: none !important;
 }
 
+.connector-sync-panel {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.connector-sync-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.connector-sync-head h4,
+.connector-sync-head p {
+  margin: 0;
+}
+
+.connector-sync-head p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.connector-sync-list {
+  display: grid;
+  gap: 10px;
+}
+
+.connector-sync-item {
+  display: grid;
+  grid-template-columns: minmax(160px, .8fr) minmax(260px, 1.2fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.055);
+}
+
+.connector-sync-main {
+  display: grid;
+  gap: 4px;
+}
+
+.connector-sync-main .connector-state {
+  width: max-content;
+}
+
+.connector-sync-main small,
+.connector-sync-item dt {
+  color: var(--muted);
+}
+
+.connector-sync-item dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.connector-sync-item dl div {
+  min-width: 0;
+}
+
+.connector-sync-item dt,
+.connector-sync-item dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.connector-sync-item dd {
+  margin-top: 3px;
+  font-weight: 700;
+}
+
 html.theme-light:not(.public-landing) .connector-row-copy strong,
 html.theme-light:not(.public-landing) .connector-settings-head h3,
 html.theme-light:not(.public-landing) .ga4-property-panel label,
@@ -13583,6 +13658,20 @@ html.theme-light:not(.public-landing) .connector-resource-panel label {
 
   .connector-row-actions {
     justify-content: space-between;
+  }
+
+  .connector-sync-head,
+  .connector-sync-item {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .connector-sync-head {
+    display: grid;
+  }
+
+  .connector-sync-item dl {
+    grid-template-columns: 1fr;
   }
 }
 

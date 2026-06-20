@@ -39,12 +39,16 @@ Initial delivery order:
 - [x] Google PKCE, short-lived hashed state, replay protection, and authorization-code exchange.
 - [x] AES-256-GCM connector token vault with tenant-bound additional authenticated data.
 - [x] Tenant-scoped connection status and disconnect lifecycle; account exports redact all OAuth and token material.
-- [x] Connector security, GA4, Google Ads, and Meta Ads synchronization smoke expanded to 58 assertions.
+- [x] Connector security, GA4, Google Ads, Meta Ads, incremental scheduling, quota backoff, unified reporting, and auto-report smoke expanded to 66 assertions.
 - [x] GA4 account/property discovery, Property selection, token refresh, paginated Data API synchronization, quota retry, and tenant-scoped UI.
 - [x] PostgreSQL schema v4 connector indexes and normalized GA4 KPI storage.
 - [x] GA4 first release deployed at `https://app.virtualtrendworks.com`; production database validation and 54/54 operational smoke passed.
 - [x] Google Ads API v24 customer discovery, MCC/client selection, `login-customer-id`, GAQL `searchStream`, transient retry, tenant-scoped UI, and normalized campaign KPI storage.
+- [x] Google Ads and Meta connector releases deployed at `https://app.virtualtrendworks.com`; current production operational smoke passes 52/52.
 - [ ] Configure production Google OAuth client, Google Ads developer token, and connector encryption key; complete a real client-account authorization and reconciliation run.
 - [x] Meta Graph API v25 long-lived token exchange, app-secret proof, paginated ad-account selection, daily campaign Insights synchronization, retry handling, tenant-scoped UI, and normalized KPI storage.
 - [ ] Configure the production Meta app and complete App Review / Business Verification plus a real ad-account reconciliation run.
-- [ ] Unified KPI model, incremental jobs, UI, automated reporting, and production credentials.
+- [x] Unified KPI model avoids GA4/ad-platform outcome double counting and exposes tenant-scoped report data.
+- [x] Daily/weekly/monthly connector scheduling, 90-day initial backfill, two-day rolling attribution refresh, worker locks, exponential quota backoff, reauthorization state, and sync observability UI.
+- [x] Connector worker creates one reusable AI run and report draft per tenant/month while enforcing the account's AI quota.
+- [ ] Configure production provider credentials, complete real-account reconciliation, and monitor the first scheduled production runs.

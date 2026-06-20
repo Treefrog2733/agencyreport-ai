@@ -92,6 +92,10 @@ const tokenServer = http.createServer((req, res) => {
       }
       return res.end(JSON.stringify({ data: [{ date_start: "2026-06-02", date_stop: "2026-06-02", campaign_id: "502", campaign_name: "Meta Retargeting", spend: "2300", impressions: "38000", clicks: "920", actions: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "18" }], action_values: [{ action_type: "offsite_conversion.fb_pixel_purchase", value: "89000" }] }] }));
     }
+    if (requestUrl.pathname === "/meta/act_4444444444/insights") {
+      res.writeHead(429, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ error: { message: "persistent rate limit" } }));
+    }
     if (req.url.startsWith("/meta/token") && params.grant_type === "fb_exchange_token") {
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify({ access_token: "meta-long-lived-token", token_type: "Bearer", expires_in: 5184000 }));
@@ -221,10 +225,23 @@ async function run() {
   const invalidMetaAccount = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ accountId: "invalid" }) });
   const inaccessibleMetaAccount = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ accountId: "9999999999" }) });
   const metaSource = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify(metaAccounts.item[0]) });
+  const failingMetaSource = await call("/api/connectors/meta-ads/select", { method: "POST", headers: tenantA.headers, body: JSON.stringify(metaAccounts.item[1]) });
   const foreignMetaSync = await call("/api/connectors/meta-ads/sync", { method: "POST", headers: tenantB.headers, body: JSON.stringify({ sourceId: metaSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
   const metaSync = await call("/api/connectors/meta-ads/sync", { method: "POST", headers: tenantA.headers, body: JSON.stringify({ sourceId: metaSource.item.id, startDate: "2026-06-01", endDate: "2026-06-30" }) });
   const metaMetricsA = await call(`/api/connectors/metrics?provider=meta_ads&sourceId=${encodeURIComponent(metaSource.item.id)}`, { headers: tenantA.headers });
   const metaMetricsB = await call("/api/connectors/metrics?provider=meta_ads", { headers: tenantB.headers });
+  const unifiedA = await call("/api/connectors/report-data?month=2026-06", { headers: tenantA.headers });
+  const unifiedB = await call("/api/connectors/report-data?month=2026-06", { headers: tenantB.headers });
+  const initialSyncStatusA = await call("/api/connectors/sync-status", { headers: tenantA.headers });
+  const dueDb = JSON.parse(fs.readFileSync(refreshDbPath, "utf8"));
+  const dueMetaSource = dueDb.data_sources.find((item) => item.id === metaSource.item.id && item.ownerId === tenantA.user.id);
+  dueMetaSource.nextSyncAt = "2020-01-01T00:00:00.000Z";
+  fs.writeFileSync(refreshDbPath, JSON.stringify(dueDb, null, 2));
+  const autoWorker = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
+  const autoWorkerAgain = await call("/api/worker/run", { method: "POST", headers: { "x-worker-secret": "connector-smoke-secret" } });
+  const autoRunsA = await call("/api/ai-runs", { headers: tenantA.headers });
+  const autoReportsA = await call("/api/reports", { headers: tenantA.headers });
+  const finalSyncStatusA = await call("/api/connectors/sync-status", { headers: tenantA.headers });
   const exportedA = await call("/api/account/export", { headers: tenantA.headers });
   const db = JSON.parse(fs.readFileSync(path.join(testRoot, "data", "db.json"), "utf8"));
   const serializedDb = JSON.stringify(db);
@@ -291,6 +308,14 @@ async function run() {
   assert(metaMetricsB.item.length === 0, "Meta normalized metrics remain tenant-isolated");
   assert(tokenRequests.some((item) => item.url.includes("/meta/me/adaccounts") && item.url.includes("appsecret_proof=")) && tokenRequests.some((item) => item.url.includes("/meta/act_3333333333/insights") && item.url.includes("time_increment=1")), "Meta Graph calls use app-secret proof and daily campaign-level Insights parameters");
   assert(tokenRequests.filter((item) => item.url.startsWith("/meta/") && !item.url.startsWith("/meta/token")).every((item) => !item.url.includes("access_token=") && item.headers.authorization === "Bearer meta-long-lived-token"), "Meta access tokens stay out of URLs and travel only in authorization headers");
+  assert(unifiedA.response.ok && unifiedA.item.rowCount === 4 && unifiedA.item.totals.spend === 8800.5 && unifiedA.item.totals.clicks === 3320 && unifiedA.item.totals.conversions === 20 && unifiedA.item.totals.revenue === 11000.5 && unifiedA.item.totals.sessions === 200, "unified report totals use ad-platform delivery KPIs and GA4 outcome KPIs without cross-platform double counting");
+  assert(unifiedB.response.ok && unifiedB.item.rowCount === 2 && unifiedB.item.totals.spend === 32.345 && unifiedB.item.totals.revenue === 219000, "unified report data remains tenant-scoped");
+  assert(initialSyncStatusA.response.ok && initialSyncStatusA.item.sources.length === 3 && initialSyncStatusA.item.jobs.every((item) => [ga4Source.item.id, metaSource.item.id].includes(item.sourceId)), "sync observability exposes only the tenant's connector sources and jobs");
+  assert(autoWorker.response.ok && autoWorker.item.connectorProcessed === 2 && autoWorker.item.connectorJobIds.length === 1 && autoWorker.item.connectorAiRunIds.length === 1 && autoWorker.item.connectorFailures.length === 1 && autoWorker.item.connectorFailures[0].code === "CONNECTOR_RATE_LIMITED", "worker completes healthy incremental syncs, records persistent quota failures, and creates one automated AI report per tenant-month");
+  assert(autoWorkerAgain.response.ok && autoWorkerAgain.item.connectorProcessed === 0 && autoWorkerAgain.item.connectorAiRunIds.length === 0, "worker lock and next-run scheduling prevent duplicate connector processing and duplicate AI reports");
+  assert(autoRunsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.mode === "connector-fallback") && autoReportsA.item.some((item) => item.automationKey === "connectors:2026-06" && item.generatedBy === "connector-worker"), "automated connector output persists as a tenant-owned AI run and reusable report draft");
+  assert(finalSyncStatusA.item.sources.some((item) => item.id === metaSource.item.id && item.status === "synced" && new Date(item.nextSyncAt) > new Date() && item.consecutiveFailures === 0), "successful incremental sync advances the next run and clears retry state");
+  assert(finalSyncStatusA.item.sources.some((item) => item.id === failingMetaSource.item.id && item.status === "error" && item.lastErrorCode === "CONNECTOR_RATE_LIMITED" && item.consecutiveFailures === 1 && new Date(item.nextSyncAt) > new Date()), "persistent quota failures enter exponential backoff with observable retry state");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => { child.kill(); tokenServer.close(); });

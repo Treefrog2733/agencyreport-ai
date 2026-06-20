@@ -1585,6 +1585,15 @@ function nextScheduleRun(schedule, from = new Date()) {
   return next.toISOString();
 }
 
+function nextConnectorRun(source, from = new Date()) {
+  const next = new Date(from);
+  const cadence = source.syncCadence || "daily";
+  if (cadence === "monthly") next.setUTCMonth(next.getUTCMonth() + 1);
+  else if (cadence === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+  else next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
+}
+
 function connectorEncryptionReady() {
   return connectorEncryptionSecret.length >= 32;
 }
@@ -2045,6 +2054,9 @@ async function selectGoogleAdsCustomer(ownerId, payload) {
     timeZone: selected.timeZone,
     status: "connected",
     syncCadence: payload.syncCadence || "daily",
+    autoReportEnabled: payload.autoReportEnabled !== false,
+    backfillStartDate: /^\d{4}-\d{2}-\d{2}$/.test(payload.backfillStartDate || "") ? payload.backfillStartDate : null,
+    nextSyncAt: existing?.nextSyncAt || new Date().toISOString(),
   }, ownerId);
 }
 
@@ -2105,7 +2117,7 @@ async function syncGoogleAdsSource(ownerId, payload) {
       const jobIndex = latest.sync_jobs.findIndex((item) => item.id === job.id && item.ownerId === ownerId);
       latest.sync_jobs[jobIndex] = { ...latest.sync_jobs[jobIndex], status: "completed", attempts: result.attempts, rowCount: rows.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       const sourceIndex = latest.data_sources.findIndex((item) => item.id === source.id && item.ownerId === ownerId);
-      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), nextSyncAt: nextConnectorRun(source), consecutiveFailures: 0, lastErrorCode: null, updatedAt: new Date().toISOString() };
       latest.data_syncs.push(withId({ ownerId, sourceId: source.id, provider: "google_ads", status: "synced", startDate, endDate, rowCount: rows.length, attempts: result.attempts, syncedAt: new Date().toISOString() }));
       latest.audit_logs.push(withId({ action: "connector:sync_completed", ownerId, provider: "google_ads", recordId: job.id, rowCount: rows.length }));
       await writeDb(latest);
@@ -2207,6 +2219,9 @@ async function selectMetaAdAccount(ownerId, payload) {
     accountStatus: selected.status,
     status: "connected",
     syncCadence: payload.syncCadence || "daily",
+    autoReportEnabled: payload.autoReportEnabled !== false,
+    backfillStartDate: /^\d{4}-\d{2}-\d{2}$/.test(payload.backfillStartDate || "") ? payload.backfillStartDate : null,
+    nextSyncAt: existing?.nextSyncAt || new Date().toISOString(),
   }, ownerId);
 }
 
@@ -2279,7 +2294,7 @@ async function syncMetaAdsSource(ownerId, payload) {
       const jobIndex = latest.sync_jobs.findIndex((item) => item.id === job.id && item.ownerId === ownerId);
       latest.sync_jobs[jobIndex] = { ...latest.sync_jobs[jobIndex], status: "completed", attempts: totalAttempts, rowCount: rows.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       const sourceIndex = latest.data_sources.findIndex((item) => item.id === source.id && item.ownerId === ownerId);
-      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), nextSyncAt: nextConnectorRun(source), consecutiveFailures: 0, lastErrorCode: null, updatedAt: new Date().toISOString() };
       latest.data_syncs.push(withId({ ownerId, sourceId: source.id, provider: "meta_ads", status: "synced", startDate, endDate, rowCount: rows.length, attempts: totalAttempts, syncedAt: new Date().toISOString() }));
       latest.audit_logs.push(withId({ action: "connector:sync_completed", ownerId, provider: "meta_ads", recordId: job.id, rowCount: rows.length }));
       await writeDb(latest);
@@ -2295,27 +2310,279 @@ async function syncMetaAdsSource(ownerId, payload) {
   }
 }
 
+function utcDateString(date) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
+function connectorIncrementalRange(source, metrics, now = new Date()) {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const sourceDates = (Array.isArray(metrics) ? metrics : [])
+    .filter((item) => item.ownerId === source.ownerId && item.sourceId === source.id && /^\d{4}-\d{2}-\d{2}$/.test(item.date))
+    .map((item) => item.date)
+    .sort();
+  let start;
+  if (sourceDates.length) {
+    start = new Date(`${sourceDates[sourceDates.length - 1]}T00:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - 2);
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(source.backfillStartDate || "")) {
+    start = new Date(`${source.backfillStartDate}T00:00:00Z`);
+  } else {
+    start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 89);
+  }
+  if (start > end) {
+    start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 2);
+  }
+  return { startDate: utcDateString(start), endDate: utcDateString(end) };
+}
+
+async function claimDueConnectorSources(limit = 20) {
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const now = new Date();
+    const credentials = Array.isArray(db.connector_credentials) ? db.connector_credentials : [];
+    const due = (Array.isArray(db.data_sources) ? db.data_sources : [])
+      .filter((source) => ["ga4", "google_ads", "meta_ads"].includes(normalizeConnectorType(source.type)))
+      .filter((source) => source.syncCadence !== "manual" && !["disconnected", "needs_reauth"].includes(source.status))
+      .filter((source) => !source.syncLockUntil || new Date(source.syncLockUntil) <= now)
+      .filter((source) => new Date(source.nextSyncAt || 0) <= now)
+      .filter((source) => credentials.some((credential) => credential.ownerId === source.ownerId && credential.provider === normalizeConnectorType(source.type) && credential.status === "connected"))
+      .slice(0, limit);
+    const ids = new Set(due.map((source) => source.id));
+    db.data_sources = db.data_sources.map((source) => ids.has(source.id) ? {
+      ...source,
+      status: "syncing",
+      syncLockUntil: new Date(now.getTime() + 15 * 60 * 1000).toISOString(),
+      updatedAt: now.toISOString(),
+    } : source);
+    if (due.length) await writeDb(db);
+    return due.map((source) => ({ ...source }));
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
+async function finalizeConnectorSchedule(source, result = {}, error = null) {
+  const code = error ? String(error.message || "CONNECTOR_SYNC_FAILED").split(":")[0] : null;
+  const failures = error ? Number(source.consecutiveFailures || 0) + 1 : 0;
+  const delayMinutes = Math.min(24 * 60, 5 * (2 ** Math.max(0, failures - 1)));
+  const nextSyncAt = error
+    ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+    : nextConnectorRun(source);
+  return upsertOwnedRecord("data_sources", {
+    id: source.id,
+    status: code === "CONNECTOR_REAUTH_REQUIRED" ? "needs_reauth" : error ? "error" : "synced",
+    syncLockUntil: null,
+    nextSyncAt,
+    consecutiveFailures: failures,
+    lastErrorCode: code,
+    lastAutoSyncAt: new Date().toISOString(),
+    ...(result.job ? { lastSyncJobId: result.job.id, rowCount: result.job.rowCount } : {}),
+  }, source.ownerId);
+}
+
+async function syncClaimedConnectorSource(source, range) {
+  const provider = normalizeConnectorType(source.type);
+  if (provider === "ga4") return syncGa4Source(source.ownerId, { sourceId: source.id, ...range });
+  if (provider === "google_ads") return syncGoogleAdsSource(source.ownerId, { sourceId: source.id, ...range });
+  if (provider === "meta_ads") return syncMetaAdsSource(source.ownerId, { sourceId: source.id, ...range });
+  throw new Error("CONNECTOR_PROVIDER_UNSUPPORTED");
+}
+
+function aggregateNormalizedMetrics(rows) {
+  const totals = rows.reduce((sum, item) => ({
+    spend: sum.spend + Number(item.spend || 0),
+    impressions: sum.impressions + Number(item.impressions || 0),
+    clicks: sum.clicks + Number(item.clicks || 0),
+    conversions: sum.conversions + Number(item.conversions || 0),
+    revenue: sum.revenue + Number(item.revenue || 0),
+    sessions: sum.sessions + Number(item.sessions || 0),
+    users: sum.users + Number(item.users || 0),
+  }), { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0, sessions: 0, users: 0 });
+  return {
+    ...totals,
+    ctr: totals.impressions ? (totals.clicks / totals.impressions) * 100 : 0,
+    cpc: totals.clicks ? totals.spend / totals.clicks : 0,
+    cvr: totals.clicks ? (totals.conversions / totals.clicks) * 100 : 0,
+    cpa: totals.conversions ? totals.spend / totals.conversions : 0,
+    roas: totals.spend ? totals.revenue / totals.spend : 0,
+  };
+}
+
+function aggregateUnifiedMetrics(rows) {
+  const all = aggregateNormalizedMetrics(rows);
+  const ads = aggregateNormalizedMetrics(rows.filter((item) => ["google_ads", "meta_ads"].includes(item.provider)));
+  const analytics = aggregateNormalizedMetrics(rows.filter((item) => item.provider === "ga4"));
+  const spend = ads.spend || all.spend;
+  const impressions = ads.impressions || all.impressions;
+  const clicks = ads.clicks || all.clicks;
+  const conversions = analytics.conversions || ads.conversions || all.conversions;
+  const revenue = analytics.revenue || ads.revenue || all.revenue;
+  const sessions = analytics.sessions || all.sessions;
+  const users = analytics.users || all.users;
+  return {
+    spend, impressions, clicks, conversions, revenue, sessions, users,
+    ctr: impressions ? (clicks / impressions) * 100 : 0,
+    cpc: clicks ? spend / clicks : 0,
+    cvr: clicks ? (conversions / clicks) * 100 : 0,
+    cpa: conversions ? spend / conversions : 0,
+    roas: spend ? revenue / spend : 0,
+  };
+}
+
+function previousReportMonth(reportMonth) {
+  const [year, month] = String(reportMonth || "").split("-").map(Number);
+  if (!year || !month) return "";
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  return previous.toISOString().slice(0, 7);
+}
+
+async function unifiedConnectorReportData(ownerId, reportMonth = "") {
+  const db = await readDb();
+  const owned = (Array.isArray(db.normalized_metrics) ? db.normalized_metrics : []).filter((item) => item.ownerId === ownerId);
+  const availableMonths = [...new Set(owned.map((item) => String(item.date || "").slice(0, 7)).filter((item) => /^\d{4}-\d{2}$/.test(item)))].sort();
+  const month = /^\d{4}-\d{2}$/.test(reportMonth) ? reportMonth : availableMonths[availableMonths.length - 1] || "";
+  const previousMonth = previousReportMonth(month);
+  const rows = owned.filter((item) => String(item.date || "").startsWith(month));
+  const previousRows = owned.filter((item) => String(item.date || "").startsWith(previousMonth));
+  const sourceMap = new Map((db.data_sources || []).filter((item) => item.ownerId === ownerId).map((item) => [item.id, item]));
+  const grouped = new Map();
+  rows.forEach((item) => {
+    const key = item.campaignId ? `${item.provider}:${item.campaignId}` : `${item.provider}:${item.channel}`;
+    const group = grouped.get(key) || { provider: item.provider, channel: item.channel, campaignId: item.campaignId, campaignName: item.campaignName, rows: [] };
+    group.rows.push(item);
+    grouped.set(key, group);
+  });
+  const breakdown = [...grouped.values()].map((group) => ({
+    provider: group.provider,
+    channel: group.channel,
+    campaignId: group.campaignId,
+    campaignName: group.campaignName,
+    ...aggregateNormalizedMetrics(group.rows),
+  })).sort((a, b) => b.revenue - a.revenue || b.conversions - a.conversions);
+  const sources = [...new Set(rows.map((item) => item.sourceId))].map((id) => sourceMap.get(id)).filter(Boolean).map((source) => ({
+    id: source.id, provider: source.provider || source.type, name: source.displayName, externalAccountId: source.externalAccountId,
+  }));
+  return {
+    reportMonth: month,
+    previousMonth,
+    totals: aggregateUnifiedMetrics(rows),
+    previousTotals: aggregateUnifiedMetrics(previousRows),
+    breakdown,
+    sources,
+    rowCount: rows.length,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+async function createAutomatedConnectorReport(ownerId) {
+  const data = await unifiedConnectorReportData(ownerId);
+  if (!data.reportMonth || !data.rowCount) return null;
+  const automationKey = `connectors:${data.reportMonth}`;
+  const db = await readDb();
+  const existing = (db.ai_runs || []).find((item) => item.ownerId === ownerId && item.automationKey === automationKey);
+  if (existing) return { id: existing.id, reportMonth: data.reportMonth, existing: true };
+  const user = (db.auth_users || []).find((item) => item.id === ownerId) || { id: ownerId };
+  const usage = await consumeApiUsage(user, "ai_report", { endpoint: "worker:connector-report", reportMonth: data.reportMonth });
+  if (!usage.allowed) {
+    await createRecord("audit_logs", { action: "connector:auto_report_quota_exceeded", reportMonth: data.reportMonth }, ownerId);
+    return null;
+  }
+  const best = data.breakdown[0] || null;
+  const weakest = [...data.breakdown].sort((a, b) => a.roas - b.roas || a.conversions - b.conversions)[0] || null;
+  const payload = {
+    reportMonth: data.reportMonth,
+    reportType: "Automated multi-channel report",
+    clientName: data.sources[0]?.name || "Connected advertising account",
+    clientNeeds: "Summarize performance, explain risks, and propose a concrete next-month budget and creative action plan.",
+    metrics: data.totals,
+    previousMetrics: data.previousTotals,
+    channels: data.breakdown,
+    bestChannel: best,
+    weakestChannel: weakest,
+    dataSources: data.sources,
+  };
+  const draft = await generateAiDraft(payload);
+  const run = await createRecord("ai_runs", {
+    ...payload, ...draft, automationKey, status: "completed", mode: draft.mode === "live" ? "connector-live" : "connector-fallback", usageEventId: usage.eventId, usage,
+  }, ownerId);
+  const report = await createRecord("reports", {
+    automationKey,
+    aiRunId: run.id,
+    reportMonth: data.reportMonth,
+    month: data.reportMonth,
+    clientName: payload.clientName,
+    reportType: payload.reportType,
+    status: "draft",
+    metrics: data.totals,
+    previousMetrics: data.previousTotals,
+    breakdown: data.breakdown,
+    sources: data.sources,
+    summary: draft.summary,
+    risks: draft.risks,
+    nextActions: draft.nextActions,
+    clientReplyDraft: draft.clientReplyDraft,
+    generatedBy: "connector-worker",
+  }, ownerId);
+  await createRecord("audit_logs", { action: "connector:auto_report_created", reportMonth: data.reportMonth, recordId: report.id, aiRunId: run.id }, ownerId);
+  return { id: run.id, reportId: report.id, reportMonth: data.reportMonth, existing: false };
+}
+
+async function processDueConnectorSources() {
+  const sources = await claimDueConnectorSources();
+  const db = await readDb();
+  const owners = new Set();
+  const completed = [];
+  const failed = [];
+  for (const source of sources) {
+    const range = connectorIncrementalRange(source, db.normalized_metrics);
+    try {
+      const result = await syncClaimedConnectorSource(source, range);
+      await finalizeConnectorSchedule(source, result);
+      completed.push({ sourceId: source.id, jobId: result.job.id, provider: normalizeConnectorType(source.type), rowCount: result.job.rowCount });
+      if (source.autoReportEnabled !== false) owners.add(source.ownerId);
+    } catch (error) {
+      await finalizeConnectorSchedule(source, {}, error);
+      failed.push({ sourceId: source.id, provider: normalizeConnectorType(source.type), code: String(error.message || "CONNECTOR_SYNC_FAILED").split(":")[0] });
+    }
+  }
+  const reports = [];
+  for (const ownerId of owners) {
+    const report = await createAutomatedConnectorReport(ownerId);
+    if (report && !report.existing) reports.push(report);
+  }
+  return { processed: sources.length, completed, failed, reports };
+}
+
 async function listGa4Properties(ownerId) {
   const { token } = await connectorAccessToken(ownerId, "ga4");
-  const summaries = [];
-  let pageToken = "";
-  for (let page = 0; page < 10; page += 1) {
-    const target = new URL(`${ga4AdminApiBaseUrl}/accountSummaries`);
-    target.searchParams.set("pageSize", "200");
-    if (pageToken) target.searchParams.set("pageToken", pageToken);
-    const { body } = await fetchConnectorJson(target.toString(), {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    });
-    summaries.push(...(body.accountSummaries || []));
-    pageToken = body.nextPageToken || "";
-    if (!pageToken) break;
+  try {
+    const summaries = [];
+    let pageToken = "";
+    for (let page = 0; page < 10; page += 1) {
+      const target = new URL(`${ga4AdminApiBaseUrl}/accountSummaries`);
+      target.searchParams.set("pageSize", "200");
+      if (pageToken) target.searchParams.set("pageToken", pageToken);
+      const { body } = await fetchConnectorJson(target.toString(), {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+      summaries.push(...(body.accountSummaries || []));
+      pageToken = body.nextPageToken || "";
+      if (!pageToken) break;
+    }
+    return summaries.flatMap((account) => (account.propertySummaries || []).map((property) => ({
+      accountId: String(account.account || "").replace(/^accounts\//, ""),
+      accountName: account.displayName || "",
+      propertyId: String(property.property || "").replace(/^properties\//, ""),
+      propertyName: property.displayName || "",
+    }))).filter((item) => /^\d+$/.test(item.propertyId));
+  } catch (error) {
+    if (String(error.message || "").split(":")[0] === "CONNECTOR_REAUTH_REQUIRED") {
+      await updateConnectorCredential(ownerId, "ga4", { status: "needs_reauth", lastErrorCode: "GA4_AUTH_EXPIRED" });
+    }
+    throw error;
   }
-  return summaries.flatMap((account) => (account.propertySummaries || []).map((property) => ({
-    accountId: String(account.account || "").replace(/^accounts\//, ""),
-    accountName: account.displayName || "",
-    propertyId: String(property.property || "").replace(/^properties\//, ""),
-    propertyName: property.displayName || "",
-  }))).filter((item) => /^\d+$/.test(item.propertyId));
 }
 
 async function selectGa4Property(ownerId, payload) {
@@ -2336,6 +2603,9 @@ async function selectGa4Property(ownerId, payload) {
     displayName: String(payload.propertyName || `GA4 ${propertyId}`),
     status: "connected",
     syncCadence: payload.syncCadence || "daily",
+    autoReportEnabled: payload.autoReportEnabled !== false,
+    backfillStartDate: /^\d{4}-\d{2}-\d{2}$/.test(payload.backfillStartDate || "") ? payload.backfillStartDate : null,
+    nextSyncAt: existing?.nextSyncAt || new Date().toISOString(),
   }, ownerId);
 }
 
@@ -2436,7 +2706,7 @@ async function syncGa4Source(ownerId, payload) {
       const jobIndex = latest.sync_jobs.findIndex((item) => item.id === job.id && item.ownerId === ownerId);
       latest.sync_jobs[jobIndex] = { ...latest.sync_jobs[jobIndex], status: "completed", attempts: totalAttempts, rowCount: rows.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       const sourceIndex = latest.data_sources.findIndex((item) => item.id === source.id && item.ownerId === ownerId);
-      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      latest.data_sources[sourceIndex] = { ...latest.data_sources[sourceIndex], status: "synced", rowCount: rows.length, lastSyncedAt: new Date().toISOString(), nextSyncAt: nextConnectorRun(source), consecutiveFailures: 0, lastErrorCode: null, updatedAt: new Date().toISOString() };
       latest.data_syncs.push(withId({ ownerId, sourceId: source.id, provider: "ga4", status: "synced", startDate, endDate, rowCount: rows.length, attempts: totalAttempts, syncedAt: new Date().toISOString() }));
       latest.audit_logs.push(withId({ action: "connector:sync_completed", ownerId, provider: "ga4", recordId: job.id, rowCount: rows.length }));
       await writeDb(latest);
@@ -2446,7 +2716,9 @@ async function syncGa4Source(ownerId, payload) {
     const completedJob = await operation;
     return { job: completedJob, metrics: rows };
   } catch (error) {
-    await upsertOwnedRecord("sync_jobs", { id: job.id, status: "failed", errorCode: String(error.message || "SYNC_FAILED").split(":")[0], failedAt: new Date().toISOString() }, ownerId);
+    const code = String(error.message || "SYNC_FAILED").split(":")[0];
+    await upsertOwnedRecord("sync_jobs", { id: job.id, status: "failed", errorCode: code, failedAt: new Date().toISOString() }, ownerId);
+    if (code === "CONNECTOR_REAUTH_REQUIRED") await updateConnectorCredential(ownerId, "ga4", { status: "needs_reauth", lastErrorCode: "GA4_AUTH_EXPIRED" });
     throw error;
   }
 }
@@ -3635,13 +3907,18 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === "/api/worker/run" && req.method === "POST") {
     if (!isWorkerAuthorized(req)) return json(res, 401, { error: "Unauthorized worker" });
-    const result = await processDueSchedules();
+    const [result, connectors] = await Promise.all([processDueSchedules(), processDueConnectorSources()]);
     return json(res, 200, {
       item: {
-        processed: result.processed,
+        processed: result.processed + connectors.processed,
+        scheduleProcessed: result.processed,
+        connectorProcessed: connectors.processed,
         aiRunIds: result.aiRuns.map((item) => item.id),
+        connectorAiRunIds: connectors.reports.map((item) => item.id),
         emailJobIds: result.emailJobs.map((item) => item.id),
         scheduleIds: result.schedules.map((item) => item.id),
+        connectorJobIds: connectors.completed.map((item) => item.jobId),
+        connectorFailures: connectors.failed,
       },
     });
   }
@@ -3882,6 +4159,41 @@ async function handleApi(req, res, url) {
       .filter((item) => !provider || item.provider === provider)
       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     return json(res, 200, { items });
+  }
+
+  if (url.pathname === "/api/connectors/report-data" && req.method === "GET") {
+    const item = await unifiedConnectorReportData(req.auth.user.id, url.searchParams.get("month") || "");
+    return json(res, 200, { item });
+  }
+
+  if (url.pathname === "/api/connectors/sync-status" && req.method === "GET") {
+    const db = await readDb();
+    const sources = (db.data_sources || []).filter((item) => item.ownerId === req.auth.user.id && ["ga4", "google_ads", "meta_ads"].includes(normalizeConnectorType(item.type)));
+    const sourceIds = new Set(sources.map((item) => item.id));
+    const jobs = (db.sync_jobs || []).filter((item) => item.ownerId === req.auth.user.id && sourceIds.has(item.sourceId)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 50);
+    return json(res, 200, { item: {
+      sources: sources.map((item) => ({ id: item.id, provider: item.provider || item.type, displayName: item.displayName, status: item.status, lastSyncedAt: item.lastSyncedAt || null, nextSyncAt: item.nextSyncAt || null, rowCount: item.rowCount || 0, consecutiveFailures: item.consecutiveFailures || 0, lastErrorCode: item.lastErrorCode || null })),
+      jobs: jobs.map((item) => ({ id: item.id, sourceId: item.sourceId, provider: item.provider, status: item.status, startDate: item.startDate, endDate: item.endDate, rowCount: item.rowCount || 0, attempts: item.attempts || 0, errorCode: item.errorCode || null, createdAt: item.createdAt, completedAt: item.completedAt || null })),
+    } });
+  }
+
+  if (url.pathname === "/api/connectors/sync" && req.method === "POST") {
+    let source = null;
+    try {
+      const payload = await readBody(req);
+      const db = await readDb();
+      source = (db.data_sources || []).find((item) => item.id === payload.sourceId && item.ownerId === req.auth.user.id && ["ga4", "google_ads", "meta_ads"].includes(normalizeConnectorType(item.type)));
+      if (!source) throw new Error("DATA_SOURCE_NOT_FOUND");
+      const range = payload.startDate && payload.endDate ? validateSyncDateRange(payload) : connectorIncrementalRange(source, db.normalized_metrics);
+      const item = await syncClaimedConnectorSource(source, range);
+      await finalizeConnectorSchedule(source, item);
+      return json(res, 200, { item });
+    } catch (error) {
+      const code = String(error.message || "CONNECTOR_SYNC_FAILED").split(":")[0];
+      if (source) await finalizeConnectorSchedule(source, {}, error);
+      const status = code === "DATA_SOURCE_NOT_FOUND" ? 404 : code === "SYNC_DATE_RANGE_INVALID" ? 400 : code === "CONNECTOR_REAUTH_REQUIRED" ? 409 : code === "CONNECTOR_PERMISSION_DENIED" ? 403 : 502;
+      return json(res, status, { error: "Connector synchronization failed", code });
+    }
   }
 
   if (url.pathname === "/api/billing/checkout" && req.method === "POST") {

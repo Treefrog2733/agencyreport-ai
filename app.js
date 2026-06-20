@@ -47,6 +47,8 @@ const state = {
   googleAdsSource: null,
   metaAdAccounts: [],
   metaAdsSource: null,
+  connectorSources: [],
+  connectorSyncJobs: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -487,6 +489,9 @@ function translateStaticWorkspace() {
   apply("#loadMetaAdAccountsBtn", "載入廣告帳戶", "Load ad accounts");
   apply("#selectMetaAdAccountBtn", "使用此帳戶", "Use this account");
   apply("#syncMetaAdsBtn", "立即同步", "Sync now");
+  apply("#connectorSyncTitle", "自動同步狀態", "Automatic sync status");
+  apply("#connectorSyncCopy", "查看每個資料源的最近執行結果、下次排程與錯誤。", "Review the latest result, next schedule, and errors for every data source.");
+  apply("#refreshConnectorStatusBtn", "更新狀態", "Refresh status");
   renderConnectorSettings();
   apply("#confirmDeleteAccountBtn", "永久刪除", "Delete permanently");
   apply("#cancelDeleteAccountBtn", "取消", "Cancel");
@@ -2053,16 +2058,52 @@ function renderConnectorSettings() {
   const metaAdsConnected = state.connectorConnections.some((item) => item.provider === "meta_ads" && item.status === "connected");
   if (!metaAdsConnected) $("#metaAdAccountPanel").hidden = true;
   if ($("#syncMetaAdsBtn")) $("#syncMetaAdsBtn").disabled = !state.metaAdsSource;
+  renderConnectorSyncStatus();
+}
+
+function connectorStatusLabel(status, zh) {
+  const labels = {
+    connected: ["已連接", "Connected"], synced: ["同步完成", "Synced"], syncing: ["同步中", "Syncing"],
+    error: ["需要重試", "Retry needed"], needs_reauth: ["需要重新授權", "Reconnect required"], disconnected: ["已中斷", "Disconnected"],
+  };
+  return (labels[status] || [status || "-", status || "-"])[zh ? 0 : 1];
+}
+
+function renderConnectorSyncStatus() {
+  const list = $("#connectorSyncList");
+  if (!list) return;
+  const zh = state.lang !== "en";
+  if (!state.connectorSources.length) {
+    list.innerHTML = `<p class="empty-state">${zh ? "連接並選擇資料來源後，會在這裡顯示自動同步紀錄。" : "Connect and select a data source to see automatic sync activity here."}</p>`;
+    return;
+  }
+  list.innerHTML = state.connectorSources.map((source) => {
+    const latestJob = state.connectorSyncJobs.find((item) => item.sourceId === source.id);
+    const last = source.lastSyncedAt ? new Date(source.lastSyncedAt).toLocaleString(zh ? "zh-TW" : "en-US") : (zh ? "尚未同步" : "Not synced yet");
+    const next = source.nextSyncAt ? new Date(source.nextSyncAt).toLocaleString(zh ? "zh-TW" : "en-US") : "-";
+    const error = source.lastErrorCode || latestJob?.errorCode || "";
+    return `<article class="connector-sync-item">
+      <div class="connector-sync-main">
+        <span class="connector-state ${["error", "needs_reauth", "disconnected"].includes(source.status) ? "disconnected" : ""}">${escapeLibraryText(connectorStatusLabel(source.status, zh))}</span>
+        <strong>${escapeLibraryText(source.displayName || connectorLabels[source.provider]?.[zh ? "zh" : "en"] || source.provider)}</strong>
+        <small>${escapeLibraryText(connectorLabels[source.provider]?.[zh ? "zh" : "en"] || source.provider)} · ${Number(source.rowCount || 0)} ${zh ? "筆" : "rows"}</small>
+      </div>
+      <dl><div><dt>${zh ? "最後同步" : "Last sync"}</dt><dd>${escapeLibraryText(last)}</dd></div><div><dt>${zh ? "下次排程" : "Next run"}</dt><dd>${escapeLibraryText(next)}</dd></div>${error ? `<div><dt>${zh ? "錯誤" : "Error"}</dt><dd>${escapeLibraryText(error)}</dd></div>` : ""}</dl>
+      <button class="ghost" type="button" data-sync-source-id="${escapeLibraryText(source.id)}" ${source.status === "syncing" || source.status === "needs_reauth" ? "disabled" : ""}>${zh ? "重試同步" : "Sync now"}</button>
+    </article>`;
+  }).join("");
 }
 
 async function loadConnectorConnections() {
   if (!authToken()) return;
   try {
-    const [connections, sources] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources")]);
+    const [connections, sources, syncStatus] = await Promise.all([api("/api/connectors/connections"), api("/api/data-sources"), api("/api/connectors/sync-status")]);
     state.connectorConnections = Array.isArray(connections) ? connections : [];
     state.ga4Source = (Array.isArray(sources) ? sources : []).find((item) => item.type === "ga4") || null;
     state.googleAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "google_ads") || null;
     state.metaAdsSource = (Array.isArray(sources) ? sources : []).find((item) => item.type === "meta_ads") || null;
+    state.connectorSources = Array.isArray(syncStatus?.sources) ? syncStatus.sources : [];
+    state.connectorSyncJobs = Array.isArray(syncStatus?.jobs) ? syncStatus.jobs : [];
     renderConnectorSettings();
   } catch (error) {
     setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load connections" : "無法載入串接狀態", error.message);
@@ -2275,6 +2316,20 @@ async function syncMetaAdsUi() {
   }
 }
 
+async function syncConnectorSourceUi(sourceId) {
+  const button = $(`[data-sync-source-id="${CSS.escape(sourceId)}"]`);
+  if (button) button.disabled = true;
+  setStatus("#connectorStatus", "", state.lang === "en" ? "Synchronizing data source..." : "正在同步資料來源...");
+  try {
+    const item = await api("/api/connectors/sync", { method: "POST", body: JSON.stringify({ sourceId, ...reportMonthRange() }) });
+    setStatus("#connectorStatus", "ok", state.lang === "en" ? "Synchronization complete" : "同步完成", state.lang === "en" ? `${item.job.rowCount} normalized rows.` : `${item.job.rowCount} 筆標準資料。`);
+    await loadConnectorConnections();
+  } catch (error) {
+    setStatus("#connectorStatus", "error", state.lang === "en" ? "Synchronization failed" : "同步失敗", error.message);
+    await loadConnectorConnections();
+  }
+}
+
 function syncConsentAudit() {
   const inputs = ["#consentData", "#consentAi", "#consentDelivery"].map((selector) => $(selector)).filter(Boolean);
   const checked = inputs.filter((input) => input.checked).length;
@@ -2388,6 +2443,11 @@ function setupEvents() {
   $("#loadMetaAdAccountsBtn")?.addEventListener("click", loadMetaAdAccounts);
   $("#selectMetaAdAccountBtn")?.addEventListener("click", selectMetaAdAccountUi);
   $("#syncMetaAdsBtn")?.addEventListener("click", syncMetaAdsUi);
+  $("#refreshConnectorStatusBtn")?.addEventListener("click", loadConnectorConnections);
+  $("#connectorSyncList")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-sync-source-id]");
+    if (button) syncConnectorSourceUi(button.dataset.syncSourceId);
+  });
   $("#runAutopilotBtn")?.addEventListener("click", () => {
     const draft = buildRuleDraft();
     $("#autopilotOutput").innerHTML = draft ? draft.actions.map((item) => `<div><strong>${escapeLibraryText(item)}</strong></div>`).join("") : "";

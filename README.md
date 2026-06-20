@@ -228,6 +228,9 @@ Data connectors:
 - `GET /api/connectors/meta-ads/accounts`
 - `POST /api/connectors/meta-ads/select`
 - `POST /api/connectors/meta-ads/sync`
+- `POST /api/connectors/sync`
+- `GET /api/connectors/sync-status`
+- `GET /api/connectors/report-data?month=YYYY-MM`
 - `GET /api/connectors/metrics?provider=ga4|google_ads|meta_ads&sourceId=...`
 - `POST /api/data-sources`
 - `POST /api/data-sources/test`
@@ -238,6 +241,8 @@ OAuth connector secrets use a dedicated `CONNECTOR_ENCRYPTION_KEY` (minimum 32 c
 Google Ads defaults to API `v24` and can be updated with `GOOGLE_ADS_API_VERSION` without changing application code. Customer discovery expands accessible manager accounts into client accounts, stores both the reporting Customer ID and manager `login-customer-id`, and rejects manager accounts as report data sources. Synchronization uses GAQL `searchStream` and normalizes cost micros, impressions, clicks, conversions, and conversion value into the shared tenant-owned KPI collection.
 
 Meta Ads defaults to Graph API `v25.0`. OAuth authorization tokens are exchanged for long-lived tokens, every server-side Graph request includes an HMAC `appsecret_proof`, and paging URLs are restricted to the configured Graph API origin and version path. Insights synchronization requests daily campaign data and normalizes spend, impressions, clicks, prioritized purchase/lead conversions, and purchase value without summing unrelated action types.
+
+Selected connector sources default to daily automation. The worker performs a 90-day initial backfill, then refreshes the latest two days to absorb delayed conversion attribution. A per-source lock prevents duplicate work; persistent quota or transient failures move to exponential backoff, while authentication failures move the source to `needs_reauth`. Unified report totals use delivery metrics from Google/Meta Ads and outcome metrics from GA4 when both are present, preventing common cross-platform double counting. After synchronization, the worker creates at most one quota-accounted AI run and reusable report draft per tenant and report month.
 
 ## OpenAI Report Flow
 
@@ -341,13 +346,13 @@ Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live Ope
 
 The public legal center is available at `/legal` and `/legal?lang=en`. Run `npm run smoke:legal` to verify bilingual section parity, the registered policy version, support contact, subprocessors, security headers, and mojibake protection. These pages remain the product's basic operational notice; external counsel review is not enforced as a launch gate.
 
-`npm run smoke:worker` verifies that the scheduled-report worker rejects unauthenticated calls, processes each due schedule once, generates an AI draft with safe fallback, advances the next run, sends the queued email, preserves tenant ownership, and keeps client content out of automation logs.
+`npm run smoke:worker` verifies that the scheduled-report worker rejects unauthenticated calls, processes each due schedule once, generates an AI draft with safe fallback, advances the next run, sends the queued email, preserves tenant ownership, and keeps client content out of automation logs. Connector automation coverage additionally verifies source locks, incremental ranges, quota backoff, deduplicated monthly AI drafts, and tenant-scoped observability.
 
 `npm run smoke:i18n` verifies that every translated HTML key exists in both Traditional Chinese and English, both catalogs remain symmetric, HTML IDs stay unique, and public source files contain no replacement-character or private-use mojibake. English visual smoke also rejects visible CJK text on both the public landing page and every workspace view.
 
 `npm run smoke:auth-privacy` runs production-shaped password-reset and verification-resend requests against existing and missing addresses, ensuring that public responses cannot be used for account enumeration. Authentication emails follow the selected interface language and contain a clickable one-time action link.
 
-`npm run smoke:connectors` verifies report-ready CSV validation, Google Sheets URL allowlisting, localhost and arbitrary-host SSRF rejection, source ownership, and tenant-isolated sync history. Public Sheets imports are limited to HTTPS Google domains, validated across redirects, capped at 5 MB, and aborted after 12 seconds.
+`npm run smoke:connectors` verifies report-ready CSV validation, Google Sheets URL allowlisting, OAuth vault security, Google PKCE refresh, GA4 Property synchronization, Google Ads MCC/client GAQL synchronization, Meta long-lived-token and Insights synchronization, tenant isolation, normalized KPI aggregation, automatic worker runs, persistent quota backoff, and reusable AI report creation. Public Sheets imports are limited to HTTPS Google domains, validated across redirects, capped at 5 MB, and aborted after 12 seconds.
 
 ## Continuous Integration
 

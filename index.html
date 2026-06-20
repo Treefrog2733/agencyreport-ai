@@ -537,6 +537,10 @@
                   <button class="ghost" id="syncMetaAdsBtn" type="button" disabled>立即同步</button>
                 </div>
               </div>
+              <section class="connector-sync-panel" aria-labelledby="connectorSyncTitle">
+                <div class="connector-sync-head"><div><h4 id="connectorSyncTitle">自動同步狀態</h4><p id="connectorSyncCopy">查看每個資料源的最近執行結果、下次排程與錯誤。</p></div><button class="ghost" id="refreshConnectorStatusBtn" type="button">更新狀態</button></div>
+                <div class="connector-sync-list" id="connectorSyncList" aria-live="polite"><p class="empty-state">連接並選擇資料來源後，會在這裡顯示自動同步紀錄。</p></div>
+              </section>
               <div id="connectorStatus" class="status-panel"></div>
             </section>
             <div class="consent-list">
