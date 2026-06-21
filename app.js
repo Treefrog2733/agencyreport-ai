@@ -309,6 +309,9 @@ async function api(path, options = {}) {
     error.status = response.status;
     error.code = body.code;
     error.details = body.item;
+    error.providerStatus = body.providerStatus;
+    error.providerMessage = body.providerMessage;
+    error.providerReason = body.providerReason;
     throw error;
   }
   return body.item ?? body.items ?? body;
@@ -2261,7 +2264,20 @@ async function loadGoogleAdsCustomers() {
     }
     setStatus("#connectorStatus", state.googleAdsCustomers.length ? "ok" : "warn", state.lang === "en" ? `${state.googleAdsCustomers.length} accounts loaded` : `已載入 ${state.googleAdsCustomers.length} 個帳戶`);
   } catch (error) {
-    setStatus("#connectorStatus", "error", state.lang === "en" ? "Unable to load Google Ads accounts" : "無法載入 Google Ads 廣告帳戶", error.message);
+    const diagnostic = [error.code, error.providerStatus, error.providerReason, error.providerMessage]
+      .filter(Boolean)
+      .join(" · ");
+    const permissionHelp = error.code === "CONNECTOR_PERMISSION_DENIED"
+      ? (state.lang === "en"
+        ? "Check that Google Ads API is enabled, the developer token can access production accounts, and this Google user has Ads account access."
+        : "請確認已啟用 Google Ads API、Developer Token 可存取正式帳戶，且此 Google 使用者擁有廣告帳戶權限。")
+      : "";
+    setStatus(
+      "#connectorStatus",
+      "error",
+      state.lang === "en" ? "Unable to load Google Ads accounts" : "無法載入 Google Ads 廣告帳戶",
+      [permissionHelp, diagnostic || error.message].filter(Boolean).join(" ")
+    );
   }
 }
 

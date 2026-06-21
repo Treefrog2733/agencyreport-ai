@@ -1952,9 +1952,21 @@ async function fetchConnectorJson(url, options = {}) {
       const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
       const body = await response.json().catch(() => ({}));
       if (response.ok) return { body, attempts: attempt };
-      if (response.status === 401) throw new Error("CONNECTOR_REAUTH_REQUIRED");
-      if (response.status === 403) throw new Error("CONNECTOR_PERMISSION_DENIED");
-      if (response.status !== 429 && response.status < 500) throw new Error(`CONNECTOR_API_FAILED:${response.status}`);
+      const providerStatus = String(body?.error?.status || "");
+      const providerMessage = String(body?.error?.message || "").replace(/\s+/g, " ").trim().slice(0, 320);
+      const providerReason = String(body?.error?.details?.[0]?.errors?.[0]?.errorCode
+        ? JSON.stringify(body.error.details[0].errors[0].errorCode)
+        : "").slice(0, 160);
+      const connectorError = (code) => {
+        const error = new Error(code);
+        error.providerStatus = providerStatus;
+        error.providerMessage = providerMessage;
+        error.providerReason = providerReason;
+        return error;
+      };
+      if (response.status === 401) throw connectorError("CONNECTOR_REAUTH_REQUIRED");
+      if (response.status === 403) throw connectorError("CONNECTOR_PERMISSION_DENIED");
+      if (response.status !== 429 && response.status < 500) throw connectorError(`CONNECTOR_API_FAILED:${response.status}`);
       lastError = new Error(response.status === 429 ? "CONNECTOR_RATE_LIMITED" : `CONNECTOR_API_RETRYABLE:${response.status}`);
     } catch (error) {
       if (["CONNECTOR_REAUTH_REQUIRED", "CONNECTOR_PERMISSION_DENIED"].includes(String(error.message || "").split(":")[0]) || String(error.message || "").startsWith("CONNECTOR_API_FAILED")) throw error;
@@ -4257,8 +4269,20 @@ async function handleApi(req, res, url) {
       return json(res, 200, { items: await listGoogleAdsCustomers(req.auth.user.id) });
     } catch (error) {
       const code = String(error.message || "GOOGLE_ADS_CUSTOMERS_FAILED").split(":")[0];
-      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code) ? 409 : code === "GOOGLE_ADS_DEVELOPER_TOKEN_REQUIRED" ? 503 : 502;
-      return json(res, status, { error: "Google Ads customers could not be loaded", code });
+      const status = ["CONNECTOR_NOT_CONNECTED", "CONNECTOR_REAUTH_REQUIRED"].includes(code)
+        ? 409
+        : code === "CONNECTOR_PERMISSION_DENIED"
+          ? 403
+          : code === "GOOGLE_ADS_DEVELOPER_TOKEN_REQUIRED"
+            ? 503
+            : 502;
+      return json(res, status, {
+        error: "Google Ads customers could not be loaded",
+        code,
+        providerStatus: error.providerStatus || "",
+        providerMessage: error.providerMessage || "",
+        providerReason: error.providerReason || "",
+      });
     }
   }
 
