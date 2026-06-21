@@ -10,7 +10,7 @@ loadLocalEnv();
 const dataDir = path.join(root, "data");
 const dbPath = path.join(dataDir, "db.json");
 const port = Number(process.env.PORT || 4173);
-const googleAnalyticsMeasurementId = "G-8T8GJ06MQP";
+const googleAnalyticsMeasurementId = "G-Y5ZK791YGN";
 const databaseUrl = process.env.DATABASE_URL || "";
 const aiProvider = (process.env.AI_PROVIDER || (process.env.OPENAI_API_KEY ? "openai" : "fallback")).toLowerCase();
 const aiApiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || "";

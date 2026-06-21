@@ -62,7 +62,7 @@ async function run() {
     const label = index ? "English" : "Chinese";
     assert((html.match(/googletagmanager\.com\/gtag\/js/g) || []).length === 1, `${label} page loads one Google tag`);
   });
-  assert(tagInitResponse.ok && tagInit.includes("G-8T8GJ06MQP"), "Google tag initializer is publicly available");
+  assert(tagInitResponse.ok && tagInit.includes("G-Y5ZK791YGN"), "Google tag initializer is publicly available");
   const csp = zhResponse.headers.get("content-security-policy") || "";
   assert(csp.includes("https://www.googletagmanager.com"), "CSP allows Google Tag Manager scripts");
   assert(csp.includes("https://www.google-analytics.com"), "CSP allows Google Analytics collection");
