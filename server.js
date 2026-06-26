@@ -98,6 +98,7 @@ const emptyDb = {
   clients: [],
   templates: [],
   leads: [],
+  feedback: [],
   data_sources: [],
   data_syncs: [],
   connector_credentials: [],
@@ -4163,6 +4164,7 @@ async function handleApi(req, res, url) {
 
   const isPublicWrite =
     (url.pathname === "/api/leads" && req.method === "POST") ||
+    (url.pathname === "/api/feedback" && req.method === "POST") ||
     (url.pathname === "/api/portal-submissions" && req.method === "POST") ||
     (url.pathname === "/api/billing/quote/accept" && req.method === "POST") ||
     (url.pathname === "/api/billing/invoice/pay" && req.method === "POST");
@@ -4600,6 +4602,7 @@ async function handleApi(req, res, url) {
     "/api/team-members": "team_members",
     "/api/templates": "templates",
     "/api/leads": "leads",
+    "/api/feedback": "feedback",
     "/api/data-sources": "data_sources",
     "/api/data-syncs": "data_syncs",
     "/api/consents": "consents",
@@ -4641,6 +4644,26 @@ async function handleApi(req, res, url) {
     if (collection === "reports") {
       const record = await upsertOwnedRecord(collection, payload, req.auth.user.id);
       return json(res, 201, { item: record });
+    }
+    if (collection === "feedback") {
+      const message = String(payload.message || "").trim();
+      const email = String(payload.email || "").trim();
+      const type = String(payload.type || "general").trim();
+      if (message.length < 8) return json(res, 400, { error: "Feedback message is too short", code: "FEEDBACK_MESSAGE_REQUIRED" });
+      if (message.length > 4000) return json(res, 400, { error: "Feedback message is too long", code: "FEEDBACK_MESSAGE_TOO_LONG" });
+      if (email && !/^\S+@\S+\.\S+$/.test(email)) return json(res, 400, { error: "A valid email is required", code: "FEEDBACK_EMAIL_INVALID" });
+      const allowedTypes = new Set(["bug", "idea", "billing", "connector", "general"]);
+      const record = await createRecord("feedback", {
+        type: allowedTypes.has(type) ? type : "general",
+        message,
+        email,
+        name: String(payload.name || "").trim().slice(0, 120),
+        page: String(payload.page || "").trim().slice(0, 500),
+        language: String(payload.language || "").trim().slice(0, 16),
+        status: "new",
+        submittedAt: new Date().toISOString(),
+      }, req.auth?.user?.id || null);
+      return json(res, 201, { item: { id: record.id, status: record.status, submittedAt: record.submittedAt } });
     }
     const record = await createRecord(collection, payload, req.auth?.user?.id || null);
     return json(res, 201, { item: record });

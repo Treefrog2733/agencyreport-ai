@@ -78,6 +78,47 @@
       </div>
     </section>
 
+    <button class="feedback-launcher" id="feedbackLauncher" type="button">
+      <span>?</span>
+      <strong data-i18n="feedbackLauncher">意見回饋</strong>
+    </button>
+
+    <section class="feedback-modal" id="feedbackModal" hidden>
+      <form class="feedback-dialog" id="feedbackForm" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+        <div class="feedback-head">
+          <div>
+            <p class="eyebrow">AgencyReport AI</p>
+            <h2 id="feedbackTitle" data-i18n="feedbackTitle">回報問題或提出建議</h2>
+            <p data-i18n="feedbackCopy">告訴我們哪裡卡住、想要什麼功能，或付款/串接遇到什麼狀況。</p>
+          </div>
+          <button class="ghost feedback-close" id="feedbackCloseBtn" type="button" aria-label="Close">x</button>
+        </div>
+        <label>
+          <span data-i18n="feedbackType">回饋類型</span>
+          <select id="feedbackType">
+            <option value="bug" data-i18n="feedbackBug">功能問題</option>
+            <option value="idea" data-i18n="feedbackIdea">功能建議</option>
+            <option value="connector" data-i18n="feedbackConnector">資料串接</option>
+            <option value="billing" data-i18n="feedbackBilling">付款方案</option>
+            <option value="general" data-i18n="feedbackGeneral">其他</option>
+          </select>
+        </label>
+        <label>
+          <span>Email</span>
+          <input id="feedbackEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+        </label>
+        <label>
+          <span data-i18n="feedbackMessage">回饋內容</span>
+          <textarea id="feedbackMessage" rows="6" data-i18n-placeholder="feedbackPlaceholder" placeholder="請描述你遇到的問題、目前頁面、希望的結果，或任何建議。"></textarea>
+        </label>
+        <div class="feedback-actions">
+          <button class="ghost" id="feedbackMailBtn" type="button" data-i18n="feedbackEmailUs">直接寄信</button>
+          <button class="primary" id="feedbackSubmitBtn" type="submit" data-i18n="feedbackSubmit">送出回饋</button>
+        </div>
+        <div class="status-panel" id="feedbackStatus"></div>
+      </form>
+    </section>
+
     <section class="auth-gate" id="authGate" hidden>
       <form class="auth-card" id="authForm">
         <button class="ghost auth-close" id="closeAuthBtn" type="button" aria-label="Close">x</button>

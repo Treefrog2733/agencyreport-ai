@@ -124,6 +124,19 @@ const copy = {
     finalCopy: "登入後匯入範例資料，先跑出一份完整月報，再逐步接上正式資料源與收款流程。",
     salesFooterTitle: "Virtual Trend Works",
     salesFooterCopy: "AgencyReport AI 銷售、付款與客服聯絡窗口。",
+    feedbackLauncher: "意見回饋",
+    feedbackTitle: "回報問題或提出建議",
+    feedbackCopy: "告訴我們哪裡卡住、想要什麼功能，或付款/串接遇到什麼狀況。",
+    feedbackType: "回饋類型",
+    feedbackBug: "功能問題",
+    feedbackIdea: "功能建議",
+    feedbackConnector: "資料串接",
+    feedbackBilling: "付款方案",
+    feedbackGeneral: "其他",
+    feedbackMessage: "回饋內容",
+    feedbackPlaceholder: "請描述你遇到的問題、目前頁面、希望的結果，或任何建議。",
+    feedbackEmailUs: "直接寄信",
+    feedbackSubmit: "送出回饋",
     agencyBrand: "代理商品牌",
     clientName: "客戶名稱",
     reportMonth: "報告月份",
@@ -237,6 +250,19 @@ const copy = {
     finalCopy: "Sign in, load sample data, generate a full report, then connect production data and payments.",
     salesFooterTitle: "Virtual Trend Works",
     salesFooterCopy: "Sales, payment, and support contact for AgencyReport AI.",
+    feedbackLauncher: "Feedback",
+    feedbackTitle: "Report an issue or suggest an improvement",
+    feedbackCopy: "Tell us where you got stuck, which feature you need, or what happened with billing or integrations.",
+    feedbackType: "Feedback type",
+    feedbackBug: "Product issue",
+    feedbackIdea: "Feature idea",
+    feedbackConnector: "Data integration",
+    feedbackBilling: "Billing plan",
+    feedbackGeneral: "Other",
+    feedbackMessage: "Message",
+    feedbackPlaceholder: "Describe the issue, current page, expected result, or any suggestion.",
+    feedbackEmailUs: "Email us",
+    feedbackSubmit: "Send feedback",
     agencyBrand: "Agency brand",
     clientName: "Client name",
     reportMonth: "Report month",
@@ -330,6 +356,10 @@ function applyLanguage(lang = state.lang) {
   $$("[data-i18n]").forEach((node) => {
     const key = node.dataset.i18n;
     if (copy[state.lang][key]) node.textContent = copy[state.lang][key];
+  });
+  $$("[data-i18n-placeholder]").forEach((node) => {
+    const key = node.dataset.i18nPlaceholder;
+    if (copy[state.lang][key]) node.placeholder = copy[state.lang][key];
   });
   const clientName = $("#clientName");
   if (clientName) {
@@ -1553,6 +1583,56 @@ function closeUpgradeModal() {
   $("#upgradeModal").hidden = true;
 }
 
+function openFeedbackModal() {
+  const email = state.auth?.user?.email || $("#authEmail")?.value || $("#accountEmail")?.value || "";
+  if ($("#feedbackEmail") && !$("#feedbackEmail").value) $("#feedbackEmail").value = email;
+  $("#feedbackModal").hidden = false;
+  setStatus("#feedbackStatus", "", "", "");
+  setTimeout(() => $("#feedbackMessage")?.focus(), 0);
+}
+
+function closeFeedbackModal() {
+  $("#feedbackModal").hidden = true;
+}
+
+function openFeedbackEmail() {
+  const subject = encodeURIComponent("AgencyReport AI feedback");
+  const body = encodeURIComponent(`${$("#feedbackMessage")?.value || ""}\n\nPage: ${location.href}`);
+  location.href = `mailto:chenbobe12@gmail.com?subject=${subject}&body=${body}`;
+}
+
+async function submitFeedback(event) {
+  event.preventDefault();
+  const zh = state.lang !== "en";
+  const message = $("#feedbackMessage")?.value.trim() || "";
+  if (message.length < 8) {
+    setStatus("#feedbackStatus", "warning", zh ? "請多補充一些內容" : "Add a little more detail", zh ? "至少描述你遇到的狀況或想要的功能。" : "Describe the issue or feature you need.");
+    return;
+  }
+  const button = $("#feedbackSubmitBtn");
+  if (button) button.disabled = true;
+  setStatus("#feedbackStatus", "", zh ? "正在送出回饋" : "Sending feedback", zh ? "我們會把這筆意見保存到後台紀錄。" : "This will be stored in the feedback log.");
+  try {
+    await api("/api/feedback", {
+      method: "POST",
+      body: JSON.stringify({
+        type: $("#feedbackType")?.value || "general",
+        email: $("#feedbackEmail")?.value.trim() || state.auth?.user?.email || "",
+        name: state.auth?.user?.name || $("#authName")?.value || "",
+        message,
+        page: location.href,
+        language: state.lang,
+      }),
+    });
+    $("#feedbackMessage").value = "";
+    setStatus("#feedbackStatus", "ok", zh ? "已收到，謝謝你的回饋" : "Received, thank you", zh ? "這筆意見已存入後台，會用來排下一批優化。" : "Your note was saved and will help prioritize the next improvements.");
+  } catch (error) {
+    setStatus("#feedbackStatus", "error", zh ? "送出失敗" : "Unable to send", `${error.message} · ${zh ? "也可以按「直接寄信」聯絡我們。" : "You can also use Email us."}`);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function isLimitExceededError(error) {
   return error?.status === 403 && (error.code === "LIMIT_EXCEEDED" || error.message === "LIMIT_EXCEEDED");
 }
@@ -2549,6 +2629,13 @@ function setupEvents() {
     }
     const plan = event.target.closest("[data-upgrade-plan]");
     if (plan) chooseUpgradePlan(plan.dataset.upgradePlan);
+  });
+  $("#feedbackLauncher")?.addEventListener("click", openFeedbackModal);
+  $("#feedbackCloseBtn")?.addEventListener("click", closeFeedbackModal);
+  $("#feedbackMailBtn")?.addEventListener("click", openFeedbackEmail);
+  $("#feedbackForm")?.addEventListener("submit", submitFeedback);
+  $("#feedbackModal")?.addEventListener("click", (event) => {
+    if (event.target.id === "feedbackModal") closeFeedbackModal();
   });
   $("#csvFile")?.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
