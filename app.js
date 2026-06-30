@@ -51,6 +51,7 @@ const state = {
   connectorSyncJobs: [],
   connectorAudits: [],
   connectorReconciliation: null,
+  appPage: "home",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -574,6 +575,8 @@ function translateStaticWorkspace() {
   $("#upgradeCloseBtn")?.setAttribute("aria-label", zh ? "關閉" : "Close");
   apply("#closeLegalBtn", "關閉", "Close");
   apply("#resetPasswordBtn", "更新密碼", "Update password");
+  apply("#homeTabBtn", "首頁", "Home");
+  apply("#workspaceTabBtn", "工作區", "Workspace");
 }
 
 function applyTheme(theme = state.theme) {
@@ -605,19 +608,17 @@ function setAuthState(auth) {
   else if (!auth) localStorage.removeItem("agencyReportAuthToken");
   const isAuthed = Boolean(state.auth);
   loadScopedWorkspaceState();
-  document.documentElement.classList.toggle("public-landing", !isAuthed);
-  $("#overviewHome").hidden = isAuthed;
-  $("#caseWorkspace").hidden = !isAuthed;
-  $("#report").hidden = !isAuthed;
+  $("#landingLoginBtn").hidden = isAuthed;
+  $("#landingStartBtn").hidden = isAuthed;
   $("#logoutBtn").hidden = !isAuthed;
   $("#authGate").hidden = true;
   if (isAuthed) {
-    openWorkspace("overview");
     refreshUsage();
     syncReportsFromServer();
     loadConnectorConnections();
     renderWorkspace();
   }
+  showAppPage(state.appPage || "home");
 }
 
 function scopedWorkspaceKey(base, userId = state.auth?.user?.id) {
@@ -685,11 +686,49 @@ function checkoutUrlFromIntent(intent) {
   return url ? new URL(url, location.origin).href : "";
 }
 
-function continueToCheckout(intent) {
+function continueToCheckout(intent, checkoutWindow = null) {
   const checkoutUrl = checkoutUrlFromIntent(intent);
   if (!checkoutUrl) return false;
-  window.location.assign(checkoutUrl);
+  if (checkoutWindow && !checkoutWindow.closed) {
+    checkoutWindow.location.href = checkoutUrl;
+    checkoutWindow.focus?.();
+  } else {
+    const openedWindow = window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+    if (!openedWindow) window.location.assign(checkoutUrl);
+  }
   return true;
+}
+
+function openCheckoutPlaceholder() {
+  const checkoutWindow = window.open("about:blank", "_blank");
+  if (checkoutWindow) checkoutWindow.opener = null;
+  return checkoutWindow;
+}
+
+function showAppPage(page = "home") {
+  const nextPage = page === "workspace" ? "workspace" : "home";
+  if (nextPage === "workspace" && !state.auth) {
+    showAuthGate();
+    setStatus(
+      "#authStatus",
+      "warning",
+      state.lang === "en" ? "Sign in to open workspace" : "請先登入工作區",
+      state.lang === "en" ? "The homepage stays available; the workspace is for signed-in accounts." : "首頁仍可瀏覽，工作區需要登入後使用。"
+    );
+    return;
+  }
+  state.appPage = nextPage;
+  const isHome = nextPage === "home";
+  document.documentElement.classList.toggle("public-landing", isHome);
+  $("#overviewHome").hidden = !isHome;
+  $("#caseWorkspace").hidden = isHome;
+  $("#report").hidden = isHome || !state.metrics;
+  $("#authGate").hidden = true;
+  $$("[data-app-page]").forEach((button) => button.classList.toggle("active", button.dataset.appPage === nextPage));
+  if (!isHome) {
+    openWorkspace("overview");
+    renderWorkspace();
+  }
 }
 
 async function resumePendingCheckout() {
@@ -806,6 +845,7 @@ async function processAuthActionLinks() {
   }
   if (connector && connectorStatus === "connected" && state.auth) {
     await loadConnectorConnections();
+    showAppPage("workspace");
     openWorkspace("settings");
     setStatus("#connectorStatus", "ok", state.lang === "en" ? "Connection authorized" : "資料串接授權完成", connectorLabels[connector]?.[state.lang === "en" ? "en" : "zh"] || connector);
     history.replaceState({}, "", location.pathname);
@@ -820,13 +860,10 @@ async function logoutAuth() {
   state.clients = [];
   state.deliveries = [];
   state.invoices = [];
-  $("#overviewHome").hidden = false;
-  $("#caseWorkspace").hidden = true;
-  $("#report").hidden = true;
   $("#landingLoginBtn").hidden = false;
   $("#landingStartBtn").hidden = false;
   $("#logoutBtn").hidden = true;
-  document.documentElement.classList.add("public-landing");
+  showAppPage("home");
 }
 
 async function exportAccountData() {
@@ -1699,6 +1736,7 @@ async function chooseUpgradePlan(plan, options = {}) {
     accountName: $("#accountName")?.value || $("#agencyName")?.value || state.auth?.user?.name || "AgencyReport AI",
     accountEmail: $("#accountEmail")?.value || state.auth?.user?.email,
   };
+  const checkoutWindow = options.resumed ? null : openCheckoutPlaceholder();
   try {
     const intent = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
     state.invoices.unshift(intent);
@@ -1707,9 +1745,11 @@ async function chooseUpgradePlan(plan, options = {}) {
     setStatus("#upgradeStatus", "ok", zh ? "正在前往綠界付款" : "Opening secure checkout", checkoutUrl || planDisplayName(plan));
     setStatus("#billingStatus", "ok", zh ? "正在前往付款" : "Opening checkout", planDisplayName(plan));
     renderWorkspace();
-    if (continueToCheckout(intent)) return;
+    if (continueToCheckout(intent, checkoutWindow)) return;
+    checkoutWindow?.close?.();
     setStatus("#upgradeStatus", "warning", zh ? "付款連結尚未產生" : "Checkout link is missing", zh ? "付款紀錄已建立，但尚未收到付款網址。" : "The billing record was created, but no checkout URL was returned.");
   } catch (error) {
+    checkoutWindow?.close?.();
     if (error.status === 401) {
       rememberPendingCheckout(plan);
       closeUpgradeModal();
@@ -2554,25 +2594,37 @@ function syncConsentAudit() {
 
 function returnToLandingHome(event) {
   event?.preventDefault();
-  document.documentElement.classList.add("public-landing");
   document.documentElement.classList.remove("auth-locked", "portal-mode");
-  $("#overviewHome").hidden = false;
-  $("#caseWorkspace").hidden = true;
-  $("#report").hidden = true;
-  $("#authGate").hidden = true;
   $("#landingLoginBtn").hidden = Boolean(state.auth);
   $("#landingStartBtn").hidden = Boolean(state.auth);
   $("#logoutBtn").hidden = !state.auth;
+  showAppPage("home");
   $("#overviewHome")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function enterWorkspace() {
+  if (!state.auth) {
+    showAuthGate();
+    setStatus(
+      "#authStatus",
+      "warning",
+      state.lang === "en" ? "Sign in to start" : "請先登入或建立帳號",
+      state.lang === "en" ? "After signing in, you can use the workspace." : "登入後即可進入工作區使用 AI 月報。"
+    );
+    return;
+  }
+  showAppPage("workspace");
 }
 
 function setupEvents() {
   $("[data-home-link]")?.addEventListener("click", returnToLandingHome);
+  $$("#homeTabBtn, [data-app-page='home']").forEach((button) => button.addEventListener("click", returnToLandingHome));
+  $$("#workspaceTabBtn, [data-app-page='workspace']").forEach((button) => button.addEventListener("click", enterWorkspace));
   $("#landingLoginBtn")?.addEventListener("click", showAuthGate);
-  $("#landingStartBtn")?.addEventListener("click", showAuthGate);
-  $("#openCaseDetailBtn")?.addEventListener("click", showAuthGate);
-  $(".landing-bottom-start")?.addEventListener("click", showAuthGate);
-  $("#homeLoadDemoBtn")?.addEventListener("click", () => { showAuthGate(); });
+  $("#landingStartBtn")?.addEventListener("click", enterWorkspace);
+  $("#openCaseDetailBtn")?.addEventListener("click", enterWorkspace);
+  $(".landing-bottom-start")?.addEventListener("click", enterWorkspace);
+  $("#homeLoadDemoBtn")?.addEventListener("click", enterWorkspace);
   $("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
   $("#authForm")?.addEventListener("submit", submitAuth);
   $("#registerBtn")?.addEventListener("click", registerAuth);

@@ -185,6 +185,37 @@ html.public-landing #printBtn {
 .landing-cta { display: none; }
 html.public-landing .landing-cta { display: inline-flex; }
 .landing-info-bar, .landing-nav-links, .landing-marketing, .landing-hero-visual { display: none; }
+.app-tabs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  justify-self: center;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+}
+.app-tabs button {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 900;
+  cursor: pointer;
+}
+.app-tabs button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, .08);
+}
+.app-tabs button.active {
+  color: #061946;
+  background: linear-gradient(135deg, #8bf5df, #3bd8ff);
+  box-shadow: 0 12px 30px rgba(59, 216, 255, .22);
+}
 html.public-landing .landing-info-bar {
   display: flex;
   justify-content: space-between;
@@ -215,6 +246,17 @@ html.public-landing .landing-nav-links a {
   font-size: 14px;
   font-weight: 760;
   text-decoration: none;
+}
+html.public-landing .app-tabs {
+  border-color: rgba(6, 25, 70, .12);
+  background: rgba(255, 255, 255, .74);
+  box-shadow: 0 18px 50px rgba(33, 16, 75, .08);
+}
+html.public-landing .app-tabs button {
+  color: #061946;
+}
+html.public-landing .app-tabs button:not(.active):hover {
+  background: rgba(6, 25, 70, .08);
 }
 html.public-landing .topbar {
   min-height: 100px;
