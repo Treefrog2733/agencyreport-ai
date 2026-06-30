@@ -55,6 +55,7 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const pendingCheckoutKey = "agencyReportPendingCheckoutPlan";
 
 const copy = {
   zh: {
@@ -675,6 +676,30 @@ function hideAuthGate() {
   $("#authGate").hidden = true;
 }
 
+function rememberPendingCheckout(plan) {
+  if (plan) sessionStorage.setItem(pendingCheckoutKey, plan);
+}
+
+function checkoutUrlFromIntent(intent) {
+  const url = intent?.checkoutUrl || intent?.quoteUrl;
+  return url ? new URL(url, location.origin).href : "";
+}
+
+function continueToCheckout(intent) {
+  const checkoutUrl = checkoutUrlFromIntent(intent);
+  if (!checkoutUrl) return false;
+  window.location.assign(checkoutUrl);
+  return true;
+}
+
+async function resumePendingCheckout() {
+  if (!state.auth) return;
+  const plan = sessionStorage.getItem(pendingCheckoutKey);
+  if (!plan) return;
+  sessionStorage.removeItem(pendingCheckoutKey);
+  await chooseUpgradePlan(plan, { resumed: true });
+}
+
 async function submitAuth(event) {
   event.preventDefault();
   const payload = {
@@ -686,6 +711,7 @@ async function submitAuth(event) {
     const auth = await api("/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
     setStatus("#authStatus", "ok", state.lang === "en" ? "Signed in" : "已登入", auth.user?.email || payload.email);
     setAuthState(auth);
+    resumePendingCheckout();
   } catch (error) {
     $("#resendVerificationBtn").hidden = error.code !== "EMAIL_NOT_VERIFIED";
     setStatus("#authStatus", "error", state.lang === "en" ? "Sign in failed" : "登入失敗", error.message);
@@ -1647,27 +1673,52 @@ function openLimitExceededUpgrade(error) {
   updateUsageUi();
 }
 
-async function chooseUpgradePlan(plan) {
+async function chooseUpgradePlan(plan, options = {}) {
+  const zh = state.lang !== "en";
   if (state.payment?.checkoutEnabled === false) {
-    setStatus("#upgradeStatus", "warn", state.lang === "en" ? "Checkout is under review" : "正式收款審核中", state.lang === "en" ? "No payment has been created." : "目前不會建立付款單或扣款。");
+    setStatus("#upgradeStatus", "warn", zh ? "正式收款審核中" : "Checkout is under review", zh ? "目前不會建立付款單或扣款。" : "No payment has been created.");
     return;
   }
-  $("#planSelect").value = plan;
+  if (!state.auth && !authToken()) {
+    rememberPendingCheckout(plan);
+    closeUpgradeModal();
+    showAuthGate();
+    setStatus(
+      "#authStatus",
+      "warning",
+      zh ? "請先登入或建立帳號" : "Sign in to continue",
+      zh ? "登入後會自動帶你前往綠界安全付款頁。" : "After signing in, we will continue to secure ECPay checkout."
+    );
+    return;
+  }
+  const planSelect = $("#planSelect");
+  if (planSelect) planSelect.value = plan;
   const payload = {
     plan,
-    currency: $("#currency").value || "TWD",
-    accountName: $("#accountName").value || $("#agencyName").value,
-    accountEmail: $("#accountEmail").value || state.auth?.user?.email,
+    currency: $("#currency")?.value || "TWD",
+    accountName: $("#accountName")?.value || $("#agencyName")?.value || state.auth?.user?.name || "AgencyReport AI",
+    accountEmail: $("#accountEmail")?.value || state.auth?.user?.email,
   };
   try {
     const intent = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
     state.invoices.unshift(intent);
     localStorage.setItem(scopedWorkspaceKey("agencyReportInvoices"), JSON.stringify(state.invoices));
-    setStatus("#upgradeStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", intent.checkoutUrl || intent.quoteUrl || "");
-    setStatus("#billingStatus", "ok", state.lang === "en" ? "Checkout draft created" : "付款草稿已建立", planDisplayName(plan));
+    const checkoutUrl = checkoutUrlFromIntent(intent);
+    setStatus("#upgradeStatus", "ok", zh ? "正在前往綠界付款" : "Opening secure checkout", checkoutUrl || planDisplayName(plan));
+    setStatus("#billingStatus", "ok", zh ? "正在前往付款" : "Opening checkout", planDisplayName(plan));
     renderWorkspace();
+    if (continueToCheckout(intent)) return;
+    setStatus("#upgradeStatus", "warning", zh ? "付款連結尚未產生" : "Checkout link is missing", zh ? "付款紀錄已建立，但尚未收到付款網址。" : "The billing record was created, but no checkout URL was returned.");
   } catch (error) {
-    setStatus("#upgradeStatus", "error", state.lang === "en" ? "Checkout failed" : "建立付款失敗", error.message);
+    if (error.status === 401) {
+      rememberPendingCheckout(plan);
+      closeUpgradeModal();
+      showAuthGate();
+      setStatus("#authStatus", "warning", zh ? "請先登入或建立帳號" : "Sign in to continue", zh ? "登入後會自動接續前往付款。" : "After signing in, checkout will continue automatically.");
+      return;
+    }
+    if (options.resumed) rememberPendingCheckout(plan);
+    setStatus("#upgradeStatus", "error", zh ? "建立付款失敗" : "Checkout failed", error.message);
   }
 }
 
