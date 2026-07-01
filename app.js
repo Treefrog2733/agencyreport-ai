@@ -699,9 +699,64 @@ function continueToCheckout(intent, checkoutWindow = null) {
   return true;
 }
 
-function openCheckoutPlaceholder() {
+function checkoutPlaceholderHtml(plan) {
+  const zh = state.lang !== "en";
+  const planName = planDisplayName(plan);
+  return `<!doctype html>
+<html lang="${zh ? "zh-Hant" : "en"}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${zh ? "正在開啟付款頁" : "Opening checkout"} | AgencyReport AI</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; color: #eef7f5; background: radial-gradient(circle at 18% 12%, rgba(139,245,223,.24), transparent 28%), linear-gradient(135deg, #07110f, #14201f 48%, #0f172a); }
+    main { width: min(520px, calc(100vw - 40px)); padding: 34px; border: 1px solid rgba(139,245,223,.26); border-radius: 22px; background: rgba(15, 23, 42, .82); box-shadow: 0 28px 80px rgba(0,0,0,.34); }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; color: #061946; font-weight: 950; background: linear-gradient(135deg, #8bf5df, #3bd8ff); }
+    .eyebrow { margin: 0; color: #8bf5df; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0 0 10px; font-size: clamp(28px, 6vw, 42px); line-height: 1.08; }
+    p { margin: 0; color: #aebfbc; line-height: 1.7; }
+    .plan { margin: 22px 0; padding: 16px; border: 1px solid rgba(139,245,223,.2); border-radius: 16px; background: rgba(139,245,223,.08); }
+    .plan span { display: block; color: #8bf5df; font-size: 12px; font-weight: 900; }
+    .plan strong { display: block; margin-top: 5px; font-size: 24px; }
+    .loader { width: 54px; height: 54px; margin: 26px 0 10px; border: 4px solid rgba(139,245,223,.22); border-top-color: #3bd8ff; border-radius: 999px; animation: spin .8s linear infinite; }
+    small { color: #7f918e; }
+    a, button { display: inline-flex; margin-top: 22px; min-height: 42px; align-items: center; justify-content: center; padding: 0 18px; border: 0; border-radius: 12px; color: #061946; background: linear-gradient(135deg, #8bf5df, #3bd8ff); font-weight: 900; text-decoration: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><span class="mark">AR</span><div><p class="eyebrow">AgencyReport AI</p><strong>Virtual Trend Works</strong></div></div>
+    <h1>${zh ? "正在建立安全付款頁" : "Preparing secure checkout"}</h1>
+    <p>${zh ? "我們正在建立綠界付款單並準備跳轉，通常只需要幾秒鐘。請不要關閉這個分頁。" : "We are creating your ECPay checkout session. This usually takes a few seconds. Please keep this tab open."}</p>
+    <div class="plan"><span>${zh ? "選擇方案" : "Selected plan"}</span><strong>${planName}</strong></div>
+    <div class="loader" aria-hidden="true"></div>
+    <small>${zh ? "如果停留太久，請回到原頁面重新點選方案。" : "If this takes too long, return to the original page and choose the plan again."}</small>
+  </main>
+</body>
+</html>`;
+}
+
+function checkoutErrorHtml(error) {
+  const zh = state.lang !== "en";
+  return `<!doctype html><html lang="${zh ? "zh-Hant" : "en"}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${zh ? "付款頁建立失敗" : "Checkout failed"}</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;background:#f6f8f7;color:#10201f}main{width:min(520px,calc(100vw - 40px));padding:30px;border:1px solid #d9e3df;border-radius:18px;background:white;box-shadow:0 22px 70px rgba(15,23,42,.14)}h1{margin:0 0 10px}p{color:#60706d;line-height:1.7}button{min-height:42px;padding:0 18px;border:0;border-radius:12px;background:#10201f;color:white;font-weight:900}</style></head><body><main><h1>${zh ? "付款頁建立失敗" : "Checkout could not be created"}</h1><p>${String(error?.message || error || "").replace(/[<>&"]/g, (char) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }[char]))}</p><button onclick="window.close()">${zh ? "關閉分頁" : "Close tab"}</button></main></body></html>`;
+}
+
+function writeCheckoutWindow(checkoutWindow, html) {
+  if (!checkoutWindow || checkoutWindow.closed) return;
+  checkoutWindow.document.open();
+  checkoutWindow.document.write(html);
+  checkoutWindow.document.close();
+}
+
+function openCheckoutPlaceholder(plan) {
   const checkoutWindow = window.open("about:blank", "_blank");
-  if (checkoutWindow) checkoutWindow.opener = null;
+  if (checkoutWindow) {
+    checkoutWindow.opener = null;
+    writeCheckoutWindow(checkoutWindow, checkoutPlaceholderHtml(plan));
+  }
   return checkoutWindow;
 }
 
@@ -1736,7 +1791,8 @@ async function chooseUpgradePlan(plan, options = {}) {
     accountName: $("#accountName")?.value || $("#agencyName")?.value || state.auth?.user?.name || "AgencyReport AI",
     accountEmail: $("#accountEmail")?.value || state.auth?.user?.email,
   };
-  const checkoutWindow = options.resumed ? null : openCheckoutPlaceholder();
+  const checkoutWindow = options.resumed ? null : openCheckoutPlaceholder(plan);
+  setStatus("#upgradeStatus", "", zh ? "正在建立綠界付款頁" : "Preparing ECPay checkout", zh ? "付款頁會在新分頁開啟，請稍候幾秒。" : "Checkout opens in a new tab. Please wait a few seconds.");
   try {
     const intent = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify(payload) });
     state.invoices.unshift(intent);
@@ -1746,10 +1802,10 @@ async function chooseUpgradePlan(plan, options = {}) {
     setStatus("#billingStatus", "ok", zh ? "正在前往付款" : "Opening checkout", planDisplayName(plan));
     renderWorkspace();
     if (continueToCheckout(intent, checkoutWindow)) return;
-    checkoutWindow?.close?.();
+    if (checkoutWindow && !checkoutWindow.closed) writeCheckoutWindow(checkoutWindow, checkoutErrorHtml(zh ? "付款連結尚未產生，請回到原頁重新點選方案。" : "Checkout link was not returned. Please go back and choose the plan again."));
     setStatus("#upgradeStatus", "warning", zh ? "付款連結尚未產生" : "Checkout link is missing", zh ? "付款紀錄已建立，但尚未收到付款網址。" : "The billing record was created, but no checkout URL was returned.");
   } catch (error) {
-    checkoutWindow?.close?.();
+    if (checkoutWindow && !checkoutWindow.closed) writeCheckoutWindow(checkoutWindow, checkoutErrorHtml(error));
     if (error.status === 401) {
       rememberPendingCheckout(plan);
       closeUpgradeModal();
