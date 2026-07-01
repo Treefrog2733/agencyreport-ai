@@ -752,10 +752,14 @@ function writeCheckoutWindow(checkoutWindow, html) {
 }
 
 function openCheckoutPlaceholder(plan) {
-  const checkoutWindow = window.open("about:blank", "_blank");
+  const loadingUrl = URL.createObjectURL(new Blob([checkoutPlaceholderHtml(plan)], { type: "text/html;charset=utf-8" }));
+  const checkoutWindow = window.open(loadingUrl, "_blank");
   if (checkoutWindow) {
     checkoutWindow.opener = null;
-    writeCheckoutWindow(checkoutWindow, checkoutPlaceholderHtml(plan));
+    checkoutWindow.focus?.();
+    window.setTimeout(() => URL.revokeObjectURL(loadingUrl), 30000);
+  } else {
+    URL.revokeObjectURL(loadingUrl);
   }
   return checkoutWindow;
 }
