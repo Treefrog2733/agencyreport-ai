@@ -1752,6 +1752,151 @@ html.public-landing .landing-system-strip p {
   font-size: 13px;
   line-height: 1.62;
 }
+
+html.public-landing .title-accent {
+  color: #4bd8ff;
+}
+
+html.public-landing .landing-fit-section,
+html.public-landing .landing-template-section,
+html.public-landing .landing-faq-section {
+  position: relative;
+  z-index: 3;
+  padding: clamp(78px, 8vw, 112px) max(28px, calc((100vw - 1180px) / 2));
+}
+
+html.public-landing .landing-fit-section {
+  background:
+    radial-gradient(circle at 12% 14%, rgba(75,216,255,.12), transparent 32%),
+    linear-gradient(180deg, #f7fbff, #fff);
+}
+
+html.public-landing .landing-template-section {
+  background:
+    radial-gradient(circle at 86% 12%, rgba(138,73,220,.12), transparent 34%),
+    linear-gradient(180deg, #fff, #f4f7ff);
+}
+
+html.public-landing .landing-faq-section {
+  background: linear-gradient(180deg, #f6f8ff, #fff);
+}
+
+html.public-landing .landing-fit-grid,
+html.public-landing .template-card-grid,
+html.public-landing .landing-faq-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  max-width: 1180px;
+  margin: 42px auto 0;
+}
+
+html.public-landing .landing-fit-grid article,
+html.public-landing .template-card-grid article,
+html.public-landing .landing-faq-grid article {
+  position: relative;
+  overflow: hidden;
+  min-height: 230px;
+  border: 1px solid rgba(23, 40, 84, .12);
+  border-radius: 22px;
+  padding: 28px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(250,253,255,.9));
+  box-shadow: 0 24px 70px rgba(14, 24, 58, .08);
+}
+
+html.public-landing .landing-fit-grid article::after,
+html.public-landing .template-card-grid article::after {
+  content: "";
+  position: absolute;
+  right: -58px;
+  bottom: -70px;
+  width: 170px;
+  height: 170px;
+  border: 1px solid rgba(75,216,255,.18);
+  border-radius: 999px;
+}
+
+html.public-landing .landing-fit-grid span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 28px;
+  border-radius: 14px;
+  color: #061946;
+  background: linear-gradient(135deg, #dffff8, #72f4d7);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+html.public-landing .landing-fit-grid h3,
+html.public-landing .template-card-grid h3,
+html.public-landing .landing-faq-grid h3 {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 12px;
+  color: #071936;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+html.public-landing .landing-fit-grid p,
+html.public-landing .template-card-grid p,
+html.public-landing .landing-faq-grid p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: #48617e;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+html.public-landing .template-visual {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+  gap: 8px;
+  min-height: 96px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(49,91,255,.12);
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(75,216,255,.14), rgba(138,73,220,.08));
+}
+
+html.public-landing .template-visual i {
+  display: block;
+  border-radius: 10px 10px 4px 4px;
+  background: linear-gradient(180deg, #4bd8ff, rgba(75,216,255,.16));
+}
+
+html.public-landing .template-visual i:nth-child(1) { height: 42px; }
+html.public-landing .template-visual i:nth-child(2) { height: 70px; }
+html.public-landing .template-visual i:nth-child(3) { height: 54px; }
+html.public-landing .template-visual.clinic i { background: linear-gradient(180deg, #72f4d7, rgba(114,244,215,.16)); }
+html.public-landing .template-visual.course i { background: linear-gradient(180deg, #8a49dc, rgba(138,73,220,.14)); }
+
+html.public-landing .landing-faq-grid article {
+  min-height: 190px;
+  border-color: rgba(49, 91, 255, .14);
+}
+
+@media (max-width: 920px) {
+  html.public-landing .landing-fit-grid,
+  html.public-landing .template-card-grid,
+  html.public-landing .landing-faq-grid {
+    grid-template-columns: 1fr;
+  }
+
+  html.public-landing .landing-fit-grid article,
+  html.public-landing .template-card-grid article,
+  html.public-landing .landing-faq-grid article {
+    min-height: auto;
+  }
+}
 html.public-landing .landing-marketing {
   background: linear-gradient(180deg, #f6f6ff 0%, #fff 38%, #f5f4ff 100%);
 }
