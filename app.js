@@ -107,7 +107,7 @@ const copy = {
     stepFourCopy: "輸出 HTML/PDF，排入 Email 任務並留下紀錄。",
     sampleTitle: "一份真正能交給客戶看的 AI 月報",
     sampleCopy: "它不是只列數字，而是把 KPI 變化、風險、下一步行動整理成代理商能直接使用的說明。",
-    sampleClient: "晨光牙醫診所 / 2026-06",
+    sampleClient: "示範牙科品牌 A / 2026-06",
     sampleHeadline: "本月 ROAS 提升，Meta CPA 需控管",
     sampleInsightOne: "搜尋廣告帶來穩定轉換，整體營收優於上月。",
     sampleInsightTwo: "下月建議把預算移往搜尋，並重新整理 Meta 受眾。",
@@ -233,7 +233,7 @@ const copy = {
     stepFourCopy: "Export HTML/PDF, queue email, and keep a record.",
     sampleTitle: "An AI report your client can actually read",
     sampleCopy: "It turns KPI changes, risks, and next actions into agency-ready narrative.",
-    sampleClient: "Sunrise Dental / 2026-06",
+    sampleClient: "Demo Dental Brand A / 2026-06",
     sampleHeadline: "ROAS improved while Meta CPA needs control",
     sampleInsightOne: "Search ads brought stable conversions and revenue improved month over month.",
     sampleInsightTwo: "Move more budget to search and rebuild Meta audiences next month.",
@@ -365,7 +365,7 @@ Object.assign(copy.zh, {
   stepFourCopy: "匯出 PDF / HTML，建立交付紀錄，之後可再次調用月報。",
   sampleTitle: "先看三種代理商常見月報範例",
   sampleCopy: "電商、診所、課程品牌都能用同一套流程，把數據轉成客戶看得懂的結論與行動。",
-  sampleClient: "晨光牙醫診所 / 2026-06",
+  sampleClient: "示範牙科品牌 A / 2026-06",
   sampleHeadline: "搜尋廣告 ROAS 成長，Meta CPA 需要控管",
   sampleKpiRevenueLabel: "營收",
   sampleKpiRoasLabel: "ROAS",
@@ -526,8 +526,8 @@ function applyLanguage(lang = state.lang) {
   });
   const clientName = $("#clientName");
   if (clientName) {
-    if (state.lang === "en" && clientName.value === "晨光牙醫診所") clientName.value = "Morning Light Dental Clinic";
-    if (state.lang !== "en" && clientName.value === "Morning Light Dental Clinic") clientName.value = "晨光牙醫診所";
+    if (state.lang === "en" && clientName.value === "示範牙科品牌 A") clientName.value = "Demo Dental Brand A";
+    if (state.lang !== "en" && clientName.value === "Demo Dental Brand A") clientName.value = "示範牙科品牌 A";
   }
   const heroTitle = $("#heroTitle");
   if (heroTitle) {
@@ -2277,12 +2277,12 @@ function summarizeIntakeApplied(items) {
 }
 
 function fillAiDemoBrief() {
-  const brief = state.lang === "en" ? `Client: Morning Light Dental Clinic
+  const brief = state.lang === "en" ? `Client: Demo Dental Brand A
 Report month: 2026-06
 Report type: Advertising report
 Request: Review this month's CPA, ROAS, Google Search, and Meta Ads performance, then recommend next month's budget.
 
-${samples.ads}` : `客戶是晨光牙醫診所
+${samples.ads}` : `客戶是示範牙科品牌 A
 報告月份：2026-06
 報告類型：廣告月報
 需求：想知道本月 CPA、ROAS、Google Search 與 Meta Ads 表現，並需要下月預算建議。
