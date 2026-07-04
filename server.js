@@ -244,6 +244,7 @@ function checkRateLimit(req, url) {
 }
 
 const planPrices = {
+  free: { TWD: 0, USD: 0 },
   starter: { TWD: 790, USD: 25 },
   agency: { TWD: 2490, USD: 79 },
   professional: { TWD: 5990, USD: 189 },
@@ -257,6 +258,114 @@ const planUsageLimits = {
   professional: { ai_report: 150 },
   whiteLabel: { ai_report: 150 },
 };
+
+const planFeatureMatrix = {
+  free: {
+    label: "Free",
+    limits: { aiReports: 3, emailDeliveries: 0, savedReports: 3, clients: 1 },
+    features: {
+      csvImport: true,
+      sheetsImport: true,
+      aiRecommendations: true,
+      pdfExport: true,
+      htmlExport: true,
+      brandedReports: false,
+      multiClientWorkspace: false,
+      paymentRecords: false,
+      emailDrafts: false,
+      scheduledReports: false,
+      clientPortal: false,
+      whiteLabel: false,
+      advancedAiAnalysis: false,
+      googleAdsConnector: false,
+      ga4Connector: false,
+      metaAdsConnector: false,
+    },
+  },
+  starter: {
+    label: "Starter",
+    limits: { aiReports: 10, emailDeliveries: 10, savedReports: 25, clients: 5 },
+    features: {
+      csvImport: true,
+      sheetsImport: true,
+      aiRecommendations: true,
+      pdfExport: true,
+      htmlExport: true,
+      brandedReports: false,
+      multiClientWorkspace: false,
+      paymentRecords: false,
+      emailDrafts: false,
+      scheduledReports: false,
+      clientPortal: false,
+      whiteLabel: false,
+      advancedAiAnalysis: false,
+      googleAdsConnector: false,
+      ga4Connector: false,
+      metaAdsConnector: false,
+    },
+  },
+  agency: {
+    label: "Agency",
+    limits: { aiReports: 50, emailDeliveries: 50, savedReports: 150, clients: 50 },
+    features: {
+      csvImport: true,
+      sheetsImport: true,
+      aiRecommendations: true,
+      pdfExport: true,
+      htmlExport: true,
+      brandedReports: true,
+      multiClientWorkspace: true,
+      paymentRecords: true,
+      emailDrafts: true,
+      scheduledReports: false,
+      clientPortal: false,
+      whiteLabel: false,
+      advancedAiAnalysis: false,
+      googleAdsConnector: false,
+      ga4Connector: false,
+      metaAdsConnector: false,
+    },
+  },
+  professional: {
+    label: "Professional",
+    limits: { aiReports: 150, emailDeliveries: 150, savedReports: 500, clients: 200 },
+    features: {
+      csvImport: true,
+      sheetsImport: true,
+      aiRecommendations: true,
+      pdfExport: true,
+      htmlExport: true,
+      brandedReports: true,
+      multiClientWorkspace: true,
+      paymentRecords: true,
+      emailDrafts: true,
+      scheduledReports: true,
+      clientPortal: true,
+      whiteLabel: true,
+      advancedAiAnalysis: true,
+      googleAdsConnector: true,
+      ga4Connector: true,
+      metaAdsConnector: true,
+    },
+  },
+};
+
+planFeatureMatrix.whiteLabel = planFeatureMatrix.professional;
+
+function publicPlans() {
+  return ["free", "starter", "agency", "professional"].map((key) => ({
+    key,
+    label: planFeatureMatrix[key].label,
+    prices: planPrices[key],
+    usage: planUsageLimits[key],
+    limits: planFeatureMatrix[key].limits,
+    features: planFeatureMatrix[key].features,
+  }));
+}
+
+function planFeatures(plan) {
+  return planFeatureMatrix[normalizePlan(plan)] || planFeatureMatrix.free;
+}
 
 function emailStatus() {
   const senderIsProduction = Boolean(emailFrom)
@@ -3589,6 +3698,7 @@ function usageSummary(db, user, feature = "ai_report") {
     used,
     remaining: Math.max(0, limit - used),
     subscription,
+    planFeatures: planFeatures(plan),
   };
 }
 
@@ -3984,6 +4094,10 @@ async function handleApi(req, res, url) {
         note: "Basic operational notice; external counsel review is not a launch gate.",
       },
     });
+  }
+
+  if (url.pathname === "/api/plans" && req.method === "GET") {
+    return json(res, 200, { items: publicPlans() });
   }
 
   if (url.pathname === "/api/auth/register" && req.method === "POST") {

@@ -30,7 +30,7 @@ The current product direction is simple: a public SaaS homepage first, then a ga
 | Agency | NT$2,490 | Small agencies with recurring clients | 50 AI reports/month, multiple clients, branded report flow, AI next actions, payment/delivery records |
 | Professional | NT$5,990 | Agencies that want semi-automated delivery | 150 AI reports/month, client portal, scheduling, email drafts, white-label direction, advanced AI analysis |
 
-Free users can generate 3 AI reports. After the free quota is reached, the frontend opens the upgrade plan modal and routes checkout through the billing API.
+Free users can generate 3 AI reports. After the free quota is reached, the frontend opens the upgrade plan modal and routes checkout through the billing API. The authoritative plan matrix is exposed at `GET /api/plans`; signed-in usage responses include the active plan, quota, remaining AI reports, and enabled plan features.
 
 ## Architecture
 
@@ -344,6 +344,8 @@ Production requests use a 65-second timeout and retry eligible GET failures up t
 - both Traditional Chinese and English legal pages respond with a versioned policy
 
 Before paid traffic, also run `npm run smoke:ai`. It performs a minimal live OpenAI report generation and fails unless the provider returns live structured summary, risk, action, client-message, and usage data. A ChatGPT subscription does not supply OpenAI API credits; API billing must be active separately.
+
+`npm run smoke:plans` starts an isolated local API, verifies the public plan matrix, simulates trusted ECPay payments for Starter, Agency, and Professional plans, consumes every included AI report for each plan, and confirms the next report is blocked after quota is exhausted. Run it after changing pricing, checkout, subscriptions, or usage limits.
 
 `npm run smoke:ai-runtime` uses a local fake provider to verify the operational state machine without spending API credits. A quota or provider failure must switch health and readiness to `degraded` with a sanitized error code while rules-based report output remains available; the next successful live response must automatically restore `live-ready` status.
 

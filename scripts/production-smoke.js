@@ -113,6 +113,21 @@ async function run() {
   results.push(check(/^legal-\d{4}-\d{2}-\d{2}$/.test(legalApi.body.item?.version || ""), "legal API exposes a versioned policy", legalApi.body.item?.version || "missing"));
   results.push(check(legalZh.text.includes(legalApi.body.item?.version || "missing") && legalEn.text.includes(legalApi.body.item?.version || "missing"), "legal pages match the registered API version"));
 
+  const plansApi = await fetchJson(`${baseUrl}/api/plans`);
+  const plans = Array.isArray(plansApi.body.items) ? plansApi.body.items : [];
+  const expectedPlanLimits = { free: 3, starter: 10, agency: 50, professional: 150 };
+  results.push(check(plansApi.response.ok && plans.length === 4, "plans API exposes four customer-facing plans"));
+  Object.entries(expectedPlanLimits).forEach(([plan, limit]) => {
+    const found = plans.find((item) => item.key === plan);
+    results.push(check(
+      found?.usage?.ai_report === limit && found?.limits?.aiReports === limit,
+      `plans API ${plan} limit is consistent`,
+      found ? JSON.stringify({ usage: found.usage, limits: found.limits }) : "missing"
+    ));
+  });
+  results.push(check(plans.find((item) => item.key === "professional")?.features?.googleAdsConnector === true, "professional plan exposes automated connectors"));
+  results.push(check(plans.find((item) => item.key === "agency")?.features?.googleAdsConnector === false, "agency plan keeps automated connectors gated"));
+
   for (const pathname of sensitivePaths) {
     const sensitive = await fetchText(`${baseUrl}${pathname}`);
     results.push(check([403, 404].includes(sensitive.response.status), `sensitive file blocked: ${pathname}`, `${sensitive.response.status}`));

@@ -20,6 +20,7 @@
     "smoke:ai-runtime": "node scripts/ai-runtime-smoke.js",
     "smoke:backup": "node scripts/backup-smoke.js",
     "smoke:legal": "node scripts/legal-smoke.js",
+    "smoke:plans": "node scripts/plan-smoke.js",
     "smoke:worker": "node scripts/worker-smoke.js",
     "smoke:i18n": "node scripts/i18n-smoke.js",
     "smoke:auth-privacy": "node scripts/auth-privacy-smoke.js",
