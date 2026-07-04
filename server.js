@@ -174,7 +174,7 @@ function robotsTxt() {
 
 function sitemapXml() {
   const today = new Date().toISOString().slice(0, 10);
-  const urls = ["/", "/legal"];
+  const urls = ["/", "/legal", "/privacy", "/terms", "/data-deletion"];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
@@ -187,6 +187,90 @@ ${urls
   .join("\n")}
 </urlset>
 `;
+}
+
+function publicPolicyHtml(kind = "privacy") {
+  const policies = {
+    privacy: {
+      title: "Privacy Policy",
+      eyebrow: "Google OAuth verification page",
+      intro: "AgencyReport AI by Virtual Trend Works uses account and marketing platform data only to provide report automation, KPI analysis, AI summaries, and customer delivery workflows.",
+      sections: [
+        ["Data we collect", "We collect account information, authenticated session data, imported marketing metrics, selected Google Analytics properties, selected Google Ads customers, report drafts, AI output, usage records, and payment or delivery status."],
+        ["How Google user data is used", "When a user connects Google Analytics or Google Ads, AgencyReport AI reads the selected account or property data to synchronize campaign metrics, conversion data, traffic trends, and reporting dimensions needed to generate monthly marketing reports. We do not sell Google user data or use it for unrelated advertising."],
+        ["Sharing and AI processing", "Report requirements, KPI totals, strongest or weakest channels, and user-approved context may be sent to configured AI providers to create summaries, risks, action plans, and client explanation drafts. Access tokens are encrypted and are never shown in the interface."],
+        ["Retention and deletion", "Users may delete account data or request data deletion by contacting support. Connector access can be revoked from the user's Google Account security settings at any time. Operational, payment, and security records may be retained where required for fraud prevention, legal compliance, or dispute handling."],
+      ],
+    },
+    terms: {
+      title: "Terms of Service",
+      eyebrow: "Public service terms",
+      intro: "AgencyReport AI is a SaaS tool for agencies and solo operators who need to turn advertising and analytics data into recurring monthly reports.",
+      sections: [
+        ["Account responsibility", "Users must provide accurate information, protect login credentials, and only connect data sources they are authorized to access."],
+        ["Report and AI output", "The service generates KPI charts, summaries, findings, risks, and next-month recommendations. Users remain responsible for checking source data, campaign settings, forecasts, and client-facing claims before delivery."],
+        ["Payments and plans", "Plan limits, prices, report quotas, and payment terms are shown before checkout. Paid access begins after successful payment through the configured payment provider."],
+        ["Acceptable use", "Users may not upload unlawful, infringing, malicious, or unauthorized personal data, or attempt to bypass usage limits, billing, security, or connector controls."],
+      ],
+    },
+    "data-deletion": {
+      title: "Data Deletion Instructions",
+      eyebrow: "Account and connector data removal",
+      intro: "AgencyReport AI users can request deletion of account, report, connector, and imported marketing data.",
+      sections: [
+        ["How to request deletion", "Email support@virtualtrendworks.com from the account email address with the subject 'Data deletion request'. Include the workspace name and the data you want removed."],
+        ["Google access revocation", "Users can immediately revoke AgencyReport AI access in Google Account > Security > Third-party apps and services. This prevents future synchronization even before backend deletion is completed."],
+        ["What is removed", "Primary account records, imported data sources, connector credentials, reports, AI runs, delivery records, and workspace data are removed where possible."],
+        ["What may be retained", "Limited billing, audit, anti-abuse, and legal records may be retained when required for payment reconciliation, security, tax, legal obligations, or dispute handling."],
+      ],
+    },
+  };
+  const policy = policies[kind] || policies.privacy;
+  const nav = [
+    ["Privacy", "/privacy"],
+    ["Terms", "/terms"],
+    ["Data deletion", "/data-deletion"],
+    ["Home", "/"],
+  ];
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${policy.title} | AgencyReport AI</title>
+  <meta name="description" content="${policy.intro}" />
+  <link rel="canonical" href="${publicOrigin()}/${kind}" />
+  <style>
+    :root{color-scheme:light;--ink:#10201f;--muted:#536762;--line:#d8e3df;--brand:#0f766e;--bg:#f5f8f7}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+    a{color:var(--brand);font-weight:750}.wrap{max-width:1040px;margin:0 auto;padding:36px 20px 64px}
+    header{padding:34px;border-radius:8px;background:#082f2d;color:#fff;box-shadow:0 24px 70px rgba(15,23,42,.12)}
+    .brand{font-weight:900;letter-spacing:.02em}.eyebrow{margin:30px 0 8px;color:#7ee7d7;font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+    h1{margin:0;font-size:clamp(34px,5vw,58px);line-height:1.05}header p{max-width:820px;color:#d3e5e2;line-height:1.75}
+    nav{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 24px}nav a{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;text-decoration:none}
+    article{display:grid;gap:14px}.card{padding:24px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:0 14px 42px rgba(15,23,42,.06)}
+    h2{margin:0 0 8px;font-size:22px}p{margin:0;color:var(--muted);line-height:1.75}.contact{margin-top:18px;padding:18px;border:1px solid #9ed4ca;border-radius:8px;background:#eefbf8}
+    @media(max-width:640px){.wrap{padding:16px 14px 42px}header,.card{padding:20px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="brand">AgencyReport AI by Virtual Trend Works</div>
+      <p class="eyebrow">${policy.eyebrow}</p>
+      <h1>${policy.title}</h1>
+      <p>${policy.intro}</p>
+    </header>
+    <nav>${nav.map(([label, href]) => `<a href="${href}">${label}</a>`).join("")}</nav>
+    <article>
+      ${policy.sections.map(([title, body]) => `<section class="card"><h2>${title}</h2><p>${body}</p></section>`).join("")}
+      <section class="contact">
+        <p><strong>Contact:</strong> <a href="mailto:support@virtualtrendworks.com">support@virtualtrendworks.com</a> / <a href="mailto:chenbobe12@gmail.com">chenbobe12@gmail.com</a></p>
+      </section>
+    </article>
+  </main>
+</body>
+</html>`;
 }
 
 function securityHeaders(extra = {}) {
@@ -4805,6 +4889,10 @@ async function serveStatic(req, res, url) {
   if (url.pathname === "/legal") {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
     return res.end(injectGoogleTag(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh")));
+  }
+  if (["/privacy", "/terms", "/data-deletion"].includes(url.pathname)) {
+    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+    return res.end(injectGoogleTag(publicPolicyHtml(url.pathname.slice(1))));
   }
   if (url.pathname.startsWith("/billing/quote/")) {
     const token = decodeURIComponent(url.pathname.split("/").pop() || "");
