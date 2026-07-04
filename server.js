@@ -4100,6 +4100,31 @@ async function resetPasswordWithToken(token, password) {
   return operation;
 }
 
+async function changeAuthPassword(userId, sessionId, currentPassword, newPassword) {
+  if (String(newPassword || "").length < 10) throw new Error("PASSWORD_TOO_SHORT");
+  if (String(currentPassword || "") === String(newPassword || "")) throw new Error("PASSWORD_REUSED");
+  const operation = writeQueue.then(async () => {
+    const db = await readDb();
+    const user = db.auth_users.find((item) => item.id === userId);
+    if (!user || !verifyPassword(currentPassword, user.passwordHash)) throw new Error("INVALID_PASSWORD");
+    user.passwordHash = hashPassword(newPassword);
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    user.updatedAt = new Date().toISOString();
+    db.auth_sessions.forEach((session) => {
+      if (session.userId === user.id && session.id !== sessionId) {
+        session.status = "revoked";
+        session.revokedAt = new Date().toISOString();
+      }
+    });
+    db.audit_logs.push(withId({ action: "auth:password_changed", userId: user.id }));
+    await writeDb(db);
+    return { changed: true };
+  });
+  writeQueue = operation.catch(() => {});
+  return operation;
+}
+
 async function revokeAuthSession(token) {
   const operation = writeQueue.then(async () => {
     const db = await readDb();
@@ -4380,6 +4405,24 @@ async function handleApi(req, res, url) {
       "content-disposition": `attachment; filename="agencyreport-account-${date}.json"`,
       "cache-control": "no-store",
     });
+  }
+
+  if (url.pathname === "/api/auth/change-password" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const result = await changeAuthPassword(req.auth.user.id, req.auth.session.id, payload.currentPassword, payload.newPassword);
+      return json(res, 200, { item: result }, { "cache-control": "no-store" });
+    } catch (error) {
+      const code = error.message || "PASSWORD_CHANGE_FAILED";
+      const message = code === "INVALID_PASSWORD"
+        ? "Current password is incorrect"
+        : code === "PASSWORD_TOO_SHORT"
+          ? "New password must be at least 10 characters"
+          : code === "PASSWORD_REUSED"
+            ? "New password must be different from the current password"
+            : "Password change failed";
+      return json(res, 400, { error: message, code });
+    }
   }
 
   if (url.pathname === "/api/account" && req.method === "DELETE") {

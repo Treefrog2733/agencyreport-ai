@@ -29,6 +29,24 @@ async function post(pathname, body) {
   return { status: response.status, body: await response.json() };
 }
 
+async function postWithCookie(pathname, body, cookie = "") {
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: await response.json(), cookie: response.headers.get("set-cookie") || "" };
+}
+
+function markEmailVerified(email) {
+  const dbPath = path.join(testRoot, "data", "db.json");
+  const db = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+  const user = db.auth_users.find((item) => item.email === email);
+  if (!user) throw new Error("Registered smoke user was not persisted");
+  user.emailVerifiedAt = new Date().toISOString();
+  fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
   console.log(`OK ${message}`);
@@ -47,6 +65,20 @@ async function run() {
   assert(publicShape(existingReset) && publicShape(missingReset), "password reset response does not reveal account existence");
   assert(existingVerify.status === 200 && missingVerify.status === 200, "verification resend requests use the same status");
   assert(publicShape(existingVerify) && publicShape(missingVerify), "verification resend response does not reveal account existence");
+
+  markEmailVerified(email);
+  const login = await postWithCookie("/api/auth/login", { email, password: "PrivacySmoke123!" });
+  const cookie = login.cookie.split(";")[0];
+  const wrongCurrent = await postWithCookie("/api/auth/change-password", { currentPassword: "wrong-password", newPassword: "PrivacySmoke456!" }, cookie);
+  const shortPassword = await postWithCookie("/api/auth/change-password", { currentPassword: "PrivacySmoke123!", newPassword: "short" }, cookie);
+  const changed = await postWithCookie("/api/auth/change-password", { currentPassword: "PrivacySmoke123!", newPassword: "PrivacySmoke456!" }, cookie);
+  const oldLogin = await postWithCookie("/api/auth/login", { email, password: "PrivacySmoke123!" });
+  const newLogin = await postWithCookie("/api/auth/login", { email, password: "PrivacySmoke456!" });
+  assert(login.status === 200 && cookie.includes("agencyreport_session="), "verified user can sign in before password change");
+  assert(wrongCurrent.status === 400 && wrongCurrent.body.code === "INVALID_PASSWORD", "password change rejects an incorrect current password");
+  assert(shortPassword.status === 400 && shortPassword.body.code === "PASSWORD_TOO_SHORT", "password change rejects a short new password");
+  assert(changed.status === 200 && changed.body.item.changed === true, "password change succeeds with valid credentials");
+  assert(oldLogin.status === 401 && newLogin.status === 200, "password change invalidates the old password");
 }
 
 run().catch((error) => { console.error(`FAIL ${error.message}`); process.exitCode = 1; }).finally(() => child.kill());

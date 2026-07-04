@@ -719,8 +719,30 @@
                 <h3 id="accountDataTitle">帳號與資料</h3>
                 <p id="accountDataCopy">下載帳號資料副本，或永久刪除帳號與此帳號建立的專案資料。</p>
               </div>
+              <section class="account-settings-card account-password-card" aria-labelledby="accountPasswordTitle">
+                <div class="account-settings-copy">
+                  <strong id="accountPasswordTitle">帳戶安全</strong>
+                  <span id="accountPasswordCopy">更新登入密碼。新密碼至少需要 10 個字元。</span>
+                </div>
+                <div class="account-password-grid">
+                  <label><span id="currentPasswordLabel">目前密碼</span><input id="currentPasswordInput" type="password" autocomplete="current-password" /></label>
+                  <label><span id="newPasswordLabel">新密碼</span><input id="newPasswordInput" type="password" minlength="10" autocomplete="new-password" /></label>
+                  <label><span id="confirmNewPasswordLabel">確認新密碼</span><input id="confirmNewPasswordInput" type="password" minlength="10" autocomplete="new-password" /></label>
+                </div>
+                <div class="button-row account-settings-actions">
+                  <button class="primary" id="changePasswordBtn" type="button">更新密碼</button>
+                </div>
+              </section>
+              <section class="account-settings-card account-export-card" aria-labelledby="accountExportTitle">
+                <div class="account-settings-copy">
+                  <strong id="accountExportTitle">資料備份</strong>
+                  <span id="accountExportCopy">下載帳號、專案、月報與交付紀錄的 JSON 副本。</span>
+                </div>
+                <div class="button-row account-settings-actions">
+                  <button class="ghost" id="exportAccountDataBtn" type="button">下載我的資料</button>
+                </div>
+              </section>
               <div class="button-row">
-                <button class="ghost" id="exportAccountDataBtn" type="button">下載我的資料</button>
                 <button class="danger" id="openDeleteAccountBtn" type="button">刪除帳號</button>
               </div>
               <div class="delete-account-panel" id="deleteAccountPanel" hidden>

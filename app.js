@@ -675,7 +675,15 @@ function translateStaticWorkspace() {
   });
   apply("#refreshAuditBtn", "更新稽核", "Refresh audit");
   apply("#accountDataTitle", "帳號與資料", "Account and data");
-  apply("#accountDataCopy", "下載帳號資料副本，或永久刪除帳號與此帳號建立的專案資料。", "Download a copy of your data or permanently delete the account and its workspace records.");
+  apply("#accountDataCopy", "管理登入安全、資料備份與帳號刪除。", "Manage login security, data backups, and account deletion.");
+  apply("#accountPasswordTitle", "帳戶安全", "Account security");
+  apply("#accountPasswordCopy", "更新登入密碼。新密碼至少需要 10 個字元。", "Update your sign-in password. The new password needs at least 10 characters.");
+  apply("#currentPasswordLabel", "目前密碼", "Current password");
+  apply("#newPasswordLabel", "新密碼", "New password");
+  apply("#confirmNewPasswordLabel", "確認新密碼", "Confirm new password");
+  apply("#changePasswordBtn", "更新密碼", "Update password");
+  apply("#accountExportTitle", "資料備份", "Data backup");
+  apply("#accountExportCopy", "下載帳號、專案、月報與交付紀錄的 JSON 副本。", "Download a JSON copy of account, project, report, and delivery records.");
   apply("#exportAccountDataBtn", "下載我的資料", "Download my data");
   apply("#openDeleteAccountBtn", "刪除帳號", "Delete account");
   apply("#deleteAccountTitle", "永久刪除帳號", "Permanently delete account");
@@ -1109,6 +1117,51 @@ async function exportAccountData() {
     );
   } catch (error) {
     setStatus("#accountDataStatus", "error", state.lang === "en" ? "Export failed" : "匯出失敗", error.message);
+  }
+}
+
+async function changeAccountPassword() {
+  const currentPassword = $("#currentPasswordInput")?.value || "";
+  const newPassword = $("#newPasswordInput")?.value || "";
+  const confirmPassword = $("#confirmNewPasswordInput")?.value || "";
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return setStatus(
+      "#accountDataStatus",
+      "warning",
+      state.lang === "en" ? "Password fields required" : "請完整填寫密碼",
+      state.lang === "en" ? "Enter your current password and confirm the new password." : "請輸入目前密碼，並再次確認新密碼。"
+    );
+  }
+  if (newPassword.length < 10) {
+    return setStatus(
+      "#accountDataStatus",
+      "warning",
+      state.lang === "en" ? "Password too short" : "密碼太短",
+      state.lang === "en" ? "Use at least 10 characters for the new password." : "新密碼至少需要 10 個字元。"
+    );
+  }
+  if (newPassword !== confirmPassword) {
+    return setStatus(
+      "#accountDataStatus",
+      "warning",
+      state.lang === "en" ? "Passwords do not match" : "新密碼不一致",
+      state.lang === "en" ? "Confirm the new password again." : "請重新確認新密碼。"
+    );
+  }
+  try {
+    await api("/api/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
+    ["#currentPasswordInput", "#newPasswordInput", "#confirmNewPasswordInput"].forEach((selector) => {
+      const input = $(selector);
+      if (input) input.value = "";
+    });
+    setStatus(
+      "#accountDataStatus",
+      "ok",
+      state.lang === "en" ? "Password updated" : "密碼已更新",
+      state.lang === "en" ? "Other active sessions were revoked for account safety." : "為了帳戶安全，其他已登入工作階段已撤銷。"
+    );
+  } catch (error) {
+    setStatus("#accountDataStatus", "error", state.lang === "en" ? "Unable to update password" : "無法更新密碼", error.message);
   }
 }
 
@@ -2902,6 +2955,7 @@ function setupEvents() {
   $("#createCheckoutBtn")?.addEventListener("click", () => chooseUpgradePlan($("#planSelect").value));
   $$("[id^='consent']").forEach((input) => input.addEventListener("change", syncConsentAudit));
   $("#refreshAuditBtn")?.addEventListener("click", syncConsentAudit);
+  $("#changePasswordBtn")?.addEventListener("click", changeAccountPassword);
   $("#exportAccountDataBtn")?.addEventListener("click", exportAccountData);
   $("#openDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(true));
   $("#cancelDeleteAccountBtn")?.addEventListener("click", () => toggleDeleteAccountPanel(false));

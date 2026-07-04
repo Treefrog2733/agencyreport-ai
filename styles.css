@@ -3792,6 +3792,50 @@ html.theme-dark .auth-reset-panel {
   color: var(--muted);
   line-height: 1.55;
 }
+.account-settings-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(17, 124, 114, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+}
+.account-settings-copy {
+  display: grid;
+  gap: 4px;
+}
+.account-settings-copy strong {
+  font-size: 15px;
+}
+.account-settings-copy span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.account-password-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.account-password-grid label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.account-password-grid input {
+  width: 100%;
+  min-width: 0;
+}
+.account-settings-actions {
+  justify-content: flex-start;
+}
+.account-data-section > .button-row:has(#openDeleteAccountBtn) {
+  justify-content: flex-start;
+  margin-top: -4px;
+}
 .delete-account-panel {
   display: grid;
   gap: 14px;
@@ -3825,6 +3869,10 @@ html.theme-dark .auth-reset-panel {
   min-width: 0;
 }
 @media (max-width: 680px) {
+  .account-password-grid {
+    grid-template-columns: 1fr;
+  }
+
   .delete-account-fields {
     grid-template-columns: 1fr;
   }
@@ -13044,6 +13092,38 @@ html.theme-light:not(.public-landing) .workspace .consent-list label span {
   color: #102033 !important;
 }
 
+html.theme-dark:not(.public-landing) .workspace .account-settings-card {
+  border-color: rgba(148, 163, 184, 0.22);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.08), transparent 38%),
+    rgba(15, 23, 42, 0.88);
+}
+
+html.theme-dark:not(.public-landing) .workspace .account-settings-copy strong,
+html.theme-dark:not(.public-landing) .workspace .account-password-grid label span {
+  color: #f8fafc;
+}
+
+html.theme-dark:not(.public-landing) .workspace .account-settings-copy span,
+html.theme-dark:not(.public-landing) .workspace .account-password-grid label {
+  color: #cbd5e1;
+}
+
+html.theme-light:not(.public-landing) .workspace .account-settings-card {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+}
+
+html.theme-light:not(.public-landing) .workspace .account-settings-copy strong,
+html.theme-light:not(.public-landing) .workspace .account-password-grid label span {
+  color: #102033;
+}
+
+html.theme-light:not(.public-landing) .workspace .account-settings-copy span,
+html.theme-light:not(.public-landing) .workspace .account-password-grid label {
+  color: #475569;
+}
+
 /* AI intake assistant: make the primary workflow feel like a simple chat box. */
 html:not(.public-landing) .ai-intake-panel {
   grid-column: 1 / -1;
@@ -14042,15 +14122,15 @@ html.public-landing .upgrade-plan button:disabled {
   min-height: 25px;
   padding: 0 9px;
   border-radius: 999px;
-  color: #0f766e;
-  background: rgba(20, 184, 166, 0.12);
+  color: #99f6e4;
+  background: rgba(20, 184, 166, 0.18);
   font-size: 11px;
   font-weight: 850;
 }
 
 .connector-state.disconnected {
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.16);
 }
 
 .ga4-property-panel,
@@ -14180,16 +14260,17 @@ html.public-landing .upgrade-plan button:disabled {
 
 .connector-provider-coverage span {
   padding: 6px 8px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 6px;
-  color: var(--muted);
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.28);
   font-size: 12px;
 }
 
 .connector-provider-coverage span.ready {
   border-color: rgba(45, 212, 191, 0.28);
-  color: var(--text);
-  background: rgba(20, 184, 166, 0.08);
+  color: #ecfeff;
+  background: rgba(20, 184, 166, 0.14);
 }
 
 .connector-reconcile-warnings {
@@ -14209,6 +14290,52 @@ html.theme-light:not(.public-landing) .connector-reconcile-warnings {
 
 html.theme-light:not(.public-landing) .connector-reconcile-ok {
   color: #0f766e;
+}
+
+html.theme-light:not(.public-landing) .connector-state {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+}
+
+html.theme-light:not(.public-landing) .connector-state.disconnected {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+html.theme-light:not(.public-landing) .connector-provider-coverage span {
+  color: #475569;
+  background: rgba(248, 250, 252, 0.86);
+}
+
+html.theme-light:not(.public-landing) .connector-provider-coverage span.ready {
+  color: #0f172a;
+  background: rgba(20, 184, 166, 0.08);
+}
+
+html.theme-dark:not(.public-landing) .connector-reconcile-overview > div {
+  border-color: rgba(45, 212, 191, 0.34);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.22), rgba(15, 23, 42, 0.68));
+}
+
+html.theme-dark:not(.public-landing) .connector-reconcile-overview span {
+  color: #8ddbd0;
+}
+
+html.theme-dark:not(.public-landing) .connector-reconcile-overview strong {
+  color: #f8fafc;
+}
+
+html.theme-dark:not(.public-landing) .connector-provider-coverage span {
+  border-color: rgba(125, 211, 252, 0.28);
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.74);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.theme-dark:not(.public-landing) .connector-provider-coverage span.ready {
+  border-color: rgba(45, 212, 191, 0.44);
+  color: #ecfeff;
+  background: rgba(13, 82, 79, 0.62);
 }
 
 #connectorAuditList {
