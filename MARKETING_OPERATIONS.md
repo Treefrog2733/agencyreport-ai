@@ -7,8 +7,8 @@ This document records the accounts, ownership, and recurring checks needed to gr
 | Service | Purpose | Status | Owner |
 | --- | --- | --- | --- |
 | Google Analytics 4 | Measure landing-page traffic, sign-up intent, and report-generation funnel | Google tag installed | Workspace owner |
-| Google Search Console | Submit sitemap, inspect indexation, monitor search queries and Core Web Vitals | Verification in progress for `https://app.virtualtrendworks.com/` | Workspace owner |
-| Bing Webmaster Tools | Submit the same sitemap and monitor Bing search performance | Website added; verification tag deployed next | Workspace owner |
+| Google Search Console | Submit sitemap, inspect indexation, monitor search queries and Core Web Vitals | Verified; `sitemap.xml` submitted and 9 URLs discovered | Workspace owner |
+| Bing Webmaster Tools | Submit the same sitemap and monitor Bing search performance | Verified; `sitemap.xml` submitted for processing | Workspace owner |
 
 ## Safe Access Record
 
