@@ -7,4 +7,5 @@ backups/
 .tmp-server-*.pid
 artifacts/
 tmp/
+private/
 *.log

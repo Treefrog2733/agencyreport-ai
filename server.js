@@ -139,6 +139,7 @@ const contentTypes = {
 };
 
 const publicStaticFiles = new Set(["/index.html", "/app.js", "/styles.css", "/gtag-init.js"]);
+const googleSearchConsoleVerificationFile = "googlec246612402efadc9.html";
 const rateBuckets = new Map();
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 120);
@@ -174,19 +175,162 @@ function robotsTxt() {
 
 function sitemapXml() {
   const today = new Date().toISOString().slice(0, 10);
-  const urls = ["/", "/legal", "/privacy", "/terms", "/data-deletion"];
+  const urls = [
+    { pathname: "/", changefreq: "weekly", priority: "1.0" },
+    { pathname: "/resources", changefreq: "weekly", priority: "0.8" },
+    { pathname: "/resources/agency-monthly-report-template", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/resources/google-ads-meta-ga4-monthly-report", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/resources/ai-agency-reporting", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/legal", changefreq: "monthly", priority: "0.4" },
+    { pathname: "/privacy", changefreq: "monthly", priority: "0.4" },
+    { pathname: "/terms", changefreq: "monthly", priority: "0.4" },
+    { pathname: "/data-deletion", changefreq: "monthly", priority: "0.4" },
+  ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls
-  .map((pathname) => `  <url>
-    <loc>${publicOrigin()}${pathname}</loc>
+  .map((item) => `  <url>
+    <loc>${publicOrigin()}${item.pathname}</loc>
     <lastmod>${today}</lastmod>
-    <changefreq>${pathname === "/" ? "weekly" : "monthly"}</changefreq>
-    <priority>${pathname === "/" ? "1.0" : "0.4"}</priority>
+    <changefreq>${item.changefreq}</changefreq>
+    <priority>${item.priority}</priority>
   </url>`)
   .join("\n")}
 </urlset>
 `;
+}
+
+function resourcePages(english = false) {
+  const pages = english
+    ? {
+        hub: {
+          title: "Agency Reporting Resources | AgencyReport AI",
+          description: "Practical guides for agencies that want to turn Google Ads, Meta Ads, GA4, spreadsheets, and AI insights into clear recurring client reports.",
+          eyebrow: "Agency reporting playbook",
+          heading: "Build reporting clients can understand and act on",
+          intro: "Clear monthly reporting is a retention system, not a collection of screenshots. These guides help agencies create a repeatable workflow from source data to client-ready decisions.",
+          cards: [
+            ["agency-monthly-report-template", "Agency monthly report template", "The practical sections, KPIs, and decision context every recurring client report should include."],
+            ["google-ads-meta-ga4-monthly-report", "Google Ads, Meta Ads, and GA4 reporting", "How to keep delivery metrics and outcome metrics clear without double counting conversions."],
+            ["ai-agency-reporting", "AI reporting workflow for agencies", "A low-friction process for turning source data and client context into a polished first draft."],
+          ],
+        },
+        "agency-monthly-report-template": {
+          title: "Agency Monthly Report Template: KPI, Insight, and Action Plan",
+          description: "Use this agency monthly report template to turn marketing data into an executive summary, KPI review, insights, and a next-month action plan.",
+          category: "Monthly report template",
+          heading: "A monthly report template clients will actually read",
+          intro: "The strongest agency reports do not attempt to show every number. They answer four client questions: what happened, why it happened, what needs attention, and what happens next.",
+          sections: [
+            ["1. Start with an executive summary", "Open with one or two short paragraphs. State the month, the most important business outcome, the strongest win, and one risk worth discussing. This gives a busy decision maker the conclusion before the detail."],
+            ["2. Choose a KPI scorecard", "Show only the measures that map to the agreed goal. For paid media this normally includes spend, impressions, clicks, CTR, conversions, conversion rate, CPA, revenue, and ROAS. For lead generation, call out qualified leads and cost per qualified lead when available."],
+            ["3. Explain movement, not just totals", "A useful finding links a change to a likely driver: a campaign, audience, creative, landing-page change, or seasonal factor. Clearly label assumptions so the report stays trustworthy."],
+            ["4. End with a committed action plan", "List the next two to four actions, who owns them, and what success signal you will review next month. Budget reallocation, creative testing, keyword expansion, and conversion tracking repairs are concrete examples."],
+          ],
+        },
+        "google-ads-meta-ga4-monthly-report": {
+          title: "Google Ads, Meta Ads, and GA4 Monthly Reporting Guide",
+          description: "Learn how agencies combine Google Ads, Meta Ads, and GA4 into a clear monthly report without mixing platform delivery metrics with site outcomes.",
+          category: "Multi-channel reporting",
+          heading: "Make Google Ads, Meta Ads, and GA4 tell one clear story",
+          intro: "Ad platforms measure delivery and attributed conversions differently from GA4. A report becomes easier to trust when it makes those roles explicit instead of adding all conversion totals together.",
+          sections: [
+            ["Use platform data for delivery decisions", "Google Ads and Meta Ads are the right sources for spend, impressions, clicks, campaign delivery, platform-attributed conversions, and platform ROAS. Compare channels on the same definitions and date range."],
+            ["Use GA4 for site outcomes", "GA4 should anchor website sessions, engagement, key events, and cross-channel outcomes. If a client asks how advertising affected the site, explain that GA4 and ad-platform attribution can differ because their attribution models and lookback windows differ."],
+            ["Avoid double counting", "Do not sum Meta conversions, Google Ads conversions, and GA4 key events into one total. Pick a canonical outcome source for the headline KPI, disclose the source, then use platform figures to explain delivery efficiency."],
+            ["Create a channel decision table", "For each channel, state spend, return or CPA, the main observed driver, and next action. This turns a spreadsheet-style report into a decision document clients can act on."],
+          ],
+        },
+        "ai-agency-reporting": {
+          title: "AI Agency Reporting: From Raw Data to Client-Ready Monthly Reports",
+          description: "A practical AI reporting workflow for agencies: provide client context and source data, review a grounded draft, then deliver a clear monthly action plan.",
+          category: "AI reporting workflow",
+          heading: "Use AI to reduce reporting work, not agency judgment",
+          intro: "AI works best after the agency gives it clear inputs: the reporting period, client goal, agreed KPIs, source data, and important context. It can then create a useful first draft while the agency remains accountable for strategy and claims.",
+          sections: [
+            ["Give AI the right brief", "Include client objective, report month, currency, target CPA or ROAS, special campaigns, and any known tracking issue. Paste a CSV, Google Sheets data, or a concise summary of the source data."],
+            ["Ask for a structured draft", "Request an executive summary, KPI highlights, strongest and weakest channel, risks, next-month actions, and client-friendly wording. A structured output is quicker to review and easier to carry into a branded report."],
+            ["Keep a human review step", "Check source totals, attribution caveats, claims about causality, and the suitability of each action. AI can surface patterns; it should not invent results or make unreviewed promises to a client."],
+            ["Turn the draft into a repeatable service", "Use the same report sections, naming convention, delivery checklist, and archive for each month. The repeatable system is what makes a report service profitable as client volume grows."],
+          ],
+        },
+      }
+    : {
+        hub: {
+          title: "代理商月報資源中心 | AgencyReport AI",
+          description: "提供行銷代理商可直接使用的月報架構、Google Ads、Meta Ads、GA4 數據整合與 AI 月報流程指南。",
+          eyebrow: "代理商月報實戰指南",
+          heading: "把數據變成客戶聽得懂、能決策的月報",
+          intro: "一份清楚的月報不只是截圖集合，而是客戶續約與策略溝通的系統。以下指南協助代理商把資料、洞察與下月行動做成可重複交付的服務。",
+          cards: [
+            ["agency-monthly-report-template", "代理商月報範本", "整理每月必備的執行摘要、KPI、洞察與下月行動計畫。"],
+            ["google-ads-meta-ga4-monthly-report", "Google Ads、Meta Ads、GA4 月報", "讓廣告投放資料與網站成果清楚分工，不重複計算轉換。"],
+            ["ai-agency-reporting", "AI 代理商月報流程", "把客戶需求與來源資料交給 AI 整理，再由代理商完成專業審稿。"],
+          ],
+        },
+        "agency-monthly-report-template": {
+          title: "代理商月報範本：KPI、洞察與下月行動計畫怎麼寫",
+          description: "用這份代理商月報範本，把行銷數據整理成執行摘要、KPI 總覽、原因分析與下月行動計畫。",
+          category: "月報範本",
+          heading: "客戶真的會看完的代理商月報範本",
+          intro: "好的月報不需要塞進每一個數字，而是要回答客戶四個問題：本月發生什麼、為什麼會這樣、哪些地方要注意、下個月準備怎麼做。",
+          sections: [
+            ["1. 從執行摘要開始", "用一到兩段話交代月份、最重要的商業成果、最大亮點，以及值得討論的風險。先給忙碌決策者結論，再讓他們決定要不要往下看細節。"],
+            ["2. 選擇真正對目標有用的 KPI", "只呈現和已約定目標有關的指標。付費廣告通常包含花費、曝光、點擊、CTR、轉換、轉換率、CPA、營收與 ROAS；名單型客戶則應加入合格名單與合格名單成本。"],
+            ["3. 解釋變化，而不是只列總數", "有價值的洞察會把數據變化連回可能原因，例如特定活動、受眾、素材、落地頁調整或季節性因素。若只是推論，要明確標示，才能維持報告可信度。"],
+            ["4. 以明確行動計畫收尾", "列出下個月兩到四項行動、負責方向，以及下次要觀察的成功訊號。預算移轉、素材測試、關鍵字擴充與轉換追蹤修正，都是客戶看得懂的具體項目。"],
+          ],
+        },
+        "google-ads-meta-ga4-monthly-report": {
+          title: "Google Ads、Meta Ads、GA4 月報整合指南",
+          description: "學習如何整合 Google Ads、Meta Ads 與 GA4，做出清楚且不重複計算轉換的代理商月報。",
+          category: "多渠道數據整合",
+          heading: "讓 Google Ads、Meta Ads 與 GA4 說同一個清楚的故事",
+          intro: "廣告平台的投放與歸因方式和 GA4 不同。月報只要先把各自的角色講清楚，就能避免把不同來源的轉換硬加在一起。",
+          sections: [
+            ["用廣告平台資料做投放決策", "Google Ads 與 Meta Ads 適合呈現花費、曝光、點擊、活動表現、平台歸因轉換與平台 ROAS。跨渠道比較時，務必使用相同的日期區間與指標定義。"],
+            ["用 GA4 說明網站成果", "GA4 應該作為網站工作階段、互動、關鍵事件與跨渠道成果的依據。當客戶問廣告如何影響網站時，也要說明 GA4 和廣告平台可能因歸因模型與回溯期間不同而出現差異。"],
+            ["避免重複計算轉換", "不要把 Meta 轉換、Google Ads 轉換與 GA4 關鍵事件全部加總成一個總數。選定一個成果來源當標題 KPI，清楚揭露來源，再用各平台數字解釋投放效率。"],
+            ["建立渠道決策表", "每個渠道都要有花費、回報或 CPA、觀察到的主要原因與下一步行動。這會讓報告從試算表變成客戶可據以決策的文件。"],
+          ],
+        },
+        "ai-agency-reporting": {
+          title: "AI 代理商月報：從原始資料到客戶可交付報告",
+          description: "一套實務 AI 月報流程：提供客戶目標與來源資料，產出有依據的初稿，再由代理商完成專業審核與交付。",
+          category: "AI 月報流程",
+          heading: "用 AI 減少月報整理時間，不取代代理商判斷",
+          intro: "AI 最適合處理已被交代清楚的輸入：報告月份、客戶目標、既定 KPI、來源資料與重要背景。它可以快速形成初稿，但策略與客戶承諾仍應由代理商負責。",
+          sections: [
+            ["先給 AI 完整的需求背景", "帶入客戶目標、報告月份、幣別、目標 CPA 或 ROAS、特殊活動與已知追蹤問題。接著貼上 CSV、Google Sheets 資料，或摘要來源數據。"],
+            ["要求結構化的報告初稿", "請 AI 產生執行摘要、KPI 亮點、最佳與最弱渠道、風險、下月行動與客戶說明稿。結構化輸出更容易審稿，也更容易放進品牌化月報。"],
+            ["保留人工審核", "確認來源總數、歸因差異、因果關係說法與每項建議是否適合客戶。AI 可以協助找出模式，但不應在未審核下替客戶做承諾。"],
+            ["把初稿變成可重複的服務", "每月使用固定章節、命名方式、交付清單與報告資料庫。真正能讓月報服務有利潤的，是能隨客戶數增加而穩定運作的流程。"],
+          ],
+        },
+      };
+  return pages;
+}
+
+function resourcePageHtml(slug = "hub", english = false) {
+  const pages = resourcePages(english);
+  const page = pages[slug] || pages.hub;
+  const path = slug === "hub" ? "/resources" : `/resources/${slug}`;
+  const home = english ? "Home" : "首頁";
+  const hub = english ? "Resources" : "資源中心";
+  const start = english ? "Create your first report" : "免費建立第一份月報";
+  const languageHref = `${path}${english ? "" : "?lang=en"}`;
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: home, item: publicOrigin() },
+      { "@type": "ListItem", position: 2, name: hub, item: `${publicOrigin()}/resources` },
+      ...(slug === "hub" ? [] : [{ "@type": "ListItem", position: 3, name: page.heading, item: `${publicOrigin()}${path}` }]),
+    ],
+  }).replace(/</g, "\\u003c");
+  const cards = page.cards?.map(([cardSlug, title, copy]) => `<article class="resource-card"><p>${escapeHtml(english ? "Guide" : "指南")}</p><h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p><a href="/resources/${cardSlug}">${english ? "Read guide" : "閱讀指南"} <span aria-hidden="true">→</span></a></article>`).join("") || "";
+  const sections = page.sections?.map(([title, copy]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p></section>`).join("") || "";
+  return `<!doctype html><html lang="${english ? "en" : "zh-Hant"}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(page.title)} | AgencyReport AI</title><meta name="description" content="${escapeHtml(page.description)}" /><meta name="robots" content="index,follow" /><link rel="canonical" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="zh-Hant" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="en" href="${publicOrigin()}${path}?lang=en" /><meta property="og:type" content="article" /><meta property="og:site_name" content="AgencyReport AI" /><meta property="og:title" content="${escapeHtml(page.title)}" /><meta property="og:description" content="${escapeHtml(page.description)}" /><meta property="og:url" content="${publicOrigin()}${path}" /><script type="application/ld+json">${jsonLd}</script><style>:root{--ink:#102033;--muted:#536476;--line:#dbe4ee;--brand:#1d4ed8;--aqua:#0f9f98;--bg:#f5f8fd}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}a{color:inherit}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;max-width:1160px;margin:auto;padding:18px 24px}.brand{font-weight:900;text-decoration:none;letter-spacing:.01em}.brand span{color:#0f9f98}.top nav{display:flex;gap:20px;align-items:center}.top nav a{font-size:14px;font-weight:750;text-decoration:none;color:#405168}.top nav a:hover{color:var(--brand)}.language{border:1px solid var(--line);border-radius:999px;padding:8px 12px}.hero{padding:78px 24px 72px;background:radial-gradient(circle at 75% 20%,rgba(73,176,255,.18),transparent 35%),linear-gradient(135deg,#071f38,#173e78);color:#fff}.hero>div,.content,.footer-inner{max-width:930px;margin:auto}.eyebrow{margin:0;color:#7dd3fc;font-size:12px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}.hero h1{max-width:820px;margin:16px 0;font-size:clamp(38px,6vw,64px);line-height:1.08;letter-spacing:0}.hero p:not(.eyebrow){max-width:760px;margin:0;color:#d5e7ff;font-size:18px;line-height:1.75}.hero-actions{display:flex;gap:12px;margin-top:28px}.hero-actions a{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border:1px solid rgba(255,255,255,.32);border-radius:8px;font-weight:850;text-decoration:none}.hero-actions .primary{border-color:#4ddbe0;background:#26a7d9;color:#06233a}.content{padding:54px 24px 72px}.breadcrumb{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px;color:#64748b;font-size:14px}.breadcrumb a{color:#2563eb;text-decoration:none}.resource-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.resource-card,article+section,main>section{padding:28px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 12px 35px rgba(15,23,42,.05)}.resource-card p:first-child{margin:0;color:#078d86;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.resource-card h2{margin:16px 0 12px;font-size:22px;line-height:1.25}.resource-card p{color:var(--muted);line-height:1.72}.resource-card a{display:inline-flex;gap:8px;margin-top:8px;color:#1d4ed8;font-weight:850;text-decoration:none}.article{max-width:760px}.article>section+section{margin-top:16px}.article h2{margin:0 0 12px;font-size:25px}.article p{margin:0;color:var(--muted);font-size:16px;line-height:1.85}.next{margin-top:22px;padding:22px;border-radius:10px;background:#e8f8f7;color:#113e48}.next strong{display:block;margin-bottom:6px}.next a{color:#0c6d7d;font-weight:850}.site-footer{border-top:1px solid var(--line);background:#fff}.footer-inner{display:flex;justify-content:space-between;gap:16px;padding:26px 24px;color:#66758a;font-size:13px}.footer-inner a{color:#405168;text-decoration:none}@media(max-width:760px){.top{padding:15px 18px}.top nav{gap:12px}.top nav a:not(.language){display:none}.hero{padding:60px 20px}.hero h1{font-size:40px}.hero-actions{flex-direction:column;align-items:flex-start}.content{padding:36px 18px 52px}.resource-grid{grid-template-columns:1fr}.footer-inner{display:grid;padding:24px 18px}}</style></head><body><header class="top"><a class="brand" href="/"><span>AR</span> AgencyReport AI</a><nav aria-label="${english ? "Site navigation" : "網站導覽"}"><a href="/resources">${hub}</a><a href="/#pricing">${english ? "Pricing" : "定價"}</a><a class="language" href="${languageHref}">${english ? "繁中" : "EN"}</a></nav></header><main>${slug === "hub" ? `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p><div class="hero-actions"><a class="primary" href="/#top">${start}</a></div></div></section><div class="content"><div class="resource-grid">${cards}</div></div>` : `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.category)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p></div></section><div class="content"><nav class="breadcrumb" aria-label="${english ? "Breadcrumb" : "麵包屑"}"><a href="/">${home}</a><span aria-hidden="true">/</span><a href="/resources">${hub}</a><span aria-hidden="true">/</span><span>${escapeHtml(page.category)}</span></nav><article class="article">${sections}<div class="next"><strong>${english ? "Ready to turn this into a repeatable workflow?" : "準備把流程變成可重複交付的服務？"}</strong><span>${english ? "Use AgencyReport AI to turn your source data and client context into a reviewable monthly report draft." : "用 AgencyReport AI 將來源資料與客戶背景整理成可審稿的月報初稿。"}</span><br /><a href="/#top">${start}</a></div></article></div>`}</main><footer class="site-footer"><div class="footer-inner"><span>© 2026 Virtual Trend Works</span><span><a href="/privacy">${english ? "Privacy" : "隱私權"}</a> · <a href="/terms">${english ? "Terms" : "服務條款"}</a></span></div></footer></body></html>`;
 }
 
 function publicPolicyHtml(kind = "privacy") {
@@ -4921,6 +5065,10 @@ async function handleApi(req, res, url) {
 }
 
 async function serveStatic(req, res, url) {
+  if (url.pathname === `/${googleSearchConsoleVerificationFile}`) {
+    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+    return res.end(`google-site-verification: ${googleSearchConsoleVerificationFile}`);
+  }
   if (url.pathname === "/robots.txt") {
     res.writeHead(200, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
     return res.end(robotsTxt());
@@ -4932,6 +5080,16 @@ async function serveStatic(req, res, url) {
   if (url.pathname === "/legal") {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
     return res.end(injectGoogleTag(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh")));
+  }
+  if (url.pathname === "/resources" || url.pathname.startsWith("/resources/")) {
+    const slug = url.pathname === "/resources" ? "hub" : decodeURIComponent(url.pathname.slice("/resources/".length));
+    const known = resourcePages(url.searchParams.get("lang") === "en");
+    if (!known[slug]) {
+      res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
+      return res.end("Resource not found");
+    }
+    res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
+    return res.end(injectGoogleTag(resourcePageHtml(slug, url.searchParams.get("lang") === "en")));
   }
   if (["/privacy", "/terms", "/data-deletion"].includes(url.pathname)) {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
