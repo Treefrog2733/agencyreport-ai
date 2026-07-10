@@ -9755,19 +9755,20 @@ html.public-landing .sales-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
+  gap: 28px;
   margin: clamp(28px, 4vw, 56px) max(18px, calc((100vw - 1180px) / 2)) 34px;
-  padding: 18px 20px;
+  padding: 24px 26px;
   border: 1px solid rgba(12, 42, 76, .12);
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, .86);
   box-shadow: 0 16px 45px rgba(13, 31, 61, .08);
   color: #0f172a;
 }
 
-html.public-landing .sales-footer div {
+html.public-landing .sales-footer-brand {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 html.public-landing .sales-footer strong {
@@ -9781,25 +9782,32 @@ html.public-landing .sales-footer span {
   font-size: 13px;
 }
 
-html.public-landing .sales-footer a {
+html.public-landing .sales-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+}
+
+html.public-landing .sales-footer-links a {
   display: inline-flex;
   align-items: center;
-  min-height: 42px;
-  padding: 0 16px;
-  border: 1px solid rgba(37, 99, 235, .22);
-  border-radius: 999px;
-  background: #f8fbff;
-  color: #1d4ed8;
+  min-height: 32px;
+  color: #334155;
   font-size: 14px;
   font-weight: 800;
   text-decoration: none;
-  overflow-wrap: anywhere;
 }
 
-html.public-landing .sales-footer a:hover {
-  border-color: rgba(37, 99, 235, .45);
-  background: #eef6ff;
-  transform: translateY(-1px);
+html.public-landing .sales-footer-links a:hover {
+  color: #2563eb;
+}
+
+html.public-landing .sales-footer small {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  text-align: right;
 }
 
 .feedback-launcher {
@@ -9974,12 +9982,17 @@ html.public-landing .feedback-dialog textarea {
 @media (max-width: 620px) {
   html.public-landing .sales-footer {
     display: grid;
+    gap: 16px;
     margin: 28px 18px 30px;
+    padding: 22px 20px;
   }
 
-  html.public-landing .sales-footer a {
-    justify-content: center;
-    width: 100%;
+  html.public-landing .sales-footer-links {
+    justify-content: flex-start;
+  }
+
+  html.public-landing .sales-footer small {
+    text-align: left;
   }
 
   .feedback-launcher {
