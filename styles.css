@@ -1805,6 +1805,27 @@ html.public-landing .landing-faq-grid article {
   box-shadow: 0 24px 70px rgba(14, 24, 58, .08);
 }
 
+html.public-landing .template-card-grid article {
+  display: flex;
+  flex-direction: column;
+}
+
+html.public-landing .landing-resource-link {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  padding-top: 18px;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+html.public-landing .landing-resource-link:hover {
+  color: #087f78;
+  text-decoration: underline;
+}
+
 html.public-landing .landing-fit-grid article::after,
 html.public-landing .template-card-grid article::after {
   content: "";
@@ -9801,6 +9822,27 @@ html.public-landing .sales-footer-links a {
 
 html.public-landing .sales-footer-links a:hover {
   color: #2563eb;
+}
+
+html.public-landing .solution-grid article {
+  display: flex;
+  flex-direction: column;
+}
+
+html.public-landing .solution-grid a {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: auto;
+  padding-top: 18px;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+html.public-landing .solution-grid a:hover {
+  color: #0f766e;
 }
 
 html.public-landing .sales-footer small {

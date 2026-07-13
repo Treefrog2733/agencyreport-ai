@@ -181,6 +181,10 @@ function sitemapXml() {
     { pathname: "/resources/agency-monthly-report-template", changefreq: "monthly", priority: "0.8" },
     { pathname: "/resources/google-ads-meta-ga4-monthly-report", changefreq: "monthly", priority: "0.8" },
     { pathname: "/resources/ai-agency-reporting", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/solutions", changefreq: "weekly", priority: "0.8" },
+    { pathname: "/solutions/agencies", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/solutions/freelancers", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/solutions/in-house-teams", changefreq: "monthly", priority: "0.8" },
     { pathname: "/legal", changefreq: "monthly", priority: "0.4" },
     { pathname: "/privacy", changefreq: "monthly", priority: "0.4" },
     { pathname: "/terms", changefreq: "monthly", priority: "0.4" },
@@ -311,12 +315,118 @@ function resourcePages(english = false) {
   return pages;
 }
 
-function resourcePageHtml(slug = "hub", english = false) {
-  const pages = resourcePages(english);
+function solutionPages(english = false) {
+  return english
+    ? {
+        hub: {
+          title: "Marketing Reporting Solutions | AgencyReport AI",
+          description: "AgencyReport AI helps marketing agencies, freelancers, consultants, and in-house teams turn advertising and analytics data into clear monthly decision reports.",
+          eyebrow: "Choose your workflow",
+          heading: "A clearer reporting workflow for every marketing role",
+          intro: "Start with the data your team already has, then turn it into an executive summary, KPI review, insights, and a next-month action plan.",
+          cards: [
+            ["agencies", "Marketing agencies", "Standardize recurring reports across clients while keeping strategy and client context in the review."],
+            ["freelancers", "Freelancers and consultants", "Create a credible client-ready report from CSV, Google Sheets, and the brief you already use."],
+            ["in-house-teams", "In-house marketing teams", "Give leaders a concise view of paid media, website outcomes, risks, and next actions."],
+          ],
+        },
+        agencies: {
+          title: "Marketing Agency Reporting Workflow",
+          description: "A repeatable AI reporting workflow for marketing agencies managing recurring Google Ads, Meta Ads, GA4, and spreadsheet reporting.",
+          category: "For marketing agencies",
+          heading: "Turn recurring reports into a scalable agency service",
+          intro: "AgencyReport AI keeps the agency in control of the narrative while reducing the manual work of preparing KPI summaries, insights, and delivery drafts.",
+          sections: [
+            ["Standardize client intake", "Use the AI import assistant to bring a client brief, CSV, Google Sheets link, or connected platform data into one reporting case. Each case keeps the reporting period, client goals, and agreed KPIs together."],
+            ["Review a client-ready draft", "Create an executive summary, KPI scorecard, channel findings, risks, and next-month actions. Your strategist reviews the result before it becomes a client-facing report, so the agency judgment remains visible."],
+            ["Create a repeatable delivery record", "Export a branded HTML or PDF report, prepare the delivery email, and keep a monthly archive. This creates a dependable reporting operation as the number of client accounts grows."],
+          ],
+        },
+        freelancers: {
+          title: "Freelancer and Consultant Marketing Reports",
+          description: "Create professional monthly marketing reports from Google Ads, Meta Ads, GA4, CSV, or Google Sheets without building a BI dashboard first.",
+          category: "For freelancers and consultants",
+          heading: "Deliver a professional report without building a BI stack",
+          intro: "For a small portfolio of clients, the fastest path is a clear reporting template, grounded data, and enough context for a useful recommendation.",
+          sections: [
+            ["Bring the client brief and data together", "Paste the client goal, source link, or CSV into the AI import assistant. It extracts the reporting period, channels, KPI signals, and source context into the report workflow."],
+            ["Focus on decisions instead of dashboards", "Use a concise scorecard and a small number of findings. Clients usually need to know what changed, what caused the change, what needs attention, and what you will test next."],
+            ["Keep delivery simple", "Generate a reviewable report, export PDF or HTML when it is approved, and keep the report in the archive so earlier months are easy to revisit."],
+          ],
+        },
+        "in-house-teams": {
+          title: "In-House Marketing Team Reporting",
+          description: "Turn advertising and analytics data into a clear monthly decision report for in-house marketing teams and business leaders.",
+          category: "For in-house teams",
+          heading: "Give leaders a monthly marketing report they can act on",
+          intro: "In-house teams can use AgencyReport AI to connect execution detail with the business discussion: what happened, why it matters, and what should change next.",
+          sections: [
+            ["Create one shared view of the month", "Combine paid media delivery, GA4 outcome metrics, and campaign context without forcing leaders to compare multiple platform dashboards. Keep platform-attributed figures separate from website outcomes."],
+            ["Surface risks early", "Show the weakest channel, tracking caveats, spend shifts, and conversion changes next to the strongest performance. A risk is more useful when it comes with the context needed to make a decision."],
+            ["Turn reporting into a monthly operating rhythm", "End with named next actions such as budget reallocation, creative testing, landing-page improvements, or tracking repairs. The monthly report becomes a record of decisions, not just a historical export."],
+          ],
+        },
+      }
+    : {
+        hub: {
+          title: "行銷月報解決方案 | AgencyReport AI",
+          description: "AgencyReport AI 協助行銷代理商、接案者、行銷顧問與品牌團隊，把廣告與分析數據整理為清楚可交付的月報。",
+          eyebrow: "選擇適合你的流程",
+          heading: "每一種行銷角色，都能用更清楚的方式交付月報",
+          intro: "從既有的資料、客戶需求與平台數據開始，整理成執行摘要、KPI、洞察與下月行動計畫。",
+          cards: [
+            ["agencies", "行銷代理商", "在保留策略審核與客戶脈絡的前提下，將多客戶的月報工作流程標準化。"],
+            ["freelancers", "接案者與行銷顧問", "用既有的 CSV、Google Sheets 與客戶需求，快速產出專業、易懂的月報。"],
+            ["in-house-teams", "品牌行銷團隊", "讓決策者快速看見廣告、網站成效、風險與下一步行動。"],
+          ],
+        },
+        agencies: {
+          title: "行銷代理商月報工作流程",
+          description: "給行銷代理商的可重複 AI 月報流程，整合 Google Ads、Meta Ads、GA4 與試算表資料。",
+          category: "適合行銷代理商",
+          heading: "把每月報表變成可擴張的代理商服務",
+          intro: "AgencyReport AI 讓代理商保有策略與敘事的主導權，同時減少整理 KPI、洞察與交付草稿的重複工作。",
+          sections: [
+            ["標準化收集客戶資料", "透過 AI 匯入助手，把客戶需求、CSV、Google Sheets 連結或已串接的平台資料集中到同一個案件。報告月份、客戶目標與約定 KPI 都能保留在案件內。"],
+            ["審核可交付的初稿", "產生執行摘要、KPI 總覽、渠道洞察、風險與下月行動。策略人員先審核內容，再輸出成客戶報告，讓代理商的專業判斷始終可見。"],
+            ["建立可重複的交付紀錄", "輸出品牌化 HTML 或 PDF、準備交付 Email，並保存每月月報。當客戶數增加時，也能維持一致且可追溯的交付流程。"],
+          ],
+        },
+        freelancers: {
+          title: "接案者與行銷顧問月報",
+          description: "不用先建 BI 儀表板，也能從 Google Ads、Meta Ads、GA4、CSV 或 Google Sheets 產出專業行銷月報。",
+          category: "適合接案者與行銷顧問",
+          heading: "不必先建 BI 系統，也能交付專業月報",
+          intro: "客戶數較少時，最有效率的做法是用清楚的報告框架、可信的數據，以及足以形成建議的客戶背景。",
+          sections: [
+            ["一次帶入需求與資料", "把客戶目標、來源網址或 CSV 貼進 AI 匯入助手。系統會將報告月份、渠道、KPI 訊號與資料來源脈絡整理進月報流程。"],
+            ["先談決策，而不是堆滿儀表板", "用精簡的 KPI 總覽與少量重要洞察，回答客戶最在意的四件事：發生什麼、原因可能是什麼、要注意什麼，以及下個月測試什麼。"],
+            ["簡單完成交付與回顧", "產出可審核的月報，確認後匯出 PDF 或 HTML，並保存到報告資料庫，未來需要回顧前幾個月時不必重新找檔案。"],
+          ],
+        },
+        "in-house-teams": {
+          title: "品牌行銷團隊月報",
+          description: "把廣告與網站分析資料轉為品牌行銷團隊與管理者看得懂、能採取行動的月度決策報告。",
+          category: "適合品牌行銷團隊",
+          heading: "讓主管拿到一份能直接討論決策的行銷月報",
+          intro: "品牌團隊可用 AgencyReport AI 將執行細節連結到經營討論：本月發生什麼、為何重要，以及下一步應調整什麼。",
+          sections: [
+            ["建立一份共同理解的月度視角", "結合付費媒體投放、GA4 網站成果與活動脈絡，不必讓主管逐一比對多個平台。平台歸因與網站成果會分開說明，避免誤讀。"],
+            ["提早看見需要處理的風險", "將最弱渠道、追蹤限制、預算變動與轉換異常放在最佳成效旁邊。風險搭配足夠的上下文，才有助於團隊做決定。"],
+            ["把月報變成固定的營運節奏", "最後列出具名的行動項目，例如預算調整、素材測試、落地頁改善或追蹤修正。月報將成為決策紀錄，而不只是歷史匯出檔。"],
+          ],
+        },
+      };
+}
+
+function resourcePageHtml(slug = "hub", english = false, collection = "resources") {
+  const isSolution = collection === "solutions";
+  const basePath = isSolution ? "/solutions" : "/resources";
+  const pages = isSolution ? solutionPages(english) : resourcePages(english);
   const page = pages[slug] || pages.hub;
-  const path = slug === "hub" ? "/resources" : `/resources/${slug}`;
+  const path = slug === "hub" ? basePath : `${basePath}/${slug}`;
   const home = english ? "Home" : "首頁";
-  const hub = english ? "Resources" : "資源中心";
+  const hub = english ? (isSolution ? "Solutions" : "Resources") : (isSolution ? "適用方案" : "資源中心");
   const start = english ? "Create your first report" : "免費建立第一份月報";
   const languageHref = `${path}${english ? "" : "?lang=en"}`;
   const jsonLd = JSON.stringify({
@@ -324,13 +434,13 @@ function resourcePageHtml(slug = "hub", english = false) {
     "@type": "BreadcrumbList",
     itemListElement: [
       { "@type": "ListItem", position: 1, name: home, item: publicOrigin() },
-      { "@type": "ListItem", position: 2, name: hub, item: `${publicOrigin()}/resources` },
+      { "@type": "ListItem", position: 2, name: hub, item: `${publicOrigin()}${basePath}` },
       ...(slug === "hub" ? [] : [{ "@type": "ListItem", position: 3, name: page.heading, item: `${publicOrigin()}${path}` }]),
     ],
   }).replace(/</g, "\\u003c");
-  const cards = page.cards?.map(([cardSlug, title, copy]) => `<article class="resource-card"><p>${escapeHtml(english ? "Guide" : "指南")}</p><h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p><a href="/resources/${cardSlug}">${english ? "Read guide" : "閱讀指南"} <span aria-hidden="true">→</span></a></article>`).join("") || "";
+  const cards = page.cards?.map(([cardSlug, title, copy]) => `<article class="resource-card"><p>${escapeHtml(english ? (isSolution ? "Solution" : "Guide") : (isSolution ? "適用情境" : "指南"))}</p><h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p><a href="${basePath}/${cardSlug}">${english ? (isSolution ? "See workflow" : "Read guide") : (isSolution ? "查看流程" : "閱讀指南")} <span aria-hidden="true">→</span></a></article>`).join("") || "";
   const sections = page.sections?.map(([title, copy]) => `<section><h2>${escapeHtml(title)}</h2><p>${escapeHtml(copy)}</p></section>`).join("") || "";
-  return `<!doctype html><html lang="${english ? "en" : "zh-Hant"}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(page.title)} | AgencyReport AI</title><meta name="description" content="${escapeHtml(page.description)}" /><meta name="robots" content="index,follow" /><link rel="canonical" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="zh-Hant" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="en" href="${publicOrigin()}${path}?lang=en" /><meta property="og:type" content="article" /><meta property="og:site_name" content="AgencyReport AI" /><meta property="og:title" content="${escapeHtml(page.title)}" /><meta property="og:description" content="${escapeHtml(page.description)}" /><meta property="og:url" content="${publicOrigin()}${path}" /><script type="application/ld+json">${jsonLd}</script><style>:root{--ink:#102033;--muted:#536476;--line:#dbe4ee;--brand:#1d4ed8;--aqua:#0f9f98;--bg:#f5f8fd}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}a{color:inherit}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;max-width:1160px;margin:auto;padding:18px 24px}.brand{font-weight:900;text-decoration:none;letter-spacing:.01em}.brand span{color:#0f9f98}.top nav{display:flex;gap:20px;align-items:center}.top nav a{font-size:14px;font-weight:750;text-decoration:none;color:#405168}.top nav a:hover{color:var(--brand)}.language{border:1px solid var(--line);border-radius:999px;padding:8px 12px}.hero{padding:78px 24px 72px;background:radial-gradient(circle at 75% 20%,rgba(73,176,255,.18),transparent 35%),linear-gradient(135deg,#071f38,#173e78);color:#fff}.hero>div,.content,.footer-inner{max-width:930px;margin:auto}.eyebrow{margin:0;color:#7dd3fc;font-size:12px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}.hero h1{max-width:820px;margin:16px 0;font-size:clamp(38px,6vw,64px);line-height:1.08;letter-spacing:0}.hero p:not(.eyebrow){max-width:760px;margin:0;color:#d5e7ff;font-size:18px;line-height:1.75}.hero-actions{display:flex;gap:12px;margin-top:28px}.hero-actions a{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border:1px solid rgba(255,255,255,.32);border-radius:8px;font-weight:850;text-decoration:none}.hero-actions .primary{border-color:#4ddbe0;background:#26a7d9;color:#06233a}.content{padding:54px 24px 72px}.breadcrumb{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px;color:#64748b;font-size:14px}.breadcrumb a{color:#2563eb;text-decoration:none}.resource-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.resource-card,article+section,main>section{padding:28px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 12px 35px rgba(15,23,42,.05)}.resource-card p:first-child{margin:0;color:#078d86;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.resource-card h2{margin:16px 0 12px;font-size:22px;line-height:1.25}.resource-card p{color:var(--muted);line-height:1.72}.resource-card a{display:inline-flex;gap:8px;margin-top:8px;color:#1d4ed8;font-weight:850;text-decoration:none}.article{max-width:760px}.article>section+section{margin-top:16px}.article h2{margin:0 0 12px;font-size:25px}.article p{margin:0;color:var(--muted);font-size:16px;line-height:1.85}.next{margin-top:22px;padding:22px;border-radius:10px;background:#e8f8f7;color:#113e48}.next strong{display:block;margin-bottom:6px}.next a{color:#0c6d7d;font-weight:850}.site-footer{border-top:1px solid var(--line);background:#fff}.footer-inner{display:flex;justify-content:space-between;gap:16px;padding:26px 24px;color:#66758a;font-size:13px}.footer-inner a{color:#405168;text-decoration:none}@media(max-width:760px){.top{padding:15px 18px}.top nav{gap:12px}.top nav a:not(.language){display:none}.hero{padding:60px 20px}.hero h1{font-size:40px}.hero-actions{flex-direction:column;align-items:flex-start}.content{padding:36px 18px 52px}.resource-grid{grid-template-columns:1fr}.footer-inner{display:grid;padding:24px 18px}}</style></head><body><header class="top"><a class="brand" href="/"><span>AR</span> AgencyReport AI</a><nav aria-label="${english ? "Site navigation" : "網站導覽"}"><a href="/resources">${hub}</a><a href="/#pricing">${english ? "Pricing" : "定價"}</a><a class="language" href="${languageHref}">${english ? "繁中" : "EN"}</a></nav></header><main>${slug === "hub" ? `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p><div class="hero-actions"><a class="primary" href="/#top">${start}</a></div></div></section><div class="content"><div class="resource-grid">${cards}</div></div>` : `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.category)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p></div></section><div class="content"><nav class="breadcrumb" aria-label="${english ? "Breadcrumb" : "麵包屑"}"><a href="/">${home}</a><span aria-hidden="true">/</span><a href="/resources">${hub}</a><span aria-hidden="true">/</span><span>${escapeHtml(page.category)}</span></nav><article class="article">${sections}<div class="next"><strong>${english ? "Ready to turn this into a repeatable workflow?" : "準備把流程變成可重複交付的服務？"}</strong><span>${english ? "Use AgencyReport AI to turn your source data and client context into a reviewable monthly report draft." : "用 AgencyReport AI 將來源資料與客戶背景整理成可審稿的月報初稿。"}</span><br /><a href="/#top">${start}</a></div></article></div>`}</main><footer class="site-footer"><div class="footer-inner"><span>© 2026 Virtual Trend Works</span><span><a href="/privacy">${english ? "Privacy" : "隱私權"}</a> · <a href="/terms">${english ? "Terms" : "服務條款"}</a></span></div></footer></body></html>`;
+  return `<!doctype html><html lang="${english ? "en" : "zh-Hant"}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(page.title)} | AgencyReport AI</title><meta name="description" content="${escapeHtml(page.description)}" /><meta name="robots" content="index,follow" /><link rel="canonical" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="zh-Hant" href="${publicOrigin()}${path}" /><link rel="alternate" hreflang="en" href="${publicOrigin()}${path}?lang=en" /><meta property="og:type" content="article" /><meta property="og:site_name" content="AgencyReport AI" /><meta property="og:title" content="${escapeHtml(page.title)}" /><meta property="og:description" content="${escapeHtml(page.description)}" /><meta property="og:url" content="${publicOrigin()}${path}" /><script type="application/ld+json">${jsonLd}</script><style>:root{--ink:#102033;--muted:#536476;--line:#dbe4ee;--brand:#1d4ed8;--aqua:#0f9f98;--bg:#f5f8fd}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}a{color:inherit}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;max-width:1160px;margin:auto;padding:18px 24px}.brand{font-weight:900;text-decoration:none;letter-spacing:.01em}.brand span{color:#0f9f98}.top nav{display:flex;gap:20px;align-items:center}.top nav a{font-size:14px;font-weight:750;text-decoration:none;color:#405168}.top nav a:hover{color:var(--brand)}.language{border:1px solid var(--line);border-radius:999px;padding:8px 12px}.hero{padding:78px 24px 72px;background:radial-gradient(circle at 75% 20%,rgba(73,176,255,.18),transparent 35%),linear-gradient(135deg,#071f38,#173e78);color:#fff}.hero>div,.content,.footer-inner{max-width:930px;margin:auto}.eyebrow{margin:0;color:#7dd3fc;font-size:12px;font-weight:900;letter-spacing:.11em;text-transform:uppercase}.hero h1{max-width:820px;margin:16px 0;font-size:clamp(38px,6vw,64px);line-height:1.08;letter-spacing:0}.hero p:not(.eyebrow){max-width:760px;margin:0;color:#d5e7ff;font-size:18px;line-height:1.75}.hero-actions{display:flex;gap:12px;margin-top:28px}.hero-actions a{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border:1px solid rgba(255,255,255,.32);border-radius:8px;font-weight:850;text-decoration:none}.hero-actions .primary{border-color:#4ddbe0;background:#26a7d9;color:#06233a}.content{padding:54px 24px 72px}.breadcrumb{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:30px;color:#64748b;font-size:14px}.breadcrumb a{color:#2563eb;text-decoration:none}.resource-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.resource-card,article+section,main>section{padding:28px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 12px 35px rgba(15,23,42,.05)}.resource-card p:first-child{margin:0;color:#078d86;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.resource-card h2{margin:16px 0 12px;font-size:22px;line-height:1.25}.resource-card p{color:var(--muted);line-height:1.72}.resource-card a{display:inline-flex;gap:8px;margin-top:8px;color:#1d4ed8;font-weight:850;text-decoration:none}.article{max-width:760px}.article>section+section{margin-top:16px}.article h2{margin:0 0 12px;font-size:25px}.article p{margin:0;color:var(--muted);font-size:16px;line-height:1.85}.next{margin-top:22px;padding:22px;border-radius:10px;background:#e8f8f7;color:#113e48}.next strong{display:block;margin-bottom:6px}.next a{color:#0c6d7d;font-weight:850}.site-footer{border-top:1px solid var(--line);background:#fff}.footer-inner{display:flex;justify-content:space-between;gap:16px;padding:26px 24px;color:#66758a;font-size:13px}.footer-inner a{color:#405168;text-decoration:none}@media(max-width:760px){.top{padding:15px 18px}.top nav{gap:12px}.top nav a:not(.language){display:none}.hero{padding:60px 20px}.hero h1{font-size:40px}.hero-actions{flex-direction:column;align-items:flex-start}.content{padding:36px 18px 52px}.resource-grid{grid-template-columns:1fr}.footer-inner{display:grid;padding:24px 18px}}</style></head><body><header class="top"><a class="brand" href="/"><span>AR</span> AgencyReport AI</a><nav aria-label="${english ? "Site navigation" : "網站導覽"}"><a href="${basePath}">${hub}</a><a href="/${isSolution ? "resources" : "solutions"}">${english ? (isSolution ? "Resources" : "Solutions") : (isSolution ? "資源中心" : "適用方案")}</a><a href="/#pricing">${english ? "Pricing" : "定價"}</a><a class="language" href="${languageHref}">${english ? "繁中" : "EN"}</a></nav></header><main>${slug === "hub" ? `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.eyebrow)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p><div class="hero-actions"><a class="primary" href="/#top">${start}</a></div></div></section><div class="content"><div class="resource-grid">${cards}</div></div>` : `<section class="hero"><div><p class="eyebrow">${escapeHtml(page.category)}</p><h1>${escapeHtml(page.heading)}</h1><p>${escapeHtml(page.intro)}</p></div></section><div class="content"><nav class="breadcrumb" aria-label="${english ? "Breadcrumb" : "麵包屑"}"><a href="/">${home}</a><span aria-hidden="true">/</span><a href="${basePath}">${hub}</a><span aria-hidden="true">/</span><span>${escapeHtml(page.category)}</span></nav><article class="article">${sections}<div class="next"><strong>${english ? "Ready to turn this into a repeatable workflow?" : "準備把流程變成可重複交付的服務？"}</strong><span>${english ? "Use AgencyReport AI to turn your source data and client context into a reviewable monthly report draft." : "用 AgencyReport AI 將來源資料與客戶背景整理成可審稿的月報初稿。"}</span><br /><a href="/#top">${start}</a></div></article></div>`}</main><footer class="site-footer"><div class="footer-inner"><span>© 2026 Virtual Trend Works</span><span><a href="/privacy">${english ? "Privacy" : "隱私權"}</a> · <a href="/terms">${english ? "Terms" : "服務條款"}</a></span></div></footer></body></html>`;
 }
 
 function publicPolicyHtml(kind = "privacy") {
@@ -5081,15 +5191,18 @@ async function serveStatic(req, res, url) {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
     return res.end(injectGoogleTag(legalDocumentHtml(url.searchParams.get("lang") === "en" ? "en" : "zh")));
   }
-  if (url.pathname === "/resources" || url.pathname.startsWith("/resources/")) {
-    const slug = url.pathname === "/resources" ? "hub" : decodeURIComponent(url.pathname.slice("/resources/".length));
-    const known = resourcePages(url.searchParams.get("lang") === "en");
+  if (url.pathname === "/resources" || url.pathname.startsWith("/resources/") || url.pathname === "/solutions" || url.pathname.startsWith("/solutions/")) {
+    const collection = url.pathname === "/solutions" || url.pathname.startsWith("/solutions/") ? "solutions" : "resources";
+    const basePath = `/${collection}`;
+    const slug = url.pathname === basePath ? "hub" : decodeURIComponent(url.pathname.slice(basePath.length + 1));
+    const english = url.searchParams.get("lang") === "en";
+    const known = collection === "solutions" ? solutionPages(english) : resourcePages(english);
     if (!known[slug]) {
       res.writeHead(404, securityHeaders({ "content-type": "text/plain;charset=utf-8" }));
-      return res.end("Resource not found");
+      return res.end(collection === "solutions" ? "Solution not found" : "Resource not found");
     }
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
-    return res.end(injectGoogleTag(resourcePageHtml(slug, url.searchParams.get("lang") === "en")));
+    return res.end(injectGoogleTag(resourcePageHtml(slug, english, collection)));
   }
   if (["/privacy", "/terms", "/data-deletion"].includes(url.pathname)) {
     res.writeHead(200, securityHeaders({ "content-type": "text/html;charset=utf-8" }));
