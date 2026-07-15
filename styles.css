@@ -7173,7 +7173,8 @@ html.theme-light .workspace .ghost:hover {
     font-size: 13px;
   }
   html.public-landing .brand-block .brand-title {
-    display: none;
+    display: block;
+    font-size: 13px;
   }
   html.public-landing .topbar .eyebrow {
     margin: 0;
