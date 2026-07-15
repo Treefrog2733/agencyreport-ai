@@ -138,7 +138,13 @@ const contentTypes = {
   ".jpeg": "image/jpeg",
 };
 
-const publicStaticFiles = new Set(["/index.html", "/app.js", "/styles.css", "/gtag-init.js"]);
+const publicStaticFiles = new Set([
+  "/index.html",
+  "/app.js",
+  "/styles.css",
+  "/gtag-init.js",
+  "/downloads/agencyreport-ai-monthly-report-template.csv",
+]);
 const googleSearchConsoleVerificationFile = "googlec246612402efadc9.html";
 const rateBuckets = new Map();
 const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
@@ -181,6 +187,9 @@ function sitemapXml() {
     { pathname: "/resources/agency-monthly-report-template", changefreq: "monthly", priority: "0.8" },
     { pathname: "/resources/google-ads-meta-ga4-monthly-report", changefreq: "monthly", priority: "0.8" },
     { pathname: "/resources/ai-agency-reporting", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/resources/google-ads-monthly-report-template", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/resources/meta-ads-monthly-report-template", changefreq: "monthly", priority: "0.8" },
+    { pathname: "/resources/ga4-monthly-report-template", changefreq: "monthly", priority: "0.8" },
     { pathname: "/solutions", changefreq: "weekly", priority: "0.8" },
     { pathname: "/solutions/agencies", changefreq: "monthly", priority: "0.8" },
     { pathname: "/solutions/freelancers", changefreq: "monthly", priority: "0.8" },
@@ -217,6 +226,9 @@ function resourcePages(english = false) {
             ["agency-monthly-report-template", "Agency monthly report template", "The practical sections, KPIs, and decision context every recurring client report should include."],
             ["google-ads-meta-ga4-monthly-report", "Google Ads, Meta Ads, and GA4 reporting", "How to keep delivery metrics and outcome metrics clear without double counting conversions."],
             ["ai-agency-reporting", "AI reporting workflow for agencies", "A low-friction process for turning source data and client context into a polished first draft."],
+            ["google-ads-monthly-report-template", "Google Ads monthly report template", "A KPI structure for explaining search and performance campaign results without drowning clients in platform detail."],
+            ["meta-ads-monthly-report-template", "Meta Ads monthly report template", "A practical way to review creative, audience, delivery, and conversion efficiency in one client-ready report."],
+            ["ga4-monthly-report-template", "GA4 monthly report template", "A decision-focused structure for website traffic, engagement, key events, and conversion quality."],
           ],
         },
         "agency-monthly-report-template": {
@@ -245,6 +257,45 @@ function resourcePages(english = false) {
             ["Create a channel decision table", "For each channel, state spend, return or CPA, the main observed driver, and next action. This turns a spreadsheet-style report into a decision document clients can act on."],
           ],
         },
+        "google-ads-monthly-report-template": {
+          title: "Google Ads Monthly Report Template: KPI, Search Terms, and Next Actions",
+          description: "Use this Google Ads monthly report template to explain spend, clicks, conversions, CPA, ROAS, search-term findings, and next actions clearly.",
+          category: "Google Ads report template",
+          heading: "A Google Ads monthly report built for decisions, not screenshots",
+          intro: "A useful Google Ads report connects campaign delivery to the client goal. It shows where money went, what produced qualified demand, and what will change next month.",
+          sections: [
+            ["Start with the business result", "Open with the agreed outcome: leads, purchases, qualified calls, or revenue. Pair it with the primary efficiency measure such as CPA or ROAS, then compare it with the previous month and the agreed target."],
+            ["Review campaign and search demand", "Show campaign spend, clicks, conversions, and efficiency. For search campaigns, include the meaningful search-term or keyword movement behind the result instead of exporting a long raw list."],
+            ["Separate delivery from conversion quality", "An increase in clicks is not automatically a win. Explain whether conversion rate, lead quality, revenue, or follow-up feedback supports the change before recommending more budget."],
+            ["Commit to a small next-month test plan", "Prioritize two to four actions such as budget movement, negative keywords, landing-page improvements, match-type testing, or new ad copy. Name the metric that will determine whether each test worked."],
+          ],
+        },
+        "meta-ads-monthly-report-template": {
+          title: "Meta Ads Monthly Report Template: Creative, Audience, and CPA Review",
+          description: "Use this Meta Ads monthly report template to explain spend, reach, clicks, conversion efficiency, creative learning, audience performance, and next actions.",
+          category: "Meta Ads report template",
+          heading: "A Meta Ads monthly report clients can use to approve the next move",
+          intro: "Meta reporting becomes useful when it explains the relationship between creative, audience, delivery cost, and the conversion outcome instead of only showing reach and engagement.",
+          sections: [
+            ["State the outcome before engagement", "Start with the business goal and outcome: leads, purchases, bookings, or revenue. Then use reach, frequency, CPM, and CTR to explain the delivery conditions behind that result."],
+            ["Group creative learning into clear themes", "Identify the strongest and weakest creative angle, format, or message. Avoid claiming a single creative caused a result unless the test design supports that conclusion; describe it as a learning signal."],
+            ["Review audiences with sufficient context", "Compare audiences using the same date range and optimization event. Consider frequency, audience size, and budget distribution before deciding that an audience has truly exhausted or underperformed."],
+            ["Turn findings into controlled tests", "Recommend specific next actions: refresh an angle, isolate a winning audience, adjust budget, test a landing-page message, or pause a weak combination. State the CPA, ROAS, or conversion-rate signal you will review next month."],
+          ],
+        },
+        "ga4-monthly-report-template": {
+          title: "GA4 Monthly Report Template: Website Traffic, Engagement, and Key Events",
+          description: "Use this GA4 monthly report template to turn sessions, engaged sessions, key events, conversion paths, and channel quality into clear business decisions.",
+          category: "GA4 report template",
+          heading: "A GA4 monthly report that explains what happened after the click",
+          intro: "GA4 is most valuable when it explains website outcomes and conversion quality. It should complement, not be mechanically added to, ad-platform attributed conversions.",
+          sections: [
+            ["Anchor the report in agreed key events", "Choose the events that represent the client goal, such as lead form completion, booking, checkout, or qualified enquiry. Confirm the event definition before comparing months so the report remains trustworthy."],
+            ["Show channel quality, not only traffic volume", "Compare sessions with engaged sessions, engagement rate, key events, and conversion rate. A channel with fewer sessions may deserve more attention when it produces stronger intent or better downstream quality."],
+            ["Explain the conversion journey", "Use landing pages, device mix, and high-level path observations to identify where people progress or drop off. Do not overstate causality when the evidence only shows a correlation."],
+            ["Keep attribution language clear", "Describe GA4 as the website-outcome source and keep platform-attributed conversion figures separate. This prevents totals from being double counted and gives stakeholders a clearer explanation of why numbers differ."],
+          ],
+        },
         "ai-agency-reporting": {
           title: "AI Agency Reporting: From Raw Data to Client-Ready Monthly Reports",
           description: "A practical AI reporting workflow for agencies: provide client context and source data, review a grounded draft, then deliver a clear monthly action plan.",
@@ -270,6 +321,9 @@ function resourcePages(english = false) {
             ["agency-monthly-report-template", "代理商月報範本", "整理每月必備的執行摘要、KPI、洞察與下月行動計畫。"],
             ["google-ads-meta-ga4-monthly-report", "Google Ads、Meta Ads、GA4 月報", "讓廣告投放資料與網站成果清楚分工，不重複計算轉換。"],
             ["ai-agency-reporting", "AI 代理商月報流程", "把客戶需求與來源資料交給 AI 整理，再由代理商完成專業審稿。"],
+            ["google-ads-monthly-report-template", "Google Ads 月報範本", "用 KPI、搜尋字詞與下月行動，清楚說明搜尋與成效型廣告結果。"],
+            ["meta-ads-monthly-report-template", "Meta Ads 月報範本", "把素材、受眾、投放成本與轉換效率整理成客戶看得懂的結論。"],
+            ["ga4-monthly-report-template", "GA4 月報範本", "用網站流量、互動、關鍵事件與轉換品質，做出可決策的網站成果報告。"],
           ],
         },
         "agency-monthly-report-template": {
@@ -296,6 +350,45 @@ function resourcePages(english = false) {
             ["用 GA4 說明網站成果", "GA4 應該作為網站工作階段、互動、關鍵事件與跨渠道成果的依據。當客戶問廣告如何影響網站時，也要說明 GA4 和廣告平台可能因歸因模型與回溯期間不同而出現差異。"],
             ["避免重複計算轉換", "不要把 Meta 轉換、Google Ads 轉換與 GA4 關鍵事件全部加總成一個總數。選定一個成果來源當標題 KPI，清楚揭露來源，再用各平台數字解釋投放效率。"],
             ["建立渠道決策表", "每個渠道都要有花費、回報或 CPA、觀察到的主要原因與下一步行動。這會讓報告從試算表變成客戶可據以決策的文件。"],
+          ],
+        },
+        "google-ads-monthly-report-template": {
+          title: "Google Ads 月報範本：KPI、搜尋字詞與下月行動怎麼整理",
+          description: "用這份 Google Ads 月報範本，清楚說明花費、點擊、轉換、CPA、ROAS、搜尋字詞洞察與下月行動。",
+          category: "Google Ads 月報範本",
+          heading: "不再只貼截圖的 Google Ads 月報範本",
+          intro: "有用的 Google Ads 月報必須把活動投放連回客戶目標：預算花在哪裡、哪些需求真的帶來成果，以及下個月會怎麼調整。",
+          sections: [
+            ["先寫商業成果", "從已約定的成果開始，例如名單、訂單、預約、合格來電或營收。搭配 CPA 或 ROAS 等主要效率指標，和上月與既定目標比較。"],
+            ["檢視活動與搜尋需求", "呈現活動花費、點擊、轉換與效率。搜尋活動則挑出真正影響結果的關鍵字或搜尋字詞變化，不要直接丟一大串原始清單給客戶。"],
+            ["把投放量與轉換品質分開", "點擊增加不一定代表更好。確認轉換率、名單品質、營收或業務回饋是否支持這個變化，再決定是否增加預算。"],
+            ["訂出小而明確的下月測試", "優先列出兩到四項行動，例如預算移轉、否定關鍵字、落地頁修正、比對方式測試或新廣告文案，並寫下各項測試要觀察的成功指標。"],
+          ],
+        },
+        "meta-ads-monthly-report-template": {
+          title: "Meta Ads 月報範本：素材、受眾與 CPA 怎麼向客戶說明",
+          description: "用這份 Meta Ads 月報範本，說明花費、觸及、點擊、轉換效率、素材學習、受眾表現與下月行動。",
+          category: "Meta Ads 月報範本",
+          heading: "讓客戶願意根據 Meta Ads 月報做下一步決策",
+          intro: "Meta 月報真正的價值，是說清楚素材、受眾、投放成本與轉換成果之間的關係，而不是只列出觸及與互動數字。",
+          sections: [
+            ["先講成果，再講互動", "從名單、訂單、預約或營收等商業目標開始。接著用觸及、頻率、CPM 與 CTR 解釋促成這些成果的投放條件。"],
+            ["把素材學習整理成主題", "指出最強與最弱的素材角度、格式或訊息。不應在測試設計不足時斷言單一素材造成結果，而應將它描述成值得延續驗證的學習訊號。"],
+            ["用足夠背景比較受眾", "比較受眾時使用相同日期區間與最佳化事件，也要考慮頻率、受眾規模與預算分配，才能判斷受眾是否真的疲乏或表現不佳。"],
+            ["把洞察變成受控測試", "提出具體下月行動：更新素材角度、拆分得勝受眾、調整預算、測試落地頁訊息或暫停弱勢組合，同時寫下下月要檢視的 CPA、ROAS 或轉換率。"],
+          ],
+        },
+        "ga4-monthly-report-template": {
+          title: "GA4 月報範本：網站流量、互動與關鍵事件怎麼呈現",
+          description: "用這份 GA4 月報範本，把工作階段、互動工作階段、關鍵事件、轉換路徑與渠道品質整理成清楚的商業決策。",
+          category: "GA4 月報範本",
+          heading: "說明點擊之後發生什麼的 GA4 月報範本",
+          intro: "GA4 最適合說明網站成果與轉換品質。它應補充廣告平台歸因，而不是和廣告平台轉換數機械相加。",
+          sections: [
+            ["以既定關鍵事件為核心", "選擇真正代表客戶目標的事件，例如表單送出、預約、結帳或合格詢問。比較月份前先確認事件定義沒有改變，月報才會可信。"],
+            ["呈現渠道品質，不只呈現流量", "將工作階段和互動工作階段、互動率、關鍵事件與轉換率一起比較。流量較少的渠道，可能因意圖或後續品質更好而值得投入更多資源。"],
+            ["解釋轉換歷程", "用登陸頁、裝置分布與高層次路徑觀察，找出使用者在哪裡前進或流失。若證據只是相關性，不要過度宣稱是單一原因造成。"],
+            ["清楚說明歸因差異", "將 GA4 定義為網站成果來源，與平台歸因轉換分開呈現。這能避免重複計算，也能讓決策者理解為何不同平台的數字會不同。"],
           ],
         },
         "ai-agency-reporting": {
