@@ -58,9 +58,17 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const pendingCheckoutKey = "agencyReportPendingCheckoutPlan";
 
+function trackMarketingEvent(name, parameters = {}) {
+  if (typeof window.gtag === "function") {
+    window.gtag("event", name, parameters);
+  }
+}
+
 const copy = {
   zh: {
-    appTitle: "代理商 AI 月報平台",
+    brandProduct: "AgencyReport AI",
+    appTitle: "AI 行銷報告平台",
+    seoHeroHeading: "AI 行銷月報與廣告報表自動化平台",
     navFeatures: "特色",
     navWorkflow: "流程",
     navSamples: "範例",
@@ -204,7 +212,9 @@ const copy = {
     saveLead: "儲存名單",
   },
   en: {
-    appTitle: "Agency AI Reporting Platform",
+    brandProduct: "AgencyReport AI",
+    appTitle: "AI Marketing Reporting Platform",
+    seoHeroHeading: "AI marketing reporting and advertising report automation platform",
     navFeatures: "Features",
     navWorkflow: "Workflow",
     navSamples: "Samples",
@@ -350,7 +360,9 @@ const copy = {
 };
 
 Object.assign(copy.zh, {
-  appTitle: "代理商 AI 月報平台",
+  brandProduct: "AgencyReport AI",
+  appTitle: "AI 行銷報告平台",
+  seoHeroHeading: "AI 行銷月報與廣告報表自動化平台",
   navFeatures: "功能",
   navWorkflow: "流程",
   navSamples: "範例",
@@ -2945,9 +2957,22 @@ function setupEvents() {
   $$("#workspaceTabBtn, [data-app-page='workspace']").forEach((button) => button.addEventListener("click", enterWorkspace));
   $("#landingLoginBtn")?.addEventListener("click", showAuthGate);
   $("#landingStartBtn")?.addEventListener("click", enterWorkspace);
-  $("#openCaseDetailBtn")?.addEventListener("click", enterWorkspace);
+  $("#openCaseDetailBtn")?.addEventListener("click", () => {
+    trackMarketingEvent("generate_lead", { source: "hero_start_free" });
+    enterWorkspace();
+  });
   $(".landing-bottom-start")?.addEventListener("click", enterWorkspace);
-  $("#homeLoadDemoBtn")?.addEventListener("click", enterWorkspace);
+  $("#homeLoadDemoBtn")?.addEventListener("click", () => {
+    trackMarketingEvent("view_item", { item_name: "sample_report", source: "hero_sample" });
+    enterWorkspace();
+  });
+  $$(".landing-resource-link").forEach((link) => link.addEventListener("click", () => {
+    trackMarketingEvent("select_content", {
+      content_type: "resource_guide",
+      item_id: link.getAttribute("href") || "resource",
+      source: "landing_template_section",
+    });
+  }));
   $("#closeAuthBtn")?.addEventListener("click", hideAuthGate);
   $("#authForm")?.addEventListener("submit", submitAuth);
   $("#registerBtn")?.addEventListener("click", registerAuth);

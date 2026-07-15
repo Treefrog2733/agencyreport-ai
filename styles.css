@@ -7172,7 +7172,7 @@ html.theme-light .workspace .ghost:hover {
     height: 36px;
     font-size: 13px;
   }
-  html.public-landing .brand-block h1 {
+  html.public-landing .brand-block .brand-title {
     display: none;
   }
   html.public-landing .topbar .eyebrow {
@@ -10913,7 +10913,7 @@ html.theme-light:not(.public-landing) .ghost {
   box-shadow: 0 16px 34px rgba(79, 70, 229, 0.24);
 }
 
-.brand-block h1,
+.brand-block .brand-title,
 .brand-block strong {
   margin: 0;
   font-size: 15px;
