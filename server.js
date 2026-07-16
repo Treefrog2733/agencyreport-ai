@@ -4662,7 +4662,7 @@ async function handleApi(req, res, url) {
     if (!sitesRuntimeMigrationToken || !safeSecretEquals(token, sitesRuntimeMigrationToken)) {
       return json(res, 404, { error: "Not found" });
     }
-    const destination = String(process.env.SITES_MIGRATION_URL || "").replace(/\/$/, "");
+    const destination = "https://agencyreport-ai-marketing.chenbobe12.chatgpt.site";
     const secret = String(process.env.SITES_MIGRATION_SECRET || "");
     if (!destination || !secret) return json(res, 503, { error: "SITES_MIGRATION_NOT_CONFIGURED" });
     const keys = [
