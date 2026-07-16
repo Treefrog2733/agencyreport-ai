@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/db-migrate.js",
     "db:backup": "node scripts/db-backup.js",
     "db:restore:drill": "node scripts/db-restore-drill.js",
+    "db:export-sites": "node scripts/export-to-sites.js",
     "email:check": "node scripts/email-check.js",
     "smoke:browser": "node scripts/browser-smoke.js",
     "smoke:workspace": "node scripts/workspace-visual-smoke.js",

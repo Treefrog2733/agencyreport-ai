@@ -91,6 +91,20 @@ async function main() {
   const chrome = chromePath();
   if (!chrome) throw new Error("Chrome or Edge was not found.");
 
+  let landingResponse;
+  try {
+    landingResponse = await fetch(targetUrl, { signal: AbortSignal.timeout(15000) });
+  } catch (error) {
+    throw new Error(`Workspace is not reachable at ${targetUrl}. Start the app first or pass --url. ${error.message}`);
+  }
+  if (!landingResponse.ok) {
+    throw new Error(`Workspace returned HTTP ${landingResponse.status} at ${targetUrl}. Start the app first or pass --url.`);
+  }
+  const landingHtml = await landingResponse.text();
+  if (!/AgencyReport AI/i.test(landingHtml)) {
+    throw new Error(`Workspace response at ${targetUrl} is not an AgencyReport AI page. Start the intended app first or pass --url.`);
+  }
+
   fs.mkdirSync(outDir, { recursive: true });
   const profile = path.join(outDir, "profile");
   const chromeArgs = [
