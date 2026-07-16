@@ -39,6 +39,7 @@ const ecpayReturnUrl = process.env.ECPAY_RETURN_URL || (appBaseUrl ? `${appBaseU
 const ecpayOrderResultUrl = process.env.ECPAY_ORDER_RESULT_URL || (appBaseUrl ? `${appBaseUrl}/billing/ecpay/result` : "");
 const ecpayClientBackUrl = process.env.ECPAY_CLIENT_BACK_URL || appBaseUrl || "";
 const connectorEncryptionSecret = process.env.CONNECTOR_ENCRYPTION_KEY || "";
+const sitesRuntimeMigrationToken = process.env.SITES_RUNTIME_MIGRATION_TOKEN || "";
 const googleOAuthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_ADS_CLIENT_ID || "";
 const googleOAuthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_ADS_CLIENT_SECRET || "";
 const metaAppId = process.env.META_APP_ID || "";
@@ -4654,6 +4655,37 @@ async function handleApi(req, res, url) {
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {
     await revokeAuthSession(authHeaderToken(req));
     return json(res, 200, { ok: true }, { "set-cookie": clearSessionCookie() });
+  }
+
+  if (url.pathname === "/api/internal/migrate-provider-config" && req.method === "POST") {
+    const token = String(req.headers["x-runtime-migration-token"] || "");
+    if (!sitesRuntimeMigrationToken || !safeSecretEquals(token, sitesRuntimeMigrationToken)) {
+      return json(res, 404, { error: "Not found" });
+    }
+    const destination = String(process.env.SITES_MIGRATION_URL || "").replace(/\/$/, "");
+    const secret = String(process.env.SITES_MIGRATION_SECRET || "");
+    if (!destination || !secret) return json(res, 503, { error: "SITES_MIGRATION_NOT_CONFIGURED" });
+    const keys = [
+      "ECPAY_MERCHANT_ID", "ECPAY_HASH_KEY", "ECPAY_HASH_IV", "ECPAY_MODE", "ECPAY_CHECKOUT_URL",
+      "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_ADS_DEVELOPER_TOKEN",
+      "META_APP_ID", "META_APP_SECRET", "META_GRAPH_VERSION",
+    ];
+    const payload = Object.fromEntries(keys.flatMap((key) => process.env[key] ? [[key, process.env[key]]] : []));
+    try {
+      const response = await fetch(`${destination}/api/migration/runtime-config`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => ({}));
+      return json(res, response.ok ? 200 : 502, {
+        ok: response.ok,
+        imported: Array.isArray(body.imported) ? body.imported : [],
+        error: response.ok ? undefined : String(body.error || "RUNTIME_MIGRATION_FAILED"),
+      });
+    } catch {
+      return json(res, 502, { error: "RUNTIME_MIGRATION_REQUEST_FAILED" });
+    }
   }
 
   if (url.pathname === "/api/worker/run" && req.method === "POST") {
