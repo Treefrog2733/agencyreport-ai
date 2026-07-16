@@ -4675,7 +4675,7 @@ async function handleApi(req, res, url) {
       const response = await fetch(`${destination}/api/migration/runtime-config`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ config: payload }),
+        body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => ({}));
       return json(res, response.ok ? 200 : 502, {
